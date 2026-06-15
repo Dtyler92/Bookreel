@@ -4,33 +4,39 @@ export default function Home() {
   return (
     <div
       className="flex flex-col min-h-full"
-      style={{ backgroundColor: "#0A0A0F", color: "#F0EDE6", fontFamily: "var(--font-inter), sans-serif" }}
+      style={{ backgroundColor: "var(--color-bg-primary)", color: "var(--color-text-body)", fontFamily: "var(--font-inter), sans-serif" }}
     >
       {/* Nav */}
       <header
         className="flex items-center justify-between px-8 py-5"
-        style={{ borderBottom: "1px solid rgba(108,99,255,0.3)" }}
+        style={{ backgroundColor: "var(--color-bg-primary)", borderBottom: "1px solid var(--color-border)" }}
       >
         {/* Logo */}
         <span className="flex items-center gap-2 text-2xl select-none">
-          <span style={{ color: "#F0EDE6", fontFamily: "var(--font-playfair), serif", fontWeight: 900 }}>
+          <span
+            style={{
+              color: "var(--color-text-heading)",
+              fontFamily: "var(--font-playfair), serif",
+              fontWeight: 900,
+            }}
+          >
             Book
           </span>
-          {/* Film-frame separator */}
+          {/* Film-frame square separator */}
           <span
             style={{
               display: "inline-block",
-              width: "12px",
-              height: "12px",
-              border: "2px solid #F5A623",
-              outline: "1px solid #F5A623",
+              width: "11px",
+              height: "11px",
+              border: "2px solid var(--color-accent)",
+              outline: "1px solid var(--color-accent)",
               outlineOffset: "2px",
-              backgroundColor: "#0A0A0F",
+              backgroundColor: "var(--color-bg-primary)",
             }}
           />
           <span
             style={{
-              color: "#F5A623",
+              color: "var(--color-accent)",
               fontFamily: "var(--font-playfair), serif",
               fontWeight: 900,
               fontStyle: "italic",
@@ -39,354 +45,349 @@ export default function Home() {
             Reel
           </span>
         </span>
-        <nav className="flex gap-4">
+
+        {/* Nav links */}
+        <nav className="flex items-center gap-6">
           <Link
             href="/login"
-            className="px-5 py-2 rounded-full text-sm font-medium transition-colors"
-            style={{
-              border: "1px solid rgba(108,99,255,0.5)",
-              color: "#8A8A9A",
-            }}
+            className="text-sm font-medium transition-colors"
+            style={{ color: "var(--color-text-heading)" }}
           >
             Login
           </Link>
           <Link
             href="/signup"
-            className="px-5 py-2 rounded-full text-sm font-semibold transition-colors"
-            style={{ backgroundColor: "#F5A623", color: "#0A0A0F" }}
+            className="px-5 py-2 text-sm font-semibold transition-colors"
+            style={{
+              backgroundColor: "var(--color-accent)",
+              color: "var(--color-text-inverse)",
+              borderRadius: "4px",
+            }}
           >
-            Get Started
+            Get Started →
           </Link>
         </nav>
       </header>
 
-      <main className="flex flex-col items-center flex-1">
+      <main className="flex flex-col flex-1">
         {/* Hero */}
-        <section className="flex flex-col items-center text-center px-6 pt-28 pb-24 max-w-4xl mx-auto">
-          <div
-            className="mb-6 inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-widest"
-            style={{
-              border: "1px solid rgba(245,166,35,0.35)",
-              backgroundColor: "rgba(245,166,35,0.08)",
-              color: "#F5A623",
-            }}
-          >
-            🎬 AI-Powered Book Marketing
-          </div>
+        <section
+          className="flex flex-col items-center text-center px-6 max-w-5xl mx-auto w-full"
+          style={{ paddingTop: "clamp(64px, 10vw, 112px)", paddingBottom: "clamp(64px, 10vw, 112px)" }}
+        >
           <h1
-            className="text-5xl sm:text-6xl lg:text-7xl leading-tight mb-8"
             style={{
               fontFamily: "var(--font-playfair), serif",
               fontWeight: 900,
-              color: "#F0EDE6",
-              lineHeight: 1.1,
+              color: "var(--color-text-heading)",
+              fontSize: "clamp(48px, 7vw, 88px)",
+              lineHeight: 1.08,
+              letterSpacing: "-0.02em",
+              marginBottom: "28px",
             }}
           >
-            Your Book Deserves a<br />
-            <span style={{ color: "#F5A623" }}>Cinematic Moment.</span>
+            Every story deserves a second life.
           </h1>
           <p
-            className="text-lg max-w-2xl mb-10 leading-relaxed"
-            style={{ color: "#8A8A9A", fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
+            className="max-w-2xl"
+            style={{
+              fontFamily: "var(--font-playfair), serif",
+              fontStyle: "italic",
+              fontSize: "clamp(17px, 2.2vw, 22px)",
+              color: "var(--color-text-body)",
+              lineHeight: 1.65,
+              marginBottom: "48px",
+            }}
           >
-            Upload your manuscript. BookReel&apos;s AI crafts a stunning video trailer — ready to
-            share in minutes. Turn readers into an audience.
+            BookReel turns your manuscript into a short, cinematic video trailer — made to share, made to be discovered.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row items-center gap-5">
             <Link
               href="/signup"
-              className="px-8 py-4 rounded-full text-base font-semibold transition-all shadow-lg"
-              style={{ backgroundColor: "#F5A623", color: "#0A0A0F" }}
+              className="px-8 py-4 text-base font-semibold transition-all"
+              style={{
+                backgroundColor: "var(--color-accent)",
+                color: "var(--color-text-inverse)",
+                borderRadius: "4px",
+              }}
             >
-              🎬 Generate My Trailer — It&apos;s Free
+              Start Your First Reel →
             </Link>
             <a
               href="#how-it-works"
-              className="px-8 py-4 rounded-full text-base font-medium transition-all"
-              style={{
-                border: "1px solid rgba(240,237,230,0.25)",
-                color: "#F0EDE6",
-              }}
+              className="text-base transition-colors"
+              style={{ color: "var(--color-text-muted)" }}
             >
-              See How It Works ↓
+              See how it works
             </a>
           </div>
         </section>
 
-        {/* Divider */}
-        <div className="w-full max-w-5xl px-6">
-          <div
-            className="h-px"
-            style={{ background: "linear-gradient(to right, transparent, #6C63FF44, transparent)" }}
-          />
+        {/* Thin rule below hero */}
+        <div className="w-full px-8">
+          <hr style={{ border: "none", borderTop: "1px solid var(--color-border)" }} />
         </div>
 
-        {/* Features Section */}
-        <section className="w-full max-w-6xl px-6 py-24">
-          <h2
-            className="text-center text-3xl sm:text-4xl mb-4"
-            style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "#F0EDE6" }}
-          >
-            Why BookReel?
-          </h2>
-          <p
-            className="text-center mb-16 max-w-xl mx-auto"
-            style={{ color: "#8A8A9A", fontFamily: "var(--font-inter), sans-serif" }}
-          >
-            The complete cinematic toolkit for indie authors.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-            {/* Feature 1 */}
-            <div
-              className="flex flex-col p-8 rounded-2xl transition-all"
+        {/* Features Section — Vellum background */}
+        <section
+          className="w-full py-24 px-6"
+          style={{ backgroundColor: "var(--color-bg-surface)" }}
+        >
+          <div className="max-w-6xl mx-auto">
+            {/* Section label */}
+            <p
+              className="text-center mb-14"
               style={{
-                backgroundColor: "#12121E",
-                border: "1px solid rgba(108,99,255,0.2)",
+                fontFamily: "var(--font-inter), sans-serif",
+                fontSize: "11px",
+                fontWeight: 600,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                color: "var(--color-text-muted)",
               }}
             >
-              <div
-                className="mb-5 flex h-12 w-12 items-center justify-center rounded-full text-xl font-bold"
-                style={{
-                  backgroundColor: "rgba(245,166,35,0.15)",
-                  color: "#F5A623",
-                  fontFamily: "var(--font-playfair), serif",
-                  fontWeight: 900,
-                }}
-              >
-                01
-              </div>
-              <h3
-                className="text-xl mb-3"
-                style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "#F0EDE6" }}
-              >
-                From PDF to Premiere in Minutes
-              </h3>
-              <p
-                className="text-sm leading-relaxed"
-                style={{ color: "#8A8A9A", fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
-              >
-                Drop in your manuscript and BookReel reads your story&apos;s tone, genre, and voice
-                to build the perfect visual brief.
-              </p>
-            </div>
+              How It Works
+            </p>
 
-            {/* Feature 2 */}
-            <div
-              className="flex flex-col p-8 rounded-2xl transition-all"
-              style={{
-                backgroundColor: "#12121E",
-                border: "1px solid rgba(108,99,255,0.2)",
-              }}
-            >
+            {/* Feature cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {/* Card 01 */}
               <div
-                className="mb-5 flex h-12 w-12 items-center justify-center rounded-full text-xl font-bold"
+                className="flex flex-col p-8"
                 style={{
-                  backgroundColor: "rgba(245,166,35,0.15)",
-                  color: "#F5A623",
-                  fontFamily: "var(--font-playfair), serif",
-                  fontWeight: 900,
+                  backgroundColor: "var(--color-bg-primary)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "4px",
+                  boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                 }}
               >
-                02
+                <span
+                  className="mb-5 text-sm font-bold"
+                  style={{ color: "var(--color-accent)", fontFamily: "var(--font-inter), sans-serif", letterSpacing: "0.06em" }}
+                >
+                  01
+                </span>
+                <h3
+                  className="text-xl mb-3"
+                  style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "var(--color-text-heading)" }}
+                >
+                  From PDF to Premiere
+                </h3>
+                <p
+                  className="text-sm leading-relaxed"
+                  style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
+                >
+                  Drop in your manuscript. BookReel reads your story&apos;s tone, genre, and voice.
+                </p>
               </div>
-              <h3
-                className="text-xl mb-3"
-                style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "#F0EDE6" }}
-              >
-                AI That Understands Story, Not Just Text
-              </h3>
-              <p
-                className="text-sm leading-relaxed"
-                style={{ color: "#8A8A9A", fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
-              >
-                Our cinematic AI maps your narrative arc, identifies emotional beats, and sequences
-                scenes the way a film director would.
-              </p>
-            </div>
 
-            {/* Feature 3 */}
-            <div
-              className="flex flex-col p-8 rounded-2xl transition-all"
-              style={{
-                backgroundColor: "#12121E",
-                border: "1px solid rgba(108,99,255,0.2)",
-              }}
-            >
+              {/* Card 02 */}
               <div
-                className="mb-5 flex h-12 w-12 items-center justify-center rounded-full text-xl font-bold"
+                className="flex flex-col p-8"
                 style={{
-                  backgroundColor: "rgba(245,166,35,0.15)",
-                  color: "#F5A623",
-                  fontFamily: "var(--font-playfair), serif",
-                  fontWeight: 900,
+                  backgroundColor: "var(--color-bg-primary)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "4px",
+                  boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
                 }}
               >
-                03
+                <span
+                  className="mb-5 text-sm font-bold"
+                  style={{ color: "var(--color-accent)", fontFamily: "var(--font-inter), sans-serif", letterSpacing: "0.06em" }}
+                >
+                  02
+                </span>
+                <h3
+                  className="text-xl mb-3"
+                  style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "var(--color-text-heading)" }}
+                >
+                  AI That Understands Story
+                </h3>
+                <p
+                  className="text-sm leading-relaxed"
+                  style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
+                >
+                  Our AI maps your narrative arc and sequences scenes like a film director.
+                </p>
               </div>
-              <h3
-                className="text-xl mb-3"
-                style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "#F0EDE6" }}
+
+              {/* Card 03 */}
+              <div
+                className="flex flex-col p-8"
+                style={{
+                  backgroundColor: "var(--color-bg-primary)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "4px",
+                  boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                }}
               >
-                Get Found by Readers Who Are Ready to Watch
-              </h3>
-              <p
-                className="text-sm leading-relaxed"
-                style={{ color: "#8A8A9A", fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
-              >
-                Every trailer lives in BookReel&apos;s discovery feed — surfaced to readers by genre,
-                mood, and reading taste.
-              </p>
+                <span
+                  className="mb-5 text-sm font-bold"
+                  style={{ color: "var(--color-accent)", fontFamily: "var(--font-inter), sans-serif", letterSpacing: "0.06em" }}
+                >
+                  03
+                </span>
+                <h3
+                  className="text-xl mb-3"
+                  style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "var(--color-text-heading)" }}
+                >
+                  Get Found by Readers
+                </h3>
+                <p
+                  className="text-sm leading-relaxed"
+                  style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
+                >
+                  Your trailer lives in BookReel&apos;s discovery feed, surfaced by genre and mood.
+                </p>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* How It Works */}
+        {/* How It Works Steps — white background */}
         <section
           id="how-it-works"
-          className="w-full py-24"
-          style={{ backgroundColor: "#12121E", borderTop: "1px solid rgba(108,99,255,0.15)", borderBottom: "1px solid rgba(108,99,255,0.15)" }}
+          className="w-full py-24 px-6"
+          style={{ backgroundColor: "var(--color-bg-primary)" }}
         >
-          <div className="max-w-5xl mx-auto px-6">
-            <h2
-              className="text-center text-3xl sm:text-4xl mb-4"
-              style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "#F0EDE6" }}
-            >
-              How It Works
-            </h2>
-            <p
-              className="text-center mb-16 max-w-lg mx-auto"
-              style={{ color: "#8A8A9A", fontFamily: "var(--font-inter), sans-serif" }}
-            >
-              Three steps from manuscript to cinematic trailer.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 relative">
+          <div className="max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-10">
               {/* Step 1 */}
               <div className="flex flex-col items-center text-center">
                 <div
-                  className="mb-5 flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold"
+                  className="mb-5 flex h-14 w-14 items-center justify-center text-lg font-bold"
                   style={{
-                    backgroundColor: "#F5A623",
-                    color: "#0A0A0F",
-                    fontFamily: "var(--font-playfair), serif",
-                    fontWeight: 900,
+                    border: "2px solid var(--color-accent)",
+                    color: "var(--color-accent)",
+                    borderRadius: "50%",
+                    fontFamily: "var(--font-inter), sans-serif",
+                    fontWeight: 700,
                   }}
                 >
                   1
                 </div>
                 <h3
-                  className="text-lg mb-2"
-                  style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "#F0EDE6" }}
+                  className="text-base mb-2"
+                  style={{ fontFamily: "var(--font-inter), sans-serif", fontWeight: 600, color: "var(--color-text-heading)" }}
                 >
-                  Upload
+                  Upload Your Book
                 </h3>
                 <p
                   className="text-sm leading-relaxed"
-                  style={{ color: "#8A8A9A", fontFamily: "var(--font-inter), sans-serif" }}
+                  style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif" }}
                 >
-                  Drop your manuscript or PDF into BookReel. We&apos;ll handle the rest.
+                  Drop your manuscript or PDF into BookReel.
                 </p>
               </div>
 
               {/* Step 2 */}
               <div className="flex flex-col items-center text-center">
                 <div
-                  className="mb-5 flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold"
+                  className="mb-5 flex h-14 w-14 items-center justify-center text-lg font-bold"
                   style={{
-                    backgroundColor: "#F5A623",
-                    color: "#0A0A0F",
-                    fontFamily: "var(--font-playfair), serif",
-                    fontWeight: 900,
+                    border: "2px solid var(--color-accent)",
+                    color: "var(--color-accent)",
+                    borderRadius: "50%",
+                    fontFamily: "var(--font-inter), sans-serif",
+                    fontWeight: 700,
                   }}
                 >
                   2
                 </div>
                 <h3
-                  className="text-lg mb-2"
-                  style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "#F0EDE6" }}
+                  className="text-base mb-2"
+                  style={{ fontFamily: "var(--font-inter), sans-serif", fontWeight: 600, color: "var(--color-text-heading)" }}
                 >
-                  AI Analyzes
+                  AI Writes the Screenplay
                 </h3>
                 <p
                   className="text-sm leading-relaxed"
-                  style={{ color: "#8A8A9A", fontFamily: "var(--font-inter), sans-serif" }}
+                  style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif" }}
                 >
-                  Our AI reads your story&apos;s tone, genre, and emotional arc — building a cinematic visual brief.
+                  Our AI reads your story&apos;s arc and crafts a cinematic script.
                 </p>
               </div>
 
               {/* Step 3 */}
               <div className="flex flex-col items-center text-center">
                 <div
-                  className="mb-5 flex h-16 w-16 items-center justify-center rounded-full text-2xl font-bold"
+                  className="mb-5 flex h-14 w-14 items-center justify-center text-lg font-bold"
                   style={{
-                    backgroundColor: "#F5A623",
-                    color: "#0A0A0F",
-                    fontFamily: "var(--font-playfair), serif",
-                    fontWeight: 900,
+                    border: "2px solid var(--color-accent)",
+                    color: "var(--color-accent)",
+                    borderRadius: "50%",
+                    fontFamily: "var(--font-inter), sans-serif",
+                    fontWeight: 700,
                   }}
                 >
                   3
                 </div>
                 <h3
-                  className="text-lg mb-2"
-                  style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "#F0EDE6" }}
+                  className="text-base mb-2"
+                  style={{ fontFamily: "var(--font-inter), sans-serif", fontWeight: 600, color: "var(--color-text-heading)" }}
                 >
-                  Get Your Trailer
+                  Your Trailer is Ready
                 </h3>
                 <p
                   className="text-sm leading-relaxed"
-                  style={{ color: "#8A8A9A", fontFamily: "var(--font-inter), sans-serif" }}
+                  style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif" }}
                 >
-                  Your polished video trailer is ready to share in minutes — on social, your site, or BookReel&apos;s feed.
+                  Share it on social, your site, or BookReel&apos;s discovery feed.
                 </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Bottom CTA Banner */}
-        <section className="w-full max-w-5xl px-6 py-24">
-          <div
-            className="rounded-3xl p-12 sm:p-16 text-center"
-            style={{ backgroundColor: "#F5A623" }}
+        {/* Bottom CTA — Vermillion background, full-width */}
+        <section
+          className="w-full py-24 px-6 text-center"
+          style={{ backgroundColor: "var(--color-accent)" }}
+        >
+          <h2
+            className="mb-8"
+            style={{
+              fontFamily: "var(--font-playfair), serif",
+              fontWeight: 900,
+              fontSize: "clamp(28px, 4vw, 44px)",
+              color: "var(--color-text-inverse)",
+              lineHeight: 1.15,
+            }}
           >
-            <h2
-              className="text-3xl sm:text-4xl mb-4"
-              style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 900, color: "#0A0A0F" }}
-            >
-              Ready to give your book its cinematic moment?
-            </h2>
-            <p
-              className="mb-8 max-w-md mx-auto text-base"
-              style={{ color: "#12121E", fontFamily: "var(--font-inter), sans-serif", fontWeight: 500 }}
-            >
-              Join thousands of indie authors using BookReel to reach readers they never could before.
-            </p>
-            <Link
-              href="/signup"
-              className="inline-block px-10 py-4 rounded-full font-semibold text-base transition-colors"
-              style={{ backgroundColor: "#0A0A0F", color: "#F5A623" }}
-            >
-              🎬 Generate My Trailer — It&apos;s Free
-            </Link>
-          </div>
+            Ready to give your book its moment?
+          </h2>
+          <Link
+            href="/signup"
+            className="inline-block px-10 py-4 text-base font-semibold transition-colors"
+            style={{
+              backgroundColor: "var(--color-text-inverse)",
+              color: "var(--color-accent)",
+              borderRadius: "4px",
+            }}
+          >
+            Create Your BookReel →
+          </Link>
         </section>
       </main>
 
       {/* Footer */}
       <footer
-        className="px-8 py-8 text-center"
-        style={{ borderTop: "1px solid rgba(108,99,255,0.2)" }}
+        className="px-8 py-10 text-center"
+        style={{ borderTop: "1px solid var(--color-border)", backgroundColor: "var(--color-bg-primary)" }}
       >
         <p
-          className="text-lg mb-2"
-          style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, fontStyle: "italic", color: "#F5A623" }}
+          className="mb-2 text-base"
+          style={{
+            fontFamily: "var(--font-playfair), serif",
+            fontStyle: "italic",
+            color: "var(--color-text-muted)",
+          }}
         >
-          Every story deserves a trailer.
+          &ldquo;For people who still dog-ear pages.&rdquo;
         </p>
         <p
           className="text-xs"
-          style={{ color: "#8A8A9A", fontFamily: "var(--font-inter), sans-serif" }}
+          style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif" }}
         >
           © {new Date().getFullYear()} BookReel. All rights reserved.
         </p>
