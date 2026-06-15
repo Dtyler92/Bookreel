@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+import { canGenerateTrailer, getModelForTier } from '@/lib/tierGate'
+import { PlanName } from '@/lib/stripe'
 
 function getServiceClient() {
   return createClient(
@@ -9,14 +11,63 @@ function getServiceClient() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { bookId: string }
-    const { bookId } = body
+    const body = await request.json() as { bookId: string; userId?: string }
+    const { bookId, userId } = body
 
     if (!bookId) {
       return Response.json({ error: 'bookId is required' }, { status: 400 })
     }
 
     const supabase = getServiceClient()
+
+    // --- Tier gate: check subscription ---
+    if (userId) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('subscription_tier')
+        .eq('id', userId)
+        .single()
+
+      if (profileError) {
+        console.error('Profile fetch error:', profileError)
+        return Response.json({ error: 'Failed to fetch user profile' }, { status: 500 })
+      }
+
+      const tier = (profile?.subscription_tier || 'free') as PlanName
+
+      if (tier === 'free') {
+        return Response.json(
+          { error: 'Upgrade your plan to generate trailers' },
+          { status: 403 }
+        )
+      }
+
+      // Count trailers generated this month for this user's books
+      const now = new Date()
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+      const { count: trailersThisMonth, error: countError } = await supabase
+        .from('trailers')
+        .select('id', { count: 'exact', head: true })
+        .eq('book_id', bookId)
+        .gte('created_at', startOfMonth)
+
+      if (countError) {
+        console.error('Trailer count error:', countError)
+        return Response.json({ error: 'Failed to check trailer usage' }, { status: 500 })
+      }
+
+      if (!canGenerateTrailer(tier, trailersThisMonth ?? 0)) {
+        return Response.json(
+          { error: 'Monthly trailer limit reached' },
+          { status: 403 }
+        )
+      }
+
+      // Get model config based on tier
+      const modelConfig = getModelForTier(tier)
+      console.log(`Generating trailer for tier "${tier}" using models:`, modelConfig)
+    }
 
     // Verify all characters for this book are approved
     const { data: characters, error: charError } = await supabase
