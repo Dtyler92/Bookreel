@@ -49,6 +49,13 @@
 }
 
 :root {
+  --color-bg: #0A0A0F;
+  --color-surface: #12121E;
+  --color-gold: #F5A623;
+  --color-crimson: #E63946;
+  --color-text: #F0EDE6;
+  --color-muted: #8A8A9A;
+  --color-glow: #6C63FF;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -123,6 +130,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-color: var(--color-bg);
+    color: var(--color-text);
   }
   html {
     @apply font-sans;
