@@ -15,10 +15,10 @@ export default function SignupPage() {
           <span className="text-3xl">🎬</span>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-          BookReel
+          Your book&apos;s trailer starts here.
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Create your account
+          Create your free account and upload your manuscript to get started.
         </p>
       </div>
 
@@ -103,6 +103,11 @@ export default function SignupPage() {
         >
           Sign in
         </Link>
+      </p>
+
+      {/* Value reminder */}
+      <p className="text-center text-xs text-gray-400 dark:text-gray-500 leading-relaxed border-t border-gray-100 dark:border-gray-800 pt-4">
+        BookReel builds your trailer directly from your manuscript — your characters, your scenes, your story. Nothing is added that isn&apos;t already in your book.
       </p>
     </div>
   )

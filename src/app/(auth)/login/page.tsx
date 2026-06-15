@@ -15,10 +15,10 @@ export default function LoginPage() {
           <span className="text-3xl">🎬</span>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-          BookReel
+          Welcome back, author.
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Sign in to your account
+          Your stories are waiting. Sign in to pick up where you left off.
         </p>
       </div>
 

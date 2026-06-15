@@ -18,10 +18,10 @@ const GENRES = [
 ]
 
 const LOADING_MESSAGES = [
-  'Reading your masterpiece...',
-  'Identifying your characters...',
-  'Writing the screenplay...',
-  'Almost ready...',
+  '📖 Reading your manuscript...',
+  '🎬 Finding your story\'s cinematic moments...',
+  '🎙️ Crafting a voiceover from your words...',
+  '✂️ Putting your trailer together...',
 ]
 
 type Step = 1 | 2 | 3
@@ -171,8 +171,8 @@ export default function UploadPage() {
         {step === 1 && (
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 space-y-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Book Details</h1>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Tell us about your book before we analyze it.</p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tell us about your book.</h1>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">A few quick details help us shape your trailer to match your genre and tone. Think of it as giving your film crew a brief before the shoot.</p>
             </div>
 
             {/* Title */}
@@ -270,9 +270,9 @@ export default function UploadPage() {
         {step === 2 && (
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 space-y-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Upload Your PDF</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Upload your manuscript.</h1>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Drop your manuscript below. We&apos;ll extract characters and scenes automatically.
+                Drop in your PDF and we&apos;ll read through your story to find your characters, key scenes, and the moments that make readers lean in. Only your manuscript is used — nothing else.
               </p>
             </div>
 
@@ -310,7 +310,7 @@ export default function UploadPage() {
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Drag & drop your PDF here, or <span className="text-indigo-600 dark:text-indigo-400">browse</span>
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">PDF only · Max 50 MB</p>
+                  <p className="text-xs text-gray-400 mt-1">Accepted format: PDF · Max file size: 50MB</p>
                 </div>
               )}
             </div>
@@ -345,7 +345,7 @@ export default function UploadPage() {
                 disabled={!file || uploading}
                 className="flex-[2] rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
               >
-                {uploading ? 'Analyzing…' : 'Upload & Analyze'}
+                {uploading ? 'Building your trailer…' : 'Upload & Build My Trailer'}
               </button>
             </div>
           </div>
@@ -361,9 +361,9 @@ export default function UploadPage() {
             </div>
 
             <div className="space-y-2">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Your book has been analyzed!</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Your trailer is ready.</h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                We&apos;ve identified your characters and written the screenplay. Review everything before generating your trailer.
+                We built it from your manuscript — your characters, your scenes, your story.
               </p>
             </div>
 
@@ -377,7 +377,7 @@ export default function UploadPage() {
               }}
               className="mt-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-8 py-3 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             >
-              Review Your Characters &amp; Scenes →
+              Review Your Story →
             </button>
 
             <Link href="/dashboard" className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">

@@ -127,14 +127,14 @@ export async function POST(request: Request) {
     if (!aiResponse.ok) {
       const errText = await aiResponse.text()
       console.error('OpenRouter error:', errText)
-      return Response.json({ error: 'AI analysis failed' }, { status: 500 })
+      return Response.json({ error: 'Our system could not read your manuscript. Please try again.' }, { status: 500 })
     }
 
     const aiJson = await aiResponse.json()
     const aiContent = aiJson.choices?.[0]?.message?.content
 
     if (!aiContent) {
-      return Response.json({ error: 'No AI response received' }, { status: 500 })
+      return Response.json({ error: 'We could not process your manuscript. Please try again.' }, { status: 500 })
     }
 
     let trailerData: {
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
       trailerData = JSON.parse(aiContent)
     } catch {
       console.error('Failed to parse AI JSON:', aiContent)
-      return Response.json({ error: 'Failed to parse AI response' }, { status: 500 })
+      return Response.json({ error: 'We had trouble reading your manuscript. Please try again.' }, { status: 500 })
     }
 
     // Save book record

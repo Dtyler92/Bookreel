@@ -136,11 +136,8 @@ export default async function DashboardPage() {
         {/* Welcome */}
         <div className="space-y-1">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Welcome back, {displayName}! 👋
+            Welcome back. What are we making today, {displayName}?
           </h1>
-          <p className="text-gray-500 dark:text-gray-400">
-            Ready to create your next book trailer?
-          </p>
         </div>
 
         {/* Subscription badge */}
@@ -168,7 +165,7 @@ export default async function DashboardPage() {
               href="/upload"
               className="rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             >
-              + Upload Your Book
+              Add My First Book →
             </Link>
           </div>
 
@@ -180,17 +177,17 @@ export default async function DashboardPage() {
               </div>
               <div className="space-y-1">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  No books yet. Upload your first book!
+                  Your bookshelf is empty — but not for long.
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Upload your manuscript and we&apos;ll generate a stunning trailer for it.
+                  Upload your first manuscript and we&apos;ll build a trailer that gives your story the entrance it deserves.
                 </p>
               </div>
               <Link
                 href="/upload"
                 className="mt-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-6 py-2.5 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
               >
-                Upload Your Book
+                Add My First Book →
               </Link>
             </div>
           ) : (

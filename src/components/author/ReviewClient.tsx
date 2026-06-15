@@ -335,12 +335,17 @@ export default function ReviewClient({ bookId, initialCharacters, initialScenes 
       {/* ── Characters ──────────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Characters
-            <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
-              ({approvedCharacters.size}/{characters.length} approved)
-            </span>
-          </h2>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              Your Characters
+              <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+                ({approvedCharacters.size}/{characters.length} approved)
+              </span>
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              These are the characters we found in your manuscript. Confirm the ones you&apos;d like featured in your trailer.
+            </p>
+          </div>
         </div>
         {characters.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400 italic">No characters found.</p>
@@ -362,12 +367,17 @@ export default function ReviewClient({ bookId, initialCharacters, initialScenes 
       {/* ── Scenes ──────────────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            Scenes
-            <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
-              ({approvedScenes.size}/{scenes.length} approved)
-            </span>
-          </h2>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              Your Key Scenes
+              <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+                ({approvedScenes.size}/{scenes.length} approved)
+              </span>
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              These are the moments from your book that we think will resonate most on screen. Keep the ones that feel right, swap any that don&apos;t.
+            </p>
+          </div>
         </div>
         {scenes.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400 italic">No scenes found.</p>
@@ -422,10 +432,10 @@ export default function ReviewClient({ bookId, initialCharacters, initialScenes 
                   Starting…
                 </span>
               ) : (
-                '🎬 Generate My Trailer'
+                'Build My Trailer'
               )}
             </button>
-            <p className="text-xs text-gray-400 mt-1">~15–20 min generation time</p>
+            <p className="text-xs text-gray-400 mt-1">Your trailer usually takes 15–20 minutes to produce.</p>
           </div>
         </div>
       </div>

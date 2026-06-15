@@ -15,9 +15,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "BookReel — AI Book Trailers for Indie Authors",
+  title: "BookReel — Cinematic Book Trailers for Indie Authors",
   description:
-    "Upload your book and let AI create a cinematic video trailer. Help readers discover your story.",
+    "Upload your manuscript and let our cinematic technology create a stunning video trailer. Give readers a reason to discover your story.",
 };
 
 export default function RootLayout({

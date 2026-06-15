@@ -73,10 +73,13 @@ export default async function ReviewPage({
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-8">
         {/* Book header */}
         <div className="space-y-2">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white leading-tight">
+            Here&apos;s what we found in your story.
+          </h1>
           <div className="flex items-start gap-3 flex-wrap">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white leading-tight">
+            <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 leading-tight">
               {typedBook.title}
-            </h1>
+            </h2>
             {typedBook.genre && (
               <span className="mt-1 inline-flex items-center rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-3 py-1 text-sm font-medium">
                 {typedBook.genre}
@@ -87,7 +90,7 @@ export default async function ReviewPage({
             <p className="text-gray-500 dark:text-gray-400 max-w-2xl">{typedBook.description}</p>
           )}
           <p className="text-sm text-gray-400 dark:text-gray-500">
-            Review and approve all characters and scenes, then generate your trailer.
+            Before we build your trailer, take a moment to review what we&apos;ve pulled from your manuscript. Add anything we missed, remove anything that doesn&apos;t feel right. This is still your story — we&apos;re just getting the details confirmed.
           </p>
         </div>
 

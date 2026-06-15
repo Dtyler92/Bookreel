@@ -48,6 +48,27 @@ export default function Home() {
 
         {/* Nav links */}
         <nav className="flex items-center gap-6">
+          <a
+            href="#how-it-works"
+            className="text-sm font-medium transition-colors"
+            style={{ color: "var(--color-text-heading)" }}
+          >
+            How It Works
+          </a>
+          <Link
+            href="/pricing"
+            className="text-sm font-medium transition-colors"
+            style={{ color: "var(--color-text-heading)" }}
+          >
+            Pricing
+          </Link>
+          <Link
+            href="/for-authors"
+            className="text-sm font-medium transition-colors"
+            style={{ color: "var(--color-text-heading)" }}
+          >
+            For Authors
+          </Link>
           <Link
             href="/login"
             className="text-sm font-medium transition-colors"
@@ -64,7 +85,7 @@ export default function Home() {
               borderRadius: "4px",
             }}
           >
-            Get Started →
+            Make My Trailer
           </Link>
         </nav>
       </header>
@@ -86,7 +107,7 @@ export default function Home() {
               marginBottom: "28px",
             }}
           >
-            Every story deserves a second life.
+            Your Story Deserves to Be Seen.
           </h1>
           <p
             className="max-w-2xl"
@@ -99,7 +120,7 @@ export default function Home() {
               marginBottom: "48px",
             }}
           >
-            BookReel turns your manuscript into a short, cinematic video trailer — made to share, made to be discovered.
+            You spent months — maybe years — writing your book. BookReel turns your manuscript into a cinematic trailer that gives readers a reason to stop scrolling and start reading. Upload your story, and we&apos;ll bring your characters and scenes to life on screen.
           </p>
           <div className="flex flex-col sm:flex-row items-center gap-5">
             <Link
@@ -111,14 +132,14 @@ export default function Home() {
                 borderRadius: "4px",
               }}
             >
-              Start Your First Reel →
+              Bring My Book to Life
             </Link>
             <a
-              href="#how-it-works"
+              href="#sample-trailer"
               className="text-base transition-colors"
               style={{ color: "var(--color-text-muted)" }}
             >
-              See how it works
+              Watch a sample trailer →
             </a>
           </div>
         </section>
@@ -136,7 +157,7 @@ export default function Home() {
           <div className="max-w-6xl mx-auto">
             {/* Section label */}
             <p
-              className="text-center mb-14"
+              className="text-center mb-3"
               style={{
                 fontFamily: "var(--font-inter), sans-serif",
                 fontSize: "11px",
@@ -146,7 +167,18 @@ export default function Home() {
                 color: "var(--color-text-muted)",
               }}
             >
-              How It Works
+              HOW IT WORKS
+            </p>
+            <p
+              className="text-center mb-14"
+              style={{
+                fontFamily: "var(--font-playfair), serif",
+                fontStyle: "italic",
+                fontSize: "clamp(16px, 2vw, 20px)",
+                color: "var(--color-text-body)",
+              }}
+            >
+              From manuscript to movie-worthy trailer — built entirely from your story.
             </p>
 
             {/* Feature cards */}
@@ -171,13 +203,13 @@ export default function Home() {
                   className="text-xl mb-3"
                   style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "var(--color-text-heading)" }}
                 >
-                  From PDF to Premiere
+                  We Read Your Manuscript
                 </h3>
                 <p
                   className="text-sm leading-relaxed"
                   style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
                 >
-                  Drop in your manuscript. BookReel reads your story&apos;s tone, genre, and voice.
+                  BookReel starts by reading your uploaded manuscript — your characters, your scenes, your voice. Nothing is invented or imported from anywhere else; every frame of your trailer is drawn directly from what you wrote.
                 </p>
               </div>
 
@@ -201,13 +233,13 @@ export default function Home() {
                   className="text-xl mb-3"
                   style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "var(--color-text-heading)" }}
                 >
-                  AI That Understands Story
+                  Your Story Becomes a Storyboard
                 </h3>
                 <p
                   className="text-sm leading-relaxed"
                   style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
                 >
-                  Our AI maps your narrative arc and sequences scenes like a film director.
+                  Our cinematic technology transforms the key moments of your book into a visual screenplay — the dramatic beats, the character introductions, the tension you crafted. Your words become the director&apos;s notes.
                 </p>
               </div>
 
@@ -231,13 +263,13 @@ export default function Home() {
                   className="text-xl mb-3"
                   style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, color: "var(--color-text-heading)" }}
                 >
-                  Get Found by Readers
+                  A Trailer Built Around Your Book
                 </h3>
                 <p
                   className="text-sm leading-relaxed"
                   style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif", fontWeight: 400 }}
                 >
-                  Your trailer lives in BookReel&apos;s discovery feed, surfaced by genre and mood.
+                  In minutes, you&apos;ll have a 60–90 second trailer — original footage, a compelling voiceover, and music — built entirely from your manuscript. Ready to share anywhere readers find their next favourite book.
                 </p>
               </div>
             </div>
@@ -251,6 +283,18 @@ export default function Home() {
           style={{ backgroundColor: "var(--color-bg-primary)" }}
         >
           <div className="max-w-4xl mx-auto">
+            <h2
+              className="text-center mb-14"
+              style={{
+                fontFamily: "var(--font-playfair), serif",
+                fontWeight: 900,
+                fontSize: "clamp(28px, 4vw, 44px)",
+                color: "var(--color-text-heading)",
+                lineHeight: 1.15,
+              }}
+            >
+              Three Steps. One Trailer. All Your Story.
+            </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-10">
               {/* Step 1 */}
               <div className="flex flex-col items-center text-center">
@@ -270,13 +314,13 @@ export default function Home() {
                   className="text-base mb-2"
                   style={{ fontFamily: "var(--font-inter), sans-serif", fontWeight: 600, color: "var(--color-text-heading)" }}
                 >
-                  Upload Your Book
+                  Upload Your Manuscript
                 </h3>
                 <p
                   className="text-sm leading-relaxed"
                   style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif" }}
                 >
-                  Drop your manuscript or PDF into BookReel.
+                  Drop in your PDF and let BookReel get acquainted with your story — your characters, your world, your words.
                 </p>
               </div>
 
@@ -298,13 +342,13 @@ export default function Home() {
                   className="text-base mb-2"
                   style={{ fontFamily: "var(--font-inter), sans-serif", fontWeight: 600, color: "var(--color-text-heading)" }}
                 >
-                  AI Writes the Screenplay
+                  Review Your Story&apos;s Highlights
                 </h3>
                 <p
                   className="text-sm leading-relaxed"
                   style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif" }}
                 >
-                  Our AI reads your story&apos;s arc and crafts a cinematic script.
+                  We&apos;ll surface the characters and scenes we&apos;ve pulled from your book — you confirm, adjust, and make sure it feels true to your vision.
                 </p>
               </div>
 
@@ -326,13 +370,13 @@ export default function Home() {
                   className="text-base mb-2"
                   style={{ fontFamily: "var(--font-inter), sans-serif", fontWeight: 600, color: "var(--color-text-heading)" }}
                 >
-                  Your Trailer is Ready
+                  Share Your Trailer with the World
                 </h3>
                 <p
                   className="text-sm leading-relaxed"
                   style={{ color: "var(--color-text-muted)", fontFamily: "var(--font-inter), sans-serif" }}
                 >
-                  Share it on social, your site, or BookReel&apos;s discovery feed.
+                  Download your finished trailer and post it everywhere your readers are — TikTok, Instagram, your author website, Amazon.
                 </p>
               </div>
             </div>
@@ -345,7 +389,7 @@ export default function Home() {
           style={{ backgroundColor: "var(--color-accent)" }}
         >
           <h2
-            className="mb-8"
+            className="mb-4"
             style={{
               fontFamily: "var(--font-playfair), serif",
               fontWeight: 900,
@@ -354,8 +398,21 @@ export default function Home() {
               lineHeight: 1.15,
             }}
           >
-            Ready to give your book its moment?
+            Your Book Has Been Waiting for Its Moment.
           </h2>
+          <p
+            className="max-w-2xl mx-auto mb-8"
+            style={{
+              fontFamily: "var(--font-playfair), serif",
+              fontStyle: "italic",
+              fontSize: "clamp(16px, 2vw, 20px)",
+              color: "var(--color-text-inverse)",
+              opacity: 0.9,
+              lineHeight: 1.65,
+            }}
+          >
+            Give readers something to feel before they even turn the first page. Your trailer is ready to be made — right now, from the manuscript you&apos;ve already written.
+          </p>
           <Link
             href="/signup"
             className="inline-block px-10 py-4 text-base font-semibold transition-colors"
@@ -365,7 +422,7 @@ export default function Home() {
               borderRadius: "4px",
             }}
           >
-            Create Your BookReel →
+            Start With My Manuscript
           </Link>
         </section>
       </main>
@@ -383,7 +440,7 @@ export default function Home() {
             color: "var(--color-text-muted)",
           }}
         >
-          &ldquo;For people who still dog-ear pages.&rdquo;
+          Every great story deserves an audience.
         </p>
         <p
           className="text-xs"
