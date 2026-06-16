@@ -107,8 +107,33 @@ export async function POST(request: Request) {
       console.log('[generate] Unapproved characters count:', unapprovedCharacters.length)
       return Response.json(
         {
-          error: `${unapprovedCharacters.length} character(s) not yet approved`,
+          error: `${unapprovedCharacters.length} character image(s) not yet approved`,
           unapprovedCount: unapprovedCharacters.length
+        },
+        { status: 400 }
+      )
+    }
+
+    // Verify all items for this book are approved
+    const { data: items, error: itemsError } = await supabase
+      .from('items')
+      .select('id, name, author_approved')
+      .eq('book_id', bookId)
+
+    if (itemsError) {
+      console.error('Items fetch error:', itemsError)
+      return Response.json({ error: 'Failed to fetch items' }, { status: 500 })
+    }
+
+    console.log('[generate] Items found:', items?.length ?? 0)
+
+    const unapprovedItems = (items || []).filter((item: { author_approved: boolean }) => !item.author_approved)
+    if (unapprovedItems.length > 0) {
+      console.log('[generate] Unapproved items count:', unapprovedItems.length)
+      return Response.json(
+        {
+          error: `${unapprovedItems.length} item image(s) not yet approved`,
+          unapprovedCount: unapprovedItems.length
         },
         { status: 400 }
       )
