@@ -21,9 +21,9 @@ export async function loginAction(
 }
 
 export async function signupAction(
-  _prevState: { error: string } | null,
+  _prevState: { error: string; email?: string } | null,
   formData: FormData
-): Promise<{ error: string }> {
+): Promise<{ error: string; email?: string }> {
   const fullName = formData.get('full_name') as string
   const email = formData.get('email') as string
   const password = formData.get('password') as string
@@ -34,6 +34,7 @@ export async function signupAction(
     password,
     options: {
       data: { full_name: fullName },
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm`,
     },
   })
 
@@ -41,5 +42,5 @@ export async function signupAction(
     return { error: error.message }
   }
 
-  redirect('/dashboard')
+  return { error: '', email }
 }

@@ -32,6 +32,97 @@ const labelStyle = {
 export default function SignupPage() {
   const [state, formAction, pending] = useActionState(signupAction, null)
 
+  // Success state: show "Check your inbox" message
+  if (state && !state.error && state.email) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#FAFAF7',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px 16px',
+      }}>
+        <div style={{
+          width: '100%',
+          maxWidth: '440px',
+          background: '#F4F1EB',
+          border: '1px solid #E8E2D5',
+          borderRadius: '12px',
+          padding: '48px 40px',
+          boxShadow: '0 4px 24px rgba(13,13,11,0.08)',
+          textAlign: 'center',
+        }}>
+          {/* Brand Logo */}
+          <div style={{ marginBottom: '20px' }}>
+            <BrandLogo size={28} />
+          </div>
+
+          {/* Diamond Rule */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
+            <hr style={{ flex: 1, border: 'none', borderTop: '1px solid #E8E2D5' }} />
+            <span style={{ color: '#C8402F', fontSize: '10px' }}>◆</span>
+            <hr style={{ flex: 1, border: 'none', borderTop: '1px solid #E8E2D5' }} />
+          </div>
+
+          {/* Envelope icon */}
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>✉️</div>
+
+          {/* Heading */}
+          <h1 style={{
+            fontFamily: 'var(--font-playfair), serif',
+            fontSize: '28px',
+            fontWeight: 700,
+            color: '#0D0D0B',
+            marginBottom: '16px',
+            lineHeight: 1.3,
+          }}>
+            Check your inbox.
+          </h1>
+
+          {/* Body */}
+          <p style={{
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: '15px',
+            color: '#3D3D35',
+            marginBottom: '12px',
+            lineHeight: 1.6,
+          }}>
+            We&apos;ve sent a confirmation link to{' '}
+            <strong style={{ color: '#0D0D0B' }}>{state.email}</strong>.
+            {' '}Click it to activate your account.
+          </p>
+
+          {/* Subtext */}
+          <p style={{
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: '13px',
+            color: '#8A8278',
+            marginBottom: '32px',
+          }}>
+            Don&apos;t see it? Check your spam folder.
+          </p>
+
+          <hr style={{ border: 'none', borderTop: '1px solid #E8E2D5', marginBottom: '24px' }} />
+
+          {/* Back to Login */}
+          <Link
+            href="/login"
+            style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '14px',
+              color: '#C8402F',
+              textDecoration: 'none',
+              fontWeight: 600,
+            }}
+          >
+            ← Back to Login
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{
       minHeight: '100vh',

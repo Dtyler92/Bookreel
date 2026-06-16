@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { loginAction } from '../actions'
 import { BrandLogo } from '@/components/shared/BrandLogo'
@@ -27,6 +28,33 @@ const labelStyle = {
   textTransform: 'uppercase' as const,
   color: '#8A8278',
   marginBottom: '6px',
+}
+
+/** Reads ?error param — must be inside a Suspense boundary */
+function ConfirmationErrorBanner() {
+  const searchParams = useSearchParams()
+  const errorParam = searchParams.get('error')
+
+  if (errorParam !== 'confirmation_failed') return null
+
+  return (
+    <div style={{
+      background: '#FEF3C7',
+      border: '1px solid #FDE68A',
+      borderRadius: '8px',
+      padding: '12px 16px',
+      marginBottom: '20px',
+      fontFamily: 'var(--font-inter), sans-serif',
+      fontSize: '14px',
+      color: '#92400E',
+    }}>
+      Your confirmation link has expired. Please{' '}
+      <Link href="/signup" style={{ color: '#92400E', fontWeight: 600 }}>
+        sign up again
+      </Link>
+      .
+    </div>
+  )
 }
 
 export default function LoginPage() {
@@ -84,7 +112,12 @@ export default function LoginPage() {
           Your stories are waiting.
         </p>
 
-        {/* Error */}
+        {/* Confirmation failed error (wrapped in Suspense for useSearchParams) */}
+        <Suspense fallback={null}>
+          <ConfirmationErrorBanner />
+        </Suspense>
+
+        {/* Form error */}
         {state?.error && (
           <div style={{
             background: '#FEE2E2',
