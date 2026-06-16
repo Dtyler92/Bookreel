@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { canGenerateTrailer, getModelForTier } from '@/lib/tierGate'
 import { PlanName } from '@/lib/stripe'
+import { runTrailerPipeline } from '@/lib/pipeline/runPipeline'
 
 function getServiceClient() {
   return createClient(
@@ -124,10 +125,30 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Failed to update trailer status' }, { status: 500 })
     }
 
-    return Response.json({
-      success: true,
-      message: 'Trailer generation queued'
+    // Determine the author's tier for pipeline configuration
+    // We need to re-fetch it here if userId was provided, otherwise default to 'author'
+    let pipelineTier: 'author' | 'pro' = 'author'
+    if (userId) {
+      const { data: tierProfile } = await supabase
+        .from('profiles')
+        .select('subscription_tier')
+        .eq('id', userId)
+        .single()
+      if (tierProfile?.subscription_tier === 'pro') {
+        pipelineTier = 'pro'
+      }
+    }
+
+    // Trigger pipeline in background (non-blocking)
+    setImmediate(async () => {
+      try {
+        await runTrailerPipeline(bookId, pipelineTier)
+      } catch (error) {
+        console.error('Pipeline failed:', error)
+      }
     })
+
+    return Response.json({ success: true, message: 'Your trailer is being built!' })
   } catch (error) {
     console.error('Generate route error:', error)
     return Response.json(
