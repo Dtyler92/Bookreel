@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import { BrandLogo } from '@/components/shared/BrandLogo'
 import type { Character, Item } from '@/types/database'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -30,13 +31,150 @@ function StatusBadge({ role }: { role: string | null }) {
   )
 }
 
-// ─── Generating Placeholder ───────────────────────────────────────────────────
+// ─── Generation Progress Bar ──────────────────────────────────────────────────
+
+const GENERATION_LABELS = [
+  'Generating character portraits…',
+  'Creating scene visuals…',
+  'Bringing your story to life…',
+  'Almost there…',
+]
+
+function GenerationProgressBar({
+  current,
+  total,
+  currentLabel,
+}: {
+  current: number
+  total: number
+  currentLabel: string
+}) {
+  const percentage = total > 0 ? Math.round((current / total) * 100) : 0
+
+  return (
+    <div style={{
+      width: '100%',
+      maxWidth: 480,
+      margin: '0 auto',
+      textAlign: 'center',
+    }}>
+      {/* Current action label */}
+      <p style={{
+        fontFamily: "'Playfair Display', Georgia, serif",
+        fontStyle: 'italic',
+        fontSize: 18,
+        color: '#8A8278',
+        marginBottom: 20,
+        minHeight: 28,
+      }}>
+        {currentLabel}
+      </p>
+
+      {/* Progress bar track */}
+      <div style={{
+        width: '100%',
+        height: 6,
+        backgroundColor: '#E8E2D5',
+        borderRadius: 3,
+        overflow: 'hidden',
+        marginBottom: 12,
+      }}>
+        {/* Fill */}
+        <div style={{
+          height: '100%',
+          width: `${percentage}%`,
+          background: 'linear-gradient(90deg, #C8402F, #E8602F)',
+          borderRadius: 3,
+          transition: 'width 600ms ease',
+        }} />
+      </div>
+
+      {/* Percentage + count */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontFamily: "'Inter', system-ui, sans-serif",
+        fontSize: 13,
+        color: '#8A8278',
+      }}>
+        <span>{percentage}% complete</span>
+        <span>{current} of {total} images</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Generation Overlay ───────────────────────────────────────────────────────
+
+function GenerationOverlay({
+  current,
+  total,
+}: {
+  current: number
+  total: number
+}) {
+  const [labelIndex, setLabelIndex] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLabelIndex((i) => (i + 1) % GENERATION_LABELS.length)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(250,248,245,0.96)',
+      backdropFilter: 'blur(4px)',
+      zIndex: 50,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 32,
+      padding: '0 24px',
+    }}>
+      <BrandLogo size={32} />
+      <GenerationProgressBar
+        current={current}
+        total={total}
+        currentLabel={GENERATION_LABELS[labelIndex]}
+      />
+    </div>
+  )
+}
+
+// ─── Generating Placeholder (per-card) ───────────────────────────────────────
 
 function GeneratingPlaceholder() {
   return (
     <div className="flex flex-col items-center justify-center w-full h-full min-h-[200px] bg-[#FDF2F0] rounded-lg border-2 border-dashed border-[#C8412C]/30">
-      <div className="w-6 h-6 border-2 border-[#C8412C] border-t-transparent rounded-full animate-spin mb-2" />
+      {/* Animated shimmer bar */}
+      <div style={{
+        width: '60%',
+        height: 4,
+        backgroundColor: '#E8E2D5',
+        borderRadius: 2,
+        overflow: 'hidden',
+        marginBottom: 10,
+      }}>
+        <div style={{
+          height: '100%',
+          background: 'linear-gradient(90deg, #C8402F, #E8602F)',
+          borderRadius: 2,
+          animation: 'shimmerBar 1.8s ease-in-out infinite',
+        }} />
+      </div>
       <span className="text-[#C8412C] text-xs font-medium">Generating…</span>
+      <style>{`
+        @keyframes shimmerBar {
+          0%   { width: 0%; }
+          50%  { width: 80%; }
+          100% { width: 0%; }
+        }
+      `}</style>
     </div>
   )
 }
@@ -457,16 +595,19 @@ export default function ReviewImagesClient({ bookId, initialCharacters, initialI
 
   const progressPct = totalItems > 0 ? (totalApproved / totalItems) * 100 : 0
 
+  // Count how many images have been generated so far (for the overlay progress bar)
+  const generatedCount =
+    characters.filter((c) => !!c.image_url).length +
+    items.filter((i) => !!i.image_url).length
+
+  // Show overlay while we're actively generating (trigger in-flight OR images still missing)
+  const showGeneratingOverlay = generating || needsGeneration
+
   return (
     <div className="space-y-12 pb-36">
-      {/* Generating notice */}
-      {generating && (
-        <div className="flex items-center gap-3 rounded-xl bg-[#FDF2F0] border border-[#C8412C]/20 px-5 py-4">
-          <span className="w-5 h-5 border-2 border-[#C8412C] border-t-transparent rounded-full animate-spin shrink-0" />
-          <p className="text-sm text-[#C8412C] font-medium">
-            Generating images from your book descriptions — this takes about 30–60 seconds…
-          </p>
-        </div>
+      {/* Generation overlay (replaces old spinner banner) */}
+      {showGeneratingOverlay && (
+        <GenerationOverlay current={generatedCount} total={totalItems} />
       )}
 
       {/* ── Characters section ────────────────────────────────────── */}
