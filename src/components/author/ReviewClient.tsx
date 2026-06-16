@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import type { Character, Scene } from '@/types/database'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -16,6 +17,8 @@ interface SceneWithApproval extends Scene {
 
 interface Props {
   bookId: string
+  bookTitle: string
+  bookGenre?: string | null
   initialCharacters: CharacterWithApproval[]
   initialScenes: SceneWithApproval[]
 }
@@ -31,33 +34,101 @@ function parseCharacterDescription(description: string | null) {
   }
 }
 
+// ─── Custom Toggle Switch ─────────────────────────────────────────────────────
+
+function ApproveToggle({
+  approved,
+  onChange,
+  id,
+}: {
+  approved: boolean
+  onChange: (val: boolean) => void
+  id: string
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <button
+        role="switch"
+        aria-checked={approved}
+        aria-label="Approve"
+        id={id}
+        onClick={() => onChange(!approved)}
+        style={{
+          position: 'relative',
+          width: '44px',
+          height: '24px',
+          borderRadius: '12px',
+          backgroundColor: approved ? '#C8402F' : '#E8E2D5',
+          border: 'none',
+          cursor: 'pointer',
+          padding: 0,
+          transition: 'background-color 250ms',
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            position: 'absolute',
+            top: '2px',
+            left: 0,
+            width: '20px',
+            height: '20px',
+            borderRadius: '50%',
+            backgroundColor: '#FFFFFF',
+            boxShadow: '0 1px 4px rgba(13,13,11,0.20)',
+            transform: approved ? 'translateX(20px)' : 'translateX(2px)',
+            transition: 'transform 250ms cubic-bezier(0.34,1.56,0.64,1)',
+            display: 'block',
+          }}
+        />
+      </button>
+      <label
+        htmlFor={id}
+        style={{
+          fontFamily: 'var(--font-inter), sans-serif',
+          fontSize: '13px',
+          fontWeight: 500,
+          color: approved ? '#C8402F' : '#8A8278',
+          cursor: 'pointer',
+          userSelect: 'none',
+        }}
+      >
+        {approved ? 'Approved' : 'Approve'}
+      </label>
+    </div>
+  )
+}
+
 // ─── Role badge ───────────────────────────────────────────────────────────────
 
 function RoleBadge({ role }: { role: string | null }) {
   const r = (role ?? '').toLowerCase()
-  // Vermillion (#C8402F) badge for all roles, varying shade
   const bg =
     r === 'protagonist'
-      ? 'rgba(200,64,47,0.12)'
+      ? '#FEF3C7'
       : r === 'antagonist'
-      ? 'rgba(200,64,47,0.20)'
-      : 'rgba(138,130,120,0.12)'
+      ? '#FEE2E2'
+      : '#EDE9E0'
   const color =
-    r === 'protagonist' || r === 'antagonist' ? '#C8402F' : '#8A8278'
+    r === 'protagonist'
+      ? '#92400E'
+      : r === 'antagonist'
+      ? '#991B1B'
+      : '#8A8278'
 
   return (
     <span
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        borderRadius: '999px',
-        padding: '2px 10px',
-        fontSize: '11px',
+        borderRadius: '100px',
+        padding: '3px 10px',
+        fontSize: '10px',
         fontFamily: 'var(--font-inter), sans-serif',
-        fontWeight: 600,
-        textTransform: 'capitalize',
-        letterSpacing: '0.04em',
-        background: bg,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        backgroundColor: bg,
         color,
       }}
     >
@@ -66,35 +137,42 @@ function RoleBadge({ role }: { role: string | null }) {
   )
 }
 
-// ─── Section label ────────────────────────────────────────────────────────────
+// ─── Section header ───────────────────────────────────────────────────────────
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <span
-      style={{
-        display: 'block',
-        fontFamily: 'var(--font-inter), sans-serif',
-        fontSize: '10px',
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '0.10em',
-        color: '#8A8278',
-        marginBottom: '3px',
-        fontVariant: 'small-caps',
-      }}
-    >
-      {children}
-    </span>
+    <div style={{ marginBottom: '20px' }}>
+      <h2
+        style={{
+          fontFamily: 'var(--font-playfair), serif',
+          fontWeight: 700,
+          fontSize: '20px',
+          color: '#0D0D0B',
+          margin: 0,
+        }}
+      >
+        {children}
+      </h2>
+      <div
+        style={{
+          width: '40px',
+          height: '2px',
+          backgroundColor: '#C8402F',
+          marginTop: '6px',
+          borderRadius: '1px',
+        }}
+      />
+    </div>
   )
 }
 
-// ─── Shared input style ───────────────────────────────────────────────────────
+// ─── Shared input/textarea style ──────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  background: '#FAFAF7',
-  border: '1.5px solid #E8E2D5',
-  borderRadius: '8px',
+  background: '#FFFFFF',
+  border: '1px solid #E8E2D5',
+  borderRadius: '6px',
   padding: '10px 12px',
   fontFamily: 'var(--font-inter), sans-serif',
   fontSize: '14px',
@@ -102,6 +180,40 @@ const inputStyle: React.CSSProperties = {
   outline: 'none',
   boxSizing: 'border-box',
   resize: 'none',
+}
+
+// ─── Info Row ─────────────────────────────────────────────────────────────────
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span
+        style={{
+          display: 'block',
+          fontFamily: 'var(--font-inter), sans-serif',
+          fontSize: '10px',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          color: '#8A8278',
+          marginBottom: '4px',
+        }}
+      >
+        {label}
+      </span>
+      <p
+        style={{
+          fontFamily: 'var(--font-inter), sans-serif',
+          fontSize: '14px',
+          color: '#1A1A18',
+          margin: 0,
+          lineHeight: 1.6,
+        }}
+      >
+        {value}
+      </p>
+    </div>
+  )
 }
 
 // ─── Character Card ───────────────────────────────────────────────────────────
@@ -173,49 +285,96 @@ function CharacterCard({
   // Re-parse in view mode in case onUpdate changed the character
   const viewParsed = parseCharacterDescription(character.description)
 
+  const initial = character.name.charAt(0).toUpperCase()
+
   return (
     <div
       style={{
+        backgroundColor: '#FFFFFF',
+        border: '1px solid #E8E2D5',
+        borderLeft: `3px solid ${approved ? '#C8402F' : '#E8E2D5'}`,
         borderRadius: '12px',
-        border: `1.5px solid ${approved ? '#6DBF8A' : '#E8E2D5'}`,
-        background: '#FFFFFF',
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-        transition: 'border-color 200ms ease',
+        padding: '24px',
+        marginBottom: '16px',
+        boxShadow: '0 2px 8px rgba(13,13,11,0.05)',
+        transition: 'border-left-color 250ms',
       }}
     >
+      {/* ── Card header ──────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          gap: '12px',
+          marginBottom: '16px',
+          alignItems: 'center',
+        }}
+      >
+        {/* Avatar */}
+        <div
+          style={{
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #EDE9E0, rgba(200,64,47,0.20))',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'var(--font-playfair), serif',
+            fontWeight: 700,
+            fontSize: '18px',
+            color: '#C8402F',
+            flexShrink: 0,
+          }}
+        >
+          {initial}
+        </div>
+        {/* Name + role badge */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h3
+            style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontWeight: 700,
+              fontSize: '18px',
+              color: '#0D0D0B',
+              margin: '0 0 4px',
+            }}
+          >
+            {character.name}
+          </h3>
+          <RoleBadge role={character.role} />
+        </div>
+      </div>
+
+      {/* ── View / Edit body ─────────────────────────────────────────────────── */}
       {editing ? (
-        // ── Edit form ──────────────────────────────────────────────────────────
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* Name */}
-          <div>
-            <SectionLabel>Name</SectionLabel>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-
-          {/* Role */}
-          <div>
-            <SectionLabel>Role</SectionLabel>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              style={{ ...inputStyle, appearance: 'auto' }}
-            >
-              <option value="protagonist">Protagonist</option>
-              <option value="antagonist">Antagonist</option>
-              <option value="supporting">Supporting</option>
-            </select>
-          </div>
-
+        <div
+          style={{
+            backgroundColor: '#F4F1EB',
+            borderRadius: '8px',
+            padding: '16px',
+            marginTop: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
           {/* Appearance */}
           <div>
-            <SectionLabel>Appearance</SectionLabel>
+            <span
+              style={{
+                display: 'block',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '10px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: '#8A8278',
+                marginBottom: '4px',
+              }}
+            >
+              Appearance
+            </span>
             <textarea
               rows={3}
               value={appearance}
@@ -227,7 +386,20 @@ function CharacterCard({
 
           {/* Temperament */}
           <div>
-            <SectionLabel>Temperament</SectionLabel>
+            <span
+              style={{
+                display: 'block',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '10px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: '#8A8278',
+                marginBottom: '4px',
+              }}
+            >
+              Temperament
+            </span>
             <textarea
               rows={3}
               value={temperament}
@@ -239,7 +411,20 @@ function CharacterCard({
 
           {/* Role in Story */}
           <div>
-            <SectionLabel>Role in Story</SectionLabel>
+            <span
+              style={{
+                display: 'block',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '10px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: '#8A8278',
+                marginBottom: '4px',
+              }}
+            >
+              Role in Story
+            </span>
             <textarea
               rows={3}
               value={storyDescription}
@@ -255,14 +440,14 @@ function CharacterCard({
               onClick={handleSave}
               disabled={saving}
               style={{
-                background: '#C8402F',
+                backgroundColor: '#C8402F',
                 border: 'none',
-                borderRadius: '8px',
-                padding: '8px 18px',
+                borderRadius: '6px',
+                padding: '8px 16px',
                 fontFamily: 'var(--font-inter), sans-serif',
                 fontSize: '13px',
                 fontWeight: 600,
-                color: '#FAFAF7',
+                color: '#FFFFFF',
                 cursor: saving ? 'not-allowed' : 'pointer',
                 opacity: saving ? 0.6 : 1,
                 transition: 'opacity 150ms ease',
@@ -273,14 +458,13 @@ function CharacterCard({
             <button
               onClick={() => setEditing(false)}
               style={{
-                background: '#FAFAF7',
-                border: '1.5px solid #E8E2D5',
-                borderRadius: '8px',
-                padding: '8px 18px',
+                background: 'none',
+                border: 'none',
+                padding: '8px 12px',
                 fontFamily: 'var(--font-inter), sans-serif',
                 fontSize: '13px',
-                fontWeight: 600,
-                color: '#1A1A18',
+                fontWeight: 500,
+                color: '#8A8278',
                 cursor: 'pointer',
               }}
             >
@@ -289,144 +473,60 @@ function CharacterCard({
           </div>
         </div>
       ) : (
-        // ── View mode ──────────────────────────────────────────────────────────
-        <>
-          {/* Header: name + badge + edit */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
-              <h3
-                style={{
-                  fontFamily: 'var(--font-playfair), serif',
-                  fontWeight: 700,
-                  fontSize: '17px',
-                  color: '#0D0D0B',
-                  margin: 0,
-                }}
-              >
-                {character.name}
-              </h3>
-              <RoleBadge role={character.role} />
-            </div>
-            <button
-              onClick={() => setEditing(true)}
-              style={{
-                flexShrink: 0,
-                background: '#FAFAF7',
-                border: '1.5px solid #E8E2D5',
-                borderRadius: '8px',
-                padding: '5px 14px',
-                fontFamily: 'var(--font-inter), sans-serif',
-                fontSize: '12px',
-                fontWeight: 600,
-                color: '#8A8278',
-                cursor: 'pointer',
-                transition: 'border-color 150ms ease',
-              }}
-            >
-              Edit
-            </button>
-          </div>
-
-          {/* Appearance */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
           {character.appearance_notes && (
-            <div>
-              <SectionLabel>Appearance</SectionLabel>
-              <p
-                style={{
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: '13px',
-                  color: '#4A4642',
-                  margin: 0,
-                  lineHeight: 1.55,
-                }}
-              >
-                {character.appearance_notes}
-              </p>
-            </div>
+            <>
+              <InfoRow label="Appearance" value={character.appearance_notes} />
+              <div style={{ height: '1px', backgroundColor: '#EDE9E0', margin: '12px 0' }} />
+            </>
           )}
-
-          {/* Temperament */}
           {viewParsed.temperament && (
-            <div>
-              <SectionLabel>Temperament</SectionLabel>
-              <p
-                style={{
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: '13px',
-                  color: '#4A4642',
-                  margin: 0,
-                  lineHeight: 1.55,
-                }}
-              >
-                {viewParsed.temperament}
-              </p>
-            </div>
+            <>
+              <InfoRow label="Temperament" value={viewParsed.temperament} />
+              <div style={{ height: '1px', backgroundColor: '#EDE9E0', margin: '12px 0' }} />
+            </>
           )}
-
-          {/* Role in Story */}
           {viewParsed.story && (
-            <div>
-              <SectionLabel>Role in Story</SectionLabel>
-              <p
-                style={{
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: '13px',
-                  color: '#4A4642',
-                  margin: 0,
-                  lineHeight: 1.55,
-                }}
-              >
-                {viewParsed.story}
-              </p>
-            </div>
+            <InfoRow label="Role in Story" value={viewParsed.story} />
           )}
-
-          {/* Approve toggle */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              paddingTop: '10px',
-              borderTop: '1px solid #F0EBE2',
-            }}
-          >
-            <input
-              type="checkbox"
-              id={`char-approve-${character.id}`}
-              checked={approved}
-              onChange={(e) => handleApproveChange(e.target.checked)}
-              style={{ accentColor: '#C8402F', width: '15px', height: '15px', cursor: 'pointer' }}
-            />
-            <label
-              htmlFor={`char-approve-${character.id}`}
-              style={{
-                fontFamily: 'var(--font-inter), sans-serif',
-                fontSize: '13px',
-                fontWeight: 500,
-                color: '#4A4642',
-                cursor: 'pointer',
-                userSelect: 'none',
-              }}
-            >
-              Approve character
-            </label>
-            {approved && (
-              <span
-                style={{
-                  marginLeft: 'auto',
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: '#3C9E5E',
-                }}
-              >
-                ✓ Approved
-              </span>
-            )}
-          </div>
-        </>
+        </div>
       )}
+
+      {/* ── Card footer ──────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingTop: '16px',
+          borderTop: '1px solid #EDE9E0',
+          marginTop: '16px',
+        }}
+      >
+        {/* Edit button */}
+        <button
+          onClick={() => setEditing((v) => !v)}
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: '13px',
+            fontWeight: 500,
+            color: '#8A8278',
+            cursor: 'pointer',
+          }}
+        >
+          ✏ Edit
+        </button>
+
+        {/* Approve toggle */}
+        <ApproveToggle
+          approved={approved}
+          onChange={handleApproveChange}
+          id={`char-approve-${character.id}`}
+        />
+      </div>
     </div>
   )
 }
@@ -437,10 +537,12 @@ function SceneCard({
   scene,
   approved,
   onApprove,
+  index,
 }: {
   scene: SceneWithApproval
   approved: boolean
   onApprove: (id: string, approved: boolean) => void
+  index: number
 }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -456,45 +558,40 @@ function SceneCard({
   return (
     <div
       style={{
+        backgroundColor: '#FFFFFF',
+        border: '1px solid #E8E2D5',
+        borderLeft: `3px solid ${approved ? '#C8402F' : '#E8E2D5'}`,
         borderRadius: '12px',
-        border: `1.5px solid ${approved ? '#6DBF8A' : '#E8E2D5'}`,
-        background: '#FFFFFF',
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-        transition: 'border-color 200ms ease',
+        padding: '24px',
+        marginBottom: '16px',
+        boxShadow: '0 2px 8px rgba(13,13,11,0.05)',
+        transition: 'border-left-color 250ms',
       }}
     >
-      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-        {/* Scene number badge */}
+      {/* Decorative number + title row */}
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '12px' }}>
         <span
           style={{
+            fontFamily: 'var(--font-playfair), serif',
+            fontWeight: 900,
+            fontSize: '48px',
+            color: 'rgba(200,64,47,0.15)',
+            lineHeight: 1,
             flexShrink: 0,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '32px',
-            height: '32px',
-            borderRadius: '8px',
-            background: 'rgba(200,64,47,0.10)',
-            fontFamily: 'var(--font-inter), sans-serif',
-            fontSize: '13px',
-            fontWeight: 700,
-            color: '#C8402F',
+            userSelect: 'none',
           }}
         >
-          {scene.scene_number}
+          {String(index + 1).padStart(2, '0')}
         </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, paddingTop: '6px' }}>
           {scene.title && (
             <h3
               style={{
                 fontFamily: 'var(--font-playfair), serif',
                 fontWeight: 700,
-                fontSize: '16px',
+                fontSize: '17px',
                 color: '#0D0D0B',
-                margin: '0 0 4px',
+                margin: '0 0 6px',
               }}
             >
               {scene.title}
@@ -503,10 +600,10 @@ function SceneCard({
           <p
             style={{
               fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '13px',
-              color: '#4A4642',
+              fontSize: '14px',
+              color: '#1A1A18',
               margin: 0,
-              lineHeight: 1.55,
+              lineHeight: 1.6,
             }}
           >
             {scene.description}
@@ -514,8 +611,9 @@ function SceneCard({
         </div>
       </div>
 
+      {/* Read screenplay toggle */}
       {scene.screenplay_text && (
-        <div>
+        <div style={{ marginBottom: '12px' }}>
           <button
             onClick={() => setExpanded((v) => !v)}
             style={{
@@ -527,27 +625,28 @@ function SceneCard({
               alignItems: 'center',
               gap: '4px',
               fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '12px',
-              fontWeight: 600,
+              fontSize: '13px',
+              fontWeight: 500,
               color: '#C8402F',
             }}
           >
-            <span>{expanded ? '▲' : '▼'}</span>
-            {expanded ? 'Hide screenplay' : 'View screenplay'}
+            {expanded ? 'Hide screenplay' : 'Read screenplay'}
+            <span style={{ fontSize: '10px' }}>{expanded ? '▲' : '▼'}</span>
           </button>
           {expanded && (
             <pre
               style={{
                 marginTop: '8px',
                 borderRadius: '8px',
-                background: '#F5F1EB',
-                border: '1px solid #E8E2D5',
-                padding: '14px',
+                background: '#F4F1EB',
+                padding: '16px',
                 fontFamily: 'monospace',
-                fontSize: '12px',
-                color: '#4A4642',
+                fontSize: '13px',
+                color: '#1A1A18',
                 whiteSpace: 'pre-wrap',
-                overflowX: 'auto',
+                overflowY: 'auto',
+                maxHeight: '200px',
+                margin: '8px 0 0',
               }}
             >
               {scene.screenplay_text}
@@ -556,48 +655,21 @@ function SceneCard({
         </div>
       )}
 
+      {/* Card footer */}
       <div
         style={{
           display: 'flex',
+          justifyContent: 'flex-end',
           alignItems: 'center',
-          gap: '8px',
-          paddingTop: '10px',
-          borderTop: '1px solid #F0EBE2',
+          paddingTop: '16px',
+          borderTop: '1px solid #EDE9E0',
         }}
       >
-        <input
-          type="checkbox"
+        <ApproveToggle
+          approved={approved}
+          onChange={handleApproveChange}
           id={`scene-approve-${scene.id}`}
-          checked={approved}
-          onChange={(e) => handleApproveChange(e.target.checked)}
-          style={{ accentColor: '#C8402F', width: '15px', height: '15px', cursor: 'pointer' }}
         />
-        <label
-          htmlFor={`scene-approve-${scene.id}`}
-          style={{
-            fontFamily: 'var(--font-inter), sans-serif',
-            fontSize: '13px',
-            fontWeight: 500,
-            color: '#4A4642',
-            cursor: 'pointer',
-            userSelect: 'none',
-          }}
-        >
-          Approve scene
-        </label>
-        {approved && (
-          <span
-            style={{
-              marginLeft: 'auto',
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: '#3C9E5E',
-            }}
-          >
-            ✓ Approved
-          </span>
-        )}
       </div>
     </div>
   )
@@ -605,7 +677,13 @@ function SceneCard({
 
 // ─── Main ReviewClient ────────────────────────────────────────────────────────
 
-export default function ReviewClient({ bookId, initialCharacters, initialScenes }: Props) {
+export default function ReviewClient({
+  bookId,
+  bookTitle,
+  bookGenre,
+  initialCharacters,
+  initialScenes,
+}: Props) {
   const router = useRouter()
   const [characters, setCharacters] = useState<CharacterWithApproval[]>(initialCharacters)
   const [scenes, setScenes] = useState<SceneWithApproval[]>(initialScenes)
@@ -645,65 +723,128 @@ export default function ReviewClient({ bookId, initialCharacters, initialScenes 
 
   const totalItems = characters.length + scenes.length
   const approvedItems = approvedCharacters.size + approvedScenes.size
+  const progressPct = totalItems > 0 ? (approvedItems / totalItems) * 100 : 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '40px', paddingBottom: '120px' }}>
-      {/* ── Characters ──────────────────────────────────────────────────────── */}
-      <section>
-        <div style={{ marginBottom: '20px' }}>
-          <h2
-            style={{
-              fontFamily: 'var(--font-playfair), serif',
-              fontWeight: 700,
-              fontSize: '22px',
-              color: '#0D0D0B',
-              margin: '0 0 4px',
-            }}
-          >
-            Your Characters
-            <span
+    <div
+      style={{
+        minHeight: '100vh',
+        backgroundColor: '#FAFAF7',
+        paddingTop: '64px',
+      }}
+    >
+      {/* ── Sticky page header ───────────────────────────────────────────────── */}
+      <div
+        style={{
+          position: 'sticky',
+          top: '64px',
+          zIndex: 40,
+          backgroundColor: '#FFFFFF',
+          borderBottom: '1px solid #E8E2D5',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '1300px',
+            margin: '0 auto',
+            padding: '24px 40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+          }}
+        >
+          {/* Left */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <Link
+              href="/dashboard"
               style={{
-                marginLeft: '10px',
                 fontFamily: 'var(--font-inter), sans-serif',
-                fontWeight: 400,
                 fontSize: '14px',
                 color: '#8A8278',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
             >
-              ({approvedCharacters.size}/{characters.length} approved)
-            </span>
-          </h2>
-          <p
+              ← Back to Dashboard
+            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <h1
+                style={{
+                  fontFamily: 'var(--font-playfair), serif',
+                  fontWeight: 700,
+                  fontSize: '28px',
+                  color: '#0D0D0B',
+                  margin: 0,
+                  lineHeight: 1.2,
+                }}
+              >
+                {bookTitle}
+              </h1>
+              {bookGenre && (
+                <span
+                  style={{
+                    backgroundColor: '#EDE9E0',
+                    color: '#8A8278',
+                    borderRadius: '100px',
+                    padding: '4px 12px',
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {bookGenre}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Right: progress */}
+          <span
             style={{
               fontFamily: 'var(--font-inter), sans-serif',
               fontSize: '14px',
               color: '#8A8278',
-              margin: 0,
+              whiteSpace: 'nowrap',
             }}
           >
-            These are the characters we found in your manuscript. Confirm the ones you&apos;d like featured in your trailer.
-          </p>
+            {approvedItems} of {totalItems} approved
+          </span>
         </div>
-        {characters.length === 0 ? (
-          <p
-            style={{
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '14px',
-              color: '#8A8278',
-              fontStyle: 'italic',
-            }}
-          >
-            No characters found.
-          </p>
-        ) : (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-              gap: '16px',
-            }}
-          >
-            {characters.map((c) => (
+      </div>
+
+      {/* ── Main content ─────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          maxWidth: '1300px',
+          margin: '0 auto',
+          padding: '32px 24px 120px',
+          display: 'grid',
+          gridTemplateColumns: '40% 1fr',
+          gap: '40px',
+          alignItems: 'start',
+        }}
+      >
+        {/* ── Left column: Characters ──────────────────────────────────────── */}
+        <section>
+          <SectionHeader>Your Characters</SectionHeader>
+          {characters.length === 0 ? (
+            <p
+              style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '14px',
+                color: '#8A8278',
+                fontStyle: 'italic',
+              }}
+            >
+              No characters found.
+            </p>
+          ) : (
+            characters.map((c) => (
               <CharacterCard
                 key={c.id}
                 character={c}
@@ -711,213 +852,131 @@ export default function ReviewClient({ bookId, initialCharacters, initialScenes 
                 onApprove={handleCharacterApprove}
                 onUpdate={handleCharacterUpdate}
               />
-            ))}
-          </div>
-        )}
-      </section>
+            ))
+          )}
+        </section>
 
-      {/* ── Scenes ──────────────────────────────────────────────────────────── */}
-      <section>
-        <div style={{ marginBottom: '20px' }}>
-          <h2
-            style={{
-              fontFamily: 'var(--font-playfair), serif',
-              fontWeight: 700,
-              fontSize: '22px',
-              color: '#0D0D0B',
-              margin: '0 0 4px',
-            }}
-          >
-            Your Key Scenes
-            <span
+        {/* ── Right column: Scenes ─────────────────────────────────────────── */}
+        <section>
+          <SectionHeader>Your Key Scenes</SectionHeader>
+          {scenes.length === 0 ? (
+            <p
               style={{
-                marginLeft: '10px',
                 fontFamily: 'var(--font-inter), sans-serif',
-                fontWeight: 400,
                 fontSize: '14px',
                 color: '#8A8278',
+                fontStyle: 'italic',
               }}
             >
-              ({approvedScenes.size}/{scenes.length} approved)
-            </span>
-          </h2>
-          <p
-            style={{
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '14px',
-              color: '#8A8278',
-              margin: 0,
-            }}
-          >
-            These are the moments from your book that we think will resonate most on screen. Keep the ones that feel right, swap any that don&apos;t.
-          </p>
-        </div>
-        {scenes.length === 0 ? (
-          <p
-            style={{
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '14px',
-              color: '#8A8278',
-              fontStyle: 'italic',
-            }}
-          >
-            No scenes found.
-          </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {scenes.map((s) => (
+              No scenes found.
+            </p>
+          ) : (
+            scenes.map((s, i) => (
               <SceneCard
                 key={s.id}
                 scene={s}
                 approved={approvedScenes.has(s.id)}
                 onApprove={handleSceneApprove}
+                index={i}
               />
-            ))}
-          </div>
-        )}
-      </section>
+            ))
+          )}
+        </section>
+      </div>
 
-      {/* ── Bottom bar ──────────────────────────────────────────────────────── */}
+      {/* ── Sticky bottom bar ────────────────────────────────────────────────── */}
       <div
         style={{
           position: 'fixed',
           bottom: 0,
           left: 0,
           right: 0,
-          borderTop: '1px solid #E8E2D5',
-          background: 'rgba(250,250,247,0.97)',
+          height: '72px',
+          backgroundColor: 'rgba(250,250,247,0.95)',
           backdropFilter: 'blur(8px)',
-          boxShadow: '0 -4px 24px rgba(0,0,0,0.06)',
+          borderTop: '1px solid #E8E2D5',
+          padding: '0 40px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          zIndex: 50,
         }}
       >
-        <div
-          style={{
-            maxWidth: '960px',
-            margin: '0 auto',
-            padding: '14px 24px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '20px',
-          }}
-        >
-          {/* Progress */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-              <span
-                style={{
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: '12px',
-                  color: '#8A8278',
-                }}
-              >
-                {approvedItems} of {totalItems} items approved
-              </span>
-              {allApproved && (
-                <span
-                  style={{
-                    fontFamily: 'var(--font-inter), sans-serif',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: '#3C9E5E',
-                  }}
-                >
-                  All approved! 🎉
-                </span>
-              )}
-            </div>
+        {/* Left: counts + progress bar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <span
+            style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '14px',
+              color: '#8A8278',
+            }}
+          >
+            {approvedCharacters.size} characters · {approvedScenes.size} scenes approved
+          </span>
+          <div
+            style={{
+              width: '200px',
+              height: '4px',
+              backgroundColor: '#E8E2D5',
+              borderRadius: '2px',
+              overflow: 'hidden',
+            }}
+          >
             <div
               style={{
-                height: '5px',
-                width: '100%',
-                borderRadius: '999px',
-                background: '#E8E2D5',
-                overflow: 'hidden',
+                height: '100%',
+                backgroundColor: '#C8402F',
+                width: `${progressPct}%`,
+                transition: 'width 300ms ease',
+                borderRadius: '2px',
               }}
-            >
-              <div
-                style={{
-                  height: '100%',
-                  borderRadius: '999px',
-                  background: '#C8402F',
-                  width: totalItems > 0 ? `${(approvedItems / totalItems) * 100}%` : '0%',
-                  transition: 'width 300ms ease',
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Generate button */}
-          <div style={{ flexShrink: 0, textAlign: 'right' }}>
-            {generateError && (
-              <p
-                style={{
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: '12px',
-                  color: '#C8402F',
-                  marginBottom: '4px',
-                }}
-              >
-                {generateError}
-              </p>
-            )}
-            <button
-              onClick={handleGenerate}
-              disabled={!allApproved || generating}
-              style={{
-                background: allApproved ? '#C8402F' : '#E8E2D5',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '12px 24px',
-                fontFamily: 'var(--font-inter), sans-serif',
-                fontSize: '14px',
-                fontWeight: 600,
-                color: allApproved ? '#FAFAF7' : '#8A8278',
-                cursor: allApproved && !generating ? 'pointer' : 'not-allowed',
-                transition: 'background 200ms ease, color 200ms ease',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              {generating ? (
-                <>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: '14px',
-                      height: '14px',
-                      border: '2px solid rgba(250,250,247,0.4)',
-                      borderTopColor: '#FAFAF7',
-                      borderRadius: '50%',
-                      animation: 'spin 0.7s linear infinite',
-                    }}
-                  />
-                  Opening…
-                </>
-              ) : (
-                'Continue to Visual Review →'
-              )}
-            </button>
-            <p
-              style={{
-                fontFamily: 'var(--font-inter), sans-serif',
-                fontSize: '11px',
-                color: '#8A8278',
-                marginTop: '4px',
-                textAlign: 'right',
-              }}
-            >
-              Your trailer usually takes 15–20 minutes to produce.
-            </p>
+            />
           </div>
         </div>
-      </div>
 
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+        {/* Right: CTA button */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+          {generateError && (
+            <span
+              style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '12px',
+                color: '#C8402F',
+              }}
+            >
+              {generateError}
+            </span>
+          )}
+          <button
+            onClick={handleGenerate}
+            disabled={!allApproved || generating}
+            style={{
+              backgroundColor: allApproved ? '#C8402F' : '#E8E2D5',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '14px 28px',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '15px',
+              fontWeight: 600,
+              color: allApproved ? '#FFFFFF' : '#8A8278',
+              cursor: allApproved && !generating ? 'pointer' : 'not-allowed',
+              opacity: allApproved ? 1 : 0.5,
+              transition: 'background-color 200ms ease, color 200ms ease, opacity 200ms ease',
+            }}
+          >
+            {generating ? 'Opening…' : 'Continue to Visual Review →'}
+          </button>
+          <span
+            style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '12px',
+              color: '#8A8278',
+            }}
+          >
+            ~15-20 min to generate your trailer
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
