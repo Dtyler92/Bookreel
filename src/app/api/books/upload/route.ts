@@ -5,23 +5,19 @@ import { PDFParse } from 'pdf-parse'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const SYSTEM_PROMPT = `You are a creative trailer scriptwriter. Analyze the provided book excerpt and generate compelling trailer data in the following exact JSON format:
-{
-  "characters": [{"name": "", "role": "", "description": "", "appearance": ""}],
-  "scenes": [{"scene_number": 1, "title": "", "description": "", "screenplay_text": "", "duration_seconds": 10}],
-  "voiceover": "",
-  "tone": "",
-  "music_mood": ""
-}
+const SYSTEM_PROMPT = `You are a screenplay writer. Return ONLY a valid JSON object with no markdown, no code blocks, no explanation. Just raw JSON.
+
+The JSON must match this exact structure:
+{"characters":[{"name":"","role":"","description":"","appearance":""}],"scenes":[{"scene_number":1,"title":"","description":"","screenplay_text":"","duration_seconds":10}],"voiceover":"","tone":"","music_mood":""}
 
 Guidelines:
 - Extract 2-5 main characters with vivid descriptions
 - Create 4-6 cinematic scenes that would work as a book trailer
-- Each scene should be 8-15 seconds
+- Each scene should be 8-15 seconds (duration_seconds between 8 and 15)
 - Voiceover should be compelling and mysterious (2-3 sentences)
 - Tone: one of dramatic, mysterious, romantic, thrilling, inspiring, dark
 - Music mood: one of orchestral, ambient, upbeat, suspenseful, emotional, epic
-- Return ONLY valid JSON, no other text`
+- Return ONLY raw JSON. No markdown fences, no backticks, no explanation before or after.`
 
 function getServiceClient() {
   return createSupabaseDirectClient(
@@ -209,18 +205,28 @@ export async function POST(request: Request) {
       console.log('OpenRouter key present:', !!process.env.OPENROUTER_API_KEY)
       console.log('OpenRouter key prefix:', process.env.OPENROUTER_API_KEY?.substring(0, 10))
 
-      const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY
-      const apiUrl = process.env.OPENROUTER_API_KEY
+      // Treat placeholder/masked values as unset
+      const isPlaceholder = (v: string | undefined) => !v || v === '***' || v === 'xxx'
+      const rawOpenRouterKey = process.env.OPENROUTER_API_KEY
+      const rawOpenAiKey = process.env.OPENAI_API_KEY
+      const openRouterKey = isPlaceholder(rawOpenRouterKey) ? undefined : rawOpenRouterKey
+      const openAiKey = isPlaceholder(rawOpenAiKey) ? undefined : rawOpenAiKey
+
+      console.log('[upload] OpenRouter key available:', !!openRouterKey)
+      console.log('[upload] OpenAI key available:', !!openAiKey)
+
+      const apiKey = openRouterKey || openAiKey
+      const apiUrl = openRouterKey
         ? 'https://openrouter.ai/api/v1/chat/completions'
         : 'https://api.openai.com/v1/chat/completions'
-      const model = process.env.OPENROUTER_API_KEY
+      const model = openRouterKey
         ? 'openai/gpt-4o-mini'
         : 'gpt-4o-mini'
 
       if (!apiKey) {
-        console.error('[upload] Neither OPENROUTER_API_KEY nor OPENAI_API_KEY is set')
+        console.error('[upload] Neither OPENROUTER_API_KEY nor OPENAI_API_KEY is set (or both are placeholder values)')
         return Response.json(
-          { error: 'AI service not configured' },
+          { error: 'AI service not configured. Please check API key configuration.' },
           { status: 500 }
         )
       }
@@ -231,7 +237,7 @@ export async function POST(request: Request) {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       }
-      if (process.env.OPENROUTER_API_KEY) {
+      if (openRouterKey) {
         aiHeaders['HTTP-Referer'] = 'https://bookreel.app'
         aiHeaders['X-Title'] = 'BookReel'
       }
@@ -259,9 +265,9 @@ export async function POST(request: Request) {
       }
 
       const aiJson = await aiResponse.json()
-      const aiContent = aiJson.choices?.[0]?.message?.content
+      const rawContent = aiJson.choices?.[0]?.message?.content
 
-      if (!aiContent) {
+      if (!rawContent) {
         console.error('[upload] OpenRouter returned no content:', JSON.stringify(aiJson))
         return Response.json(
           { error: 'AI service returned no data. Please try again.' },
@@ -269,15 +275,27 @@ export async function POST(request: Request) {
         )
       }
 
+      console.log('[upload] AI raw response (first 500 chars):', rawContent.substring(0, 500))
+
+      // Strip markdown code blocks if the AI wrapped its response
+      const cleanContent = rawContent
+        .replace(/^```json\n?/i, '')
+        .replace(/^```\n?/i, '')
+        .replace(/\n?```$/i, '')
+        .trim()
+
+      let trailerDataParsed: typeof trailerData
       try {
-        trailerData = JSON.parse(aiContent)
+        trailerDataParsed = JSON.parse(cleanContent)
       } catch (parseErr) {
-        console.error('[upload] Failed to parse AI JSON:', aiContent)
+        console.error('[upload] Failed to parse AI JSON. Parse error:', (parseErr as Error).message)
+        console.error('[upload] Raw content was:', rawContent.substring(0, 500))
         return Response.json(
           { error: 'AI service returned invalid data. Please try again.' },
           { status: 500 }
         )
       }
+      trailerData = trailerDataParsed
 
       console.log('[upload] AI trailer data generated, scenes:', trailerData.scenes?.length)
     } catch (aiErr) {
