@@ -163,20 +163,29 @@ export async function POST(request: Request) {
     let extractedText = ''
     try {
       await ensureWorker()
-      const fileBuffer2 = await file.arrayBuffer()
-      const fileBytes2 = new Uint8Array(fileBuffer2)
-      const parser = new PDFParse({ data: fileBytes2 })
+      const pdfBuffer = Buffer.from(await file.arrayBuffer())
+      const parser = new PDFParse({ data: pdfBuffer })
       const textResult = await parser.getText()
-      extractedText = textResult.text
+      extractedText = textResult.text || ''
       console.log('[upload] PDF text extracted, length:', extractedText.length)
     } catch (pdfError) {
       console.error('[upload] PDF parse error (non-fatal, using fallback):', pdfError)
-      // Fallback to title/description so the rest of the flow continues
-      extractedText = `Title: ${title}\nGenre: ${genre || 'Unknown'}\nDescription: ${description || 'No description provided'}`
+      extractedText = ''
     }
 
-    // Truncate to 15000 chars
-    const truncatedText = extractedText.slice(0, 15000)
+    // If we couldn't extract meaningful text, fall back to form data silently
+    if (extractedText.length < 100) {
+      console.log('[upload] PDF text too short, using form data as fallback')
+      extractedText = `Book Title: ${title}\nGenre: ${genre || 'Unknown'}\nDescription: ${description || 'No description provided'}\n\nThis is a ${genre || 'fiction'} book called "${title}". ${description || ''}`
+    }
+
+    // Build the AI user message — richer prompt when only form data is available
+    const userMessage = extractedText.length > 500
+      ? `Analyze this book excerpt and generate trailer data:\n\nTitle: ${title}\nGenre: ${genre}\n\n${extractedText.substring(0, 15000)}`
+      : `Generate a compelling book trailer screenplay for this book:\n\nTitle: ${title}\nGenre: ${genre}\nDescription: ${description}\n\nCreate dramatic, engaging scenes that would work well for a ${genre} book with this title and description. Use your knowledge of this genre to create compelling characters and scenes.`
+
+    // Truncate to 15000 chars (for the full-text path)
+    const truncatedText = userMessage.slice(0, 15000)
 
     // ── Step 4: Call OpenRouter API ───────────────────────────────────────────
     let trailerData: {
@@ -225,7 +234,7 @@ export async function POST(request: Request) {
           model,
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: `Analyze this book excerpt and generate trailer data:\n\n${truncatedText}` }
+            { role: 'user', content: truncatedText }
           ],
           response_format: { type: 'json_object' }
         })
@@ -235,7 +244,7 @@ export async function POST(request: Request) {
         const errText = await aiResponse.text()
         console.error('[upload] OpenRouter error:', aiResponse.status, errText)
         return Response.json(
-          { error: 'Our system could not read your manuscript. Please try again.', detail: errText },
+          { error: 'AI service failed to generate trailer data. Please try again.', detail: errText },
           { status: 500 }
         )
       }
@@ -246,7 +255,7 @@ export async function POST(request: Request) {
       if (!aiContent) {
         console.error('[upload] OpenRouter returned no content:', JSON.stringify(aiJson))
         return Response.json(
-          { error: 'We could not process your manuscript. Please try again.' },
+          { error: 'AI service returned no data. Please try again.' },
           { status: 500 }
         )
       }
@@ -256,7 +265,7 @@ export async function POST(request: Request) {
       } catch (parseErr) {
         console.error('[upload] Failed to parse AI JSON:', aiContent)
         return Response.json(
-          { error: 'We had trouble reading your manuscript. Please try again.' },
+          { error: 'AI service returned invalid data. Please try again.' },
           { status: 500 }
         )
       }
