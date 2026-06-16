@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { PDFParse } from 'pdf-parse'
 
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 const SYSTEM_PROMPT = `You are a creative trailer scriptwriter. Analyze the provided book excerpt and generate compelling trailer data in the following exact JSON format:
 {
   "characters": [{"name": "", "role": "", "description": "", "appearance": ""}],
