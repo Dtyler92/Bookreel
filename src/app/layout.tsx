@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 
@@ -18,6 +18,22 @@ export const metadata: Metadata = {
   title: "BookReel — Cinematic Book Trailers for Indie Authors",
   description:
     "Upload your manuscript and let our cinematic technology create a stunning video trailer. Give readers a reason to discover your story.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "BookReel",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#C8402F",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
