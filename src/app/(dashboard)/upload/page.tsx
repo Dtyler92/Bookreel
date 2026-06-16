@@ -27,12 +27,13 @@ const LOADING_MESSAGES = [
   'Almost ready to roll…',
 ]
 
-type Step = 1 | 2 | 3
+type Step = 1 | 2 | 3 | 4
 
 const STEPS = [
   { label: 'Book Details' },
   { label: 'Upload PDF' },
   { label: 'Processing' },
+  { label: 'Book Cover' },
 ]
 
 // ─── Shared input style ──────────────────────────────────────────────────────
@@ -108,6 +109,14 @@ export default function UploadPage() {
 
   // Step 3
   const [bookId, setBookId] = useState<string | null>(null)
+
+  // Step 4 — Book Cover
+  const [step4CoverPreview, setStep4CoverPreview] = useState<string | null>(null)
+  const [step4Generating, setStep4Generating] = useState(false)
+  const [step4Uploading, setStep4Uploading] = useState(false)
+  const [step4Error, setStep4Error] = useState<string | null>(null)
+  const [step4DragOver, setStep4DragOver] = useState(false)
+  const step4FileInputRef = useRef<HTMLInputElement>(null)
 
   // Rotating loading messages
   useEffect(() => {
@@ -826,25 +835,361 @@ export default function UploadPage() {
             <PrimaryButton
               fullWidth
               onClick={() => {
-                if (bookId) {
-                  router.push(`/dashboard/review/${bookId}`)
-                } else {
-                  router.push('/dashboard')
-                }
+                setStep(4)
               }}
             >
-              Review Your Story →
+              Add a Cover →
             </PrimaryButton>
 
             <div style={{ marginTop: '16px' }}>
-              <Link href="/dashboard" style={{
+              <button
+                onClick={() => {
+                  if (bookId) {
+                    router.push(`/dashboard/review/${bookId}`)
+                  } else {
+                    router.push('/dashboard')
+                  }
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '14px',
+                  color: '#8A8278',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                Skip — Review My Story →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 4: Book Cover ──────────────────────────────────────────────── */}
+        {step === 4 && (
+          <div style={{
+            background: '#FFFFFF',
+            border: '1px solid #E8E2D5',
+            borderRadius: '12px',
+            padding: '40px',
+          }}>
+            <h1 style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontWeight: 700,
+              fontSize: '28px',
+              color: '#0D0D0B',
+              margin: '0 0 10px',
+            }}>
+              Add a cover for your book.
+            </h1>
+            <p style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '15px',
+              color: '#8A8278',
+              margin: '0 0 32px',
+            }}>
+              Readers see this in the discovery feed. Make it count.
+            </p>
+
+            {step4Error && (
+              <div style={{
+                background: 'rgba(200,64,47,0.06)',
+                border: '1px solid rgba(200,64,47,0.25)',
+                borderRadius: '8px',
+                padding: '12px 16px',
                 fontFamily: 'var(--font-inter), sans-serif',
                 fontSize: '14px',
-                color: '#8A8278',
-                textDecoration: 'none',
+                color: '#C8402F',
+                marginBottom: '20px',
               }}>
-                ← Back to Dashboard
-              </Link>
+                {step4Error}
+              </div>
+            )}
+
+            {/* Preview */}
+            {step4CoverPreview && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={step4CoverPreview}
+                  alt="Cover preview"
+                  style={{
+                    width: 140,
+                    height: 210,
+                    objectFit: 'cover',
+                    borderRadius: '8px',
+                    border: '1px solid #E8E2D5',
+                    boxShadow: '0 8px 24px rgba(13,13,11,0.12)',
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Two options side by side */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+
+              {/* Option A — Upload */}
+              <div style={{
+                border: '1.5px dashed #E8E2D5',
+                borderRadius: '12px',
+                padding: '24px 20px',
+                textAlign: 'center',
+                background: step4DragOver ? 'rgba(200,64,47,0.03)' : '#FAFAF7',
+                borderColor: step4DragOver ? '#C8402F' : '#E8E2D5',
+                transition: 'all 150ms ease',
+                cursor: 'pointer',
+              }}
+                onDragOver={(e) => { e.preventDefault(); setStep4DragOver(true) }}
+                onDragLeave={() => setStep4DragOver(false)}
+                onDrop={async (e) => {
+                  e.preventDefault()
+                  setStep4DragOver(false)
+                  const droppedFile = e.dataTransfer.files[0]
+                  if (!droppedFile) return
+                  if (droppedFile.size > 10 * 1024 * 1024) {
+                    setStep4Error('File must be under 10MB')
+                    return
+                  }
+                  const reader = new FileReader()
+                  reader.onload = () => { setStep4CoverPreview(reader.result as string); setStep4Error(null) }
+                  reader.readAsDataURL(droppedFile)
+                }}
+                onClick={() => step4FileInputRef.current?.click()}
+              >
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>📁</div>
+                <p style={{
+                  fontFamily: 'var(--font-playfair), serif',
+                  fontWeight: 700,
+                  fontSize: '16px',
+                  color: '#0D0D0B',
+                  margin: '0 0 6px',
+                }}>
+                  Upload your cover
+                </p>
+                <p style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '12px',
+                  color: '#8A8278',
+                  margin: '0 0 16px',
+                }}>
+                  JPG, PNG, WebP — max 10MB
+                </p>
+                <button
+                  type="button"
+                  disabled={step4Uploading || step4Generating}
+                  style={{
+                    background: '#F4F1EB',
+                    border: '1.5px solid #E8E2D5',
+                    borderRadius: '8px',
+                    padding: '8px 20px',
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: '#2B2B2B',
+                    cursor: 'pointer',
+                  }}
+                  onClick={(e) => { e.stopPropagation(); step4FileInputRef.current?.click() }}
+                >
+                  Browse files
+                </button>
+                <input
+                  ref={step4FileInputRef}
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (!f) return
+                    if (f.size > 10 * 1024 * 1024) { setStep4Error('File must be under 10MB'); return }
+                    const reader = new FileReader()
+                    reader.onload = () => { setStep4CoverPreview(reader.result as string); setStep4Error(null) }
+                    reader.readAsDataURL(f)
+                  }}
+                />
+              </div>
+
+              {/* Option B — Generate */}
+              <div style={{
+                border: '1.5px solid #E8E2D5',
+                borderRadius: '12px',
+                padding: '24px 20px',
+                textAlign: 'center',
+                background: '#FAFAF7',
+              }}>
+                <div style={{ fontSize: '32px', marginBottom: '12px' }}>✨</div>
+                <p style={{
+                  fontFamily: 'var(--font-playfair), serif',
+                  fontWeight: 700,
+                  fontSize: '16px',
+                  color: '#0D0D0B',
+                  margin: '0 0 6px',
+                }}>
+                  Generate with AI
+                </p>
+                <p style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '12px',
+                  color: '#8A8278',
+                  margin: '0 0 16px',
+                }}>
+                  We'll design a unique cover based on your book.
+                </p>
+                <button
+                  type="button"
+                  disabled={step4Generating || step4Uploading}
+                  onClick={async () => {
+                    setStep4Generating(true)
+                    setStep4Error(null)
+                    try {
+                      const res = await fetch('/api/books/generate-cover', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          bookId: bookId ?? undefined,
+                          title,
+                          genre: genre || 'Fiction',
+                          description,
+                        }),
+                      })
+                      if (!res.ok) {
+                        const d = await res.json().catch(() => ({}))
+                        throw new Error((d as { error?: string }).error ?? 'Failed to generate cover')
+                      }
+                      const data = await res.json() as { imageUrl?: string; coverUrl?: string }
+                      setStep4CoverPreview(data.imageUrl ?? data.coverUrl ?? null)
+                    } catch (err) {
+                      setStep4Error(err instanceof Error ? err.message : 'Failed to generate cover')
+                    } finally {
+                      setStep4Generating(false)
+                    }
+                  }}
+                  style={{
+                    background: step4Generating ? '#F4F1EB' : '#C8402F',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 20px',
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: step4Generating ? '#8A8278' : '#FFFFFF',
+                    cursor: step4Generating ? 'not-allowed' : 'pointer',
+                    width: '100%',
+                  }}
+                >
+                  {step4Generating ? 'Designing your cover…' : 'Generate Cover with AI'}
+                </button>
+                {step4Generating && (
+                  <div style={{ width: '100%', height: 3, background: '#E8E2D5', borderRadius: 2, overflow: 'hidden', marginTop: '10px', position: 'relative' }}>
+                    <style>{`@keyframes s4IndBar{0%{left:-60%;width:60%}60%{left:100%;width:60%}100%{left:100%;width:60%}}`}</style>
+                    <div style={{ position: 'absolute', height: '100%', background: '#C8402F', borderRadius: 2, animation: 's4IndBar 1.4s ease-in-out infinite' }} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              {step4CoverPreview ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setStep4Uploading(true)
+                      setStep4Error(null)
+                      try {
+                        // If the preview is a data URL (uploaded file), upload it via API
+                        if (step4CoverPreview.startsWith('data:') && bookId) {
+                          // Convert data URL to blob and upload
+                          const res = await fetch(step4CoverPreview)
+                          const blob = await res.blob()
+                          const formData = new FormData()
+                          formData.append('image', blob, 'cover.jpg')
+                          formData.append('bookId', bookId)
+                          const uploadRes = await fetch('/api/books/upload-cover', {
+                            method: 'POST',
+                            body: formData,
+                            credentials: 'include',
+                          })
+                          if (!uploadRes.ok) {
+                            const d = await uploadRes.json().catch(() => ({}))
+                            throw new Error((d as { error?: string }).error ?? 'Upload failed')
+                          }
+                        }
+                        // Navigate to review page
+                        if (bookId) {
+                          router.push(`/dashboard/review/${bookId}`)
+                        } else {
+                          router.push('/dashboard')
+                        }
+                      } catch (err) {
+                        setStep4Error(err instanceof Error ? err.message : 'Failed to save cover')
+                        setStep4Uploading(false)
+                      }
+                    }}
+                    disabled={step4Uploading}
+                    style={{
+                      flex: 2,
+                      background: step4Uploading ? '#F4F1EB' : '#C8402F',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '14px 24px',
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      fontWeight: 600,
+                      fontSize: '15px',
+                      color: step4Uploading ? '#8A8278' : '#FFFFFF',
+                      cursor: step4Uploading ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {step4Uploading ? 'Saving…' : 'Use This Cover →'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setStep4CoverPreview(null); setStep4Error(null) }}
+                    disabled={step4Uploading}
+                    style={{
+                      flex: 1,
+                      background: '#FAFAF7',
+                      border: '1.5px solid #E8E2D5',
+                      borderRadius: '8px',
+                      padding: '14px 24px',
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      fontWeight: 500,
+                      fontSize: '15px',
+                      color: '#8A8278',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Try Again
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (bookId) {
+                      router.push(`/dashboard/review/${bookId}`)
+                    } else {
+                      router.push('/dashboard')
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    background: 'none',
+                    border: '1.5px solid #E8E2D5',
+                    borderRadius: '8px',
+                    padding: '14px 24px',
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontWeight: 500,
+                    fontSize: '15px',
+                    color: '#8A8278',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                  }}
+                >
+                  Skip for now — Review My Story →
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -852,3 +1197,4 @@ export default function UploadPage() {
     </div>
   )
 }
+

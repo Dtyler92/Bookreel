@@ -42,7 +42,7 @@ export default function PricingPage() {
     billing === 'yearly'
       ? 'Billed $588/yr. Save $120 a year.'
       : billing === 'beta'
-      ? 'Founding Member rate. Yours forever.'
+      ? 'Billed $348/yr. Founding Member rate — yours forever.'
       : null;
 
   return (

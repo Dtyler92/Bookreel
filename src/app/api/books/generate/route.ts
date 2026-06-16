@@ -77,12 +77,12 @@ export async function POST(request: Request) {
       .eq('book_id', bookId)
       .single()
 
-    if (trailerFetchError) {
+    if (trailerFetchError || !trailer) {
       console.error('Trailer fetch error:', trailerFetchError)
-      return Response.json({ error: 'Failed to fetch trailer record' }, { status: 500 })
+      return Response.json({ error: 'No trailer record found. Please complete the image review step first.', requiresImageApproval: true }, { status: 400 })
     }
 
-    if (trailer && !trailer.images_approved) {
+    if (!trailer.images_approved) {
       return Response.json(
         { error: 'Character and item images must be approved before generating your trailer', requiresImageApproval: true },
         { status: 400 }
@@ -114,30 +114,9 @@ export async function POST(request: Request) {
       )
     }
 
-    // Verify all scenes for this book are approved
-    const { data: scenes, error: scenesError } = await supabase
-      .from('scenes')
-      .select('id, title, author_approved')
-      .eq('book_id', bookId)
-
-    if (scenesError) {
-      console.error('[generate] Scenes fetch error:', scenesError)
-      return Response.json({ error: 'Failed to fetch scenes' }, { status: 500 })
-    }
-
-    console.log('[generate] Scenes found:', scenes?.length ?? 0, scenes?.map((s: { id: string; title: string; author_approved: boolean }) => ({ id: s.id, title: s.title, approved: s.author_approved })))
-
-    const unapprovedScenes = (scenes || []).filter((s: { author_approved: boolean }) => !s.author_approved)
-    if (unapprovedScenes.length > 0) {
-      console.log('[generate] Unapproved scenes count:', unapprovedScenes.length)
-      return Response.json(
-        {
-          error: `${unapprovedScenes.length} scene(s) not yet approved`,
-          unapprovedCount: unapprovedScenes.length
-        },
-        { status: 400 }
-      )
-    }
+    // Note: scene-level author_approved is set during the manuscript review step
+    // (not the image review step), so we do NOT re-check scenes here.
+    // The images_approved flag on the trailer record is the final gate before video generation.
 
     // Update trailer status to 'generating'
     const { error: trailerError } = await supabase

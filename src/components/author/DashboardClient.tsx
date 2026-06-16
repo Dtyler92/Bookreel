@@ -262,7 +262,7 @@ function BookCard({
     if (isGenerating) {
       pollRef.current = setInterval(async () => {
         try {
-          const res = await fetch(`/api/books/trailer-status?bookId=${book.id}`)
+          const res = await fetch(`/api/books/status/${book.id}`)
           if (res.ok) {
             const data = await res.json()
             if (data.status && data.status !== trailerStatus) {
@@ -275,7 +275,7 @@ function BookCard({
         } catch {
           // swallow
         }
-      }, 10000)
+      }, 30000)
     }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
