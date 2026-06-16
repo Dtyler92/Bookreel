@@ -6,22 +6,22 @@ import { CONTENT_POLICY_SYSTEM_ADDENDUM, sanitizeAppearanceDescription, sanitize
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const SYSTEM_PROMPT = `You are a book trailer screenplay writer. Analyze the provided book text and return ONLY a valid JSON object (no markdown, no code blocks) in exactly this format:
+const SYSTEM_PROMPT = `You are a book trailer screenplay writer. Analyze the book excerpt and return ONLY a JSON object (no markdown, no code blocks) with this exact structure:
 {
-  "characters": [
-    {"name": "string", "role": "protagonist|antagonist|supporting", "description": "string", "appearance": "string - describe exactly as in the book: hair, eyes, build, clothing, age"}
-  ],
-  "items": [
-    {"name": "string", "description": "string - describe exactly as mentioned in the book"}
-  ],
-  "scenes": [
-    {"scene_number": 1, "title": "string", "description": "string", "screenplay_text": "string", "duration_seconds": 10}
-  ],
-  "voiceover": "string - max 120 words",
+  "characters": [{"name": "string", "role": "protagonist", "description": "string", "appearance": "string"}],
+  "scenes": [{"scene_number": 1, "title": "string", "description": "string", "screenplay_text": "string", "duration_seconds": 10}],
+  "items": [{"name": "string", "description": "string"}],
+  "voiceover": "string",
   "tone": "string",
   "music_mood": "string"
 }
-Extract 3-5 main characters, 3-5 key items, and 6-8 scenes. Use ONLY descriptions from the book text, do not invent details.
+Rules:
+- 3-5 characters max
+- 5-7 scenes max
+- 2-4 key items/objects max
+- Keep descriptions book-accurate
+- No explicit sexual content
+- Return ONLY the JSON object, nothing else
 
 ${CONTENT_POLICY_SYSTEM_ADDENDUM}`
 
@@ -192,11 +192,19 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
+    // Clean text of null bytes and control characters that can break JSON/API calls
+    const cleanedText = extractedText
+      .replace(/\x00/g, '')
+      .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    console.log('[upload] Text contains null bytes:', extractedText.includes('\x00'))
+    console.log('[upload] Text length after cleaning:', cleanedText.length)
+
     // Build the AI user message
-    const userMessage = `Analyze this book excerpt and generate trailer data:\n\nTitle: ${title}\nGenre: ${genre}\n\n${extractedText.substring(0, 15000)}`
+    const userMessage = `Analyze this book excerpt and generate trailer data:\n\nTitle: ${title}\nGenre: ${genre}\n\n${cleanedText.substring(0, 14000)}`
 
     // Truncate to 15000 chars
     const truncatedText = userMessage.slice(0, 15000)
+    console.log('[upload] First 200 chars of text being sent:', truncatedText.substring(0, 200))
 
     // ── Step 4: Call OpenRouter API ───────────────────────────────────────────
     let trailerData: {
@@ -248,7 +256,12 @@ export async function POST(request: Request) {
         )
       }
 
-      console.log('[upload] Using AI endpoint:', apiUrl, 'model:', model)
+      console.log('=== AI CALL START ===')
+      console.log('[upload] Using AI endpoint:', apiUrl)
+      console.log('[upload] Using model:', model)
+      console.log('[upload] Key is placeholder:', ['***', 'xxx', ''].includes(apiKey || ''))
+      console.log('[upload] Key prefix:', apiKey?.substring(0, 15))
+      console.log('[upload] Text length being sent:', truncatedText.length)
 
       const aiHeaders: Record<string, string> = {
         'Authorization': `Bearer ${apiKey}`,
@@ -272,16 +285,19 @@ export async function POST(request: Request) {
         })
       })
 
+      console.log('[upload] AI response status:', aiResponse.status)
+      const responseText = await aiResponse.text()
+      console.log('[upload] AI raw response (first 500 chars):', responseText.substring(0, 500))
+
       if (!aiResponse.ok) {
-        const errText = await aiResponse.text()
-        console.error('[upload] OpenRouter error:', aiResponse.status, errText)
+        console.error('[upload] AI call failed:', aiResponse.status, responseText.substring(0, 300))
         return Response.json(
-          { error: 'AI service failed to generate trailer data. Please try again.', detail: errText },
+          { error: `AI service failed to generate trailer data. Status: ${aiResponse.status}`, detail: responseText.substring(0, 300) },
           { status: 500 }
         )
       }
 
-      const aiJson = await aiResponse.json()
+      const aiJson = JSON.parse(responseText)
       const rawContent = aiJson.choices?.[0]?.message?.content
 
       if (!rawContent) {
