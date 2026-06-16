@@ -74,9 +74,9 @@ export async function POST(request: Request) {
     }
 
     if (!file || !(file instanceof File)) {
-      console.error('[upload] No PDF file found in form data. Received keys:', file)
+      console.error('[upload] No file found in form data. Received keys:', file)
       return Response.json(
-        { error: 'No file provided. Please select a PDF file and try again.' },
+        { error: 'No file provided. Please select a PDF or TXT file and try again.' },
         { status: 400 }
       )
     }
@@ -85,10 +85,13 @@ export async function POST(request: Request) {
     }
 
     // Validate file type
-    if (file.type !== 'application/pdf') {
-      return Response.json({ error: 'File must be a PDF' }, { status: 400 })
+    const fileType = file.type
+    const fileName = file.name.toLowerCase()
+    const isTextFile = fileType === 'text/plain' || fileType === 'text/txt' || fileName.endsWith('.txt')
+    const isPdfFile = fileType === 'application/pdf' || fileName.endsWith('.pdf')
+    if (!isTextFile && !isPdfFile) {
+      return Response.json({ error: 'File must be a PDF or plain text (.txt) file' }, { status: 400 })
     }
-
     // Validate file size (50MB)
     const MAX_SIZE = 50 * 1024 * 1024
     if (file.size > MAX_SIZE) {
@@ -137,7 +140,7 @@ export async function POST(request: Request) {
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('books')
         .upload(fileName, fileBytes, {
-          contentType: 'application/pdf',
+          contentType: isTextFile ? 'text/plain' : 'application/pdf',
           upsert: false
         })
 
@@ -159,32 +162,38 @@ export async function POST(request: Request) {
       )
     }
 
-    // ── Step 3: Extract text from PDF ─────────────────────────────────────────
+    // ── Step 3: Extract text from file ────────────────────────────────────────
     let extractedText = ''
-    try {
-      await ensureWorker()
-      const pdfBuffer = Buffer.from(await file.arrayBuffer())
-      const parser = new PDFParse({ data: pdfBuffer })
-      const textResult = await parser.getText()
-      extractedText = textResult.text || ''
-      console.log('[upload] PDF text extracted, length:', extractedText.length)
-    } catch (pdfError) {
-      console.error('[upload] PDF parse error (non-fatal, using fallback):', pdfError)
-      extractedText = ''
+
+    if (isTextFile) {
+      // Read TXT directly
+      extractedText = await file.text()
+      console.log('[upload] TXT file read directly, length:', extractedText.length)
+    } else {
+      // Try PDF parsing
+      try {
+        await ensureWorker()
+        const pdfBuffer = Buffer.from(await file.arrayBuffer())
+        const parser = new PDFParse({ data: pdfBuffer })
+        const textResult = await parser.getText()
+        extractedText = textResult.text || ''
+        console.log('[upload] PDF text extracted, length:', extractedText.length)
+      } catch (pdfError) {
+        console.error('[upload] PDF parse error:', pdfError)
+        extractedText = ''
+      }
     }
 
-    // If we couldn't extract meaningful text, fall back to form data silently
-    if (extractedText.length < 100) {
-      console.log('[upload] PDF text too short, using form data as fallback')
-      extractedText = `Book Title: ${title}\nGenre: ${genre || 'Unknown'}\nDescription: ${description || 'No description provided'}\n\nThis is a ${genre || 'fiction'} book called "${title}". ${description || ''}`
+    if (extractedText.length < 500) {
+      return Response.json({
+        error: 'We could not extract readable text from your manuscript. Please make sure your file contains actual text (not scanned images). Try exporting directly from Word, Google Docs, or Scrivener as a PDF or plain text (.txt) file.'
+      }, { status: 400 })
     }
 
-    // Build the AI user message — richer prompt when only form data is available
-    const userMessage = extractedText.length > 500
-      ? `Analyze this book excerpt and generate trailer data:\n\nTitle: ${title}\nGenre: ${genre}\n\n${extractedText.substring(0, 15000)}`
-      : `Generate a compelling book trailer screenplay for this book:\n\nTitle: ${title}\nGenre: ${genre}\nDescription: ${description}\n\nCreate dramatic, engaging scenes that would work well for a ${genre} book with this title and description. Use your knowledge of this genre to create compelling characters and scenes.`
+    // Build the AI user message
+    const userMessage = `Analyze this book excerpt and generate trailer data:\n\nTitle: ${title}\nGenre: ${genre}\n\n${extractedText.substring(0, 15000)}`
 
-    // Truncate to 15000 chars (for the full-text path)
+    // Truncate to 15000 chars
     const truncatedText = userMessage.slice(0, 15000)
 
     // ── Step 4: Call OpenRouter API ───────────────────────────────────────────

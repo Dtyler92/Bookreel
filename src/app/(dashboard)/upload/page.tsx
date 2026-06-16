@@ -130,20 +130,36 @@ export default function UploadPage() {
     e.preventDefault()
     setDragging(false)
     const dropped = e.dataTransfer.files[0]
-    if (dropped && dropped.type === 'application/pdf') {
+    const droppedName = dropped?.name.toLowerCase()
+    const isAccepted = dropped && (
+      dropped.type === 'application/pdf' ||
+      dropped.type === 'text/plain' ||
+      dropped.type === 'text/txt' ||
+      droppedName?.endsWith('.pdf') ||
+      droppedName?.endsWith('.txt')
+    )
+    if (isAccepted) {
       setFile(dropped)
       setUploadError(null)
     } else {
-      setUploadError('Please upload a PDF file.')
+      setUploadError('Please upload a PDF or plain text (.txt) file.')
     }
   }
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0]
-    if (selected && selected.type === 'application/pdf') {
+    const selectedName = selected?.name.toLowerCase()
+    const isAccepted = selected && (
+      selected.type === 'application/pdf' ||
+      selected.type === 'text/plain' ||
+      selected.type === 'text/txt' ||
+      selectedName?.endsWith('.pdf') ||
+      selectedName?.endsWith('.txt')
+    )
+    if (isAccepted) {
       setFile(selected)
       setUploadError(null)
     } else if (selected) {
-      setUploadError('Please upload a PDF file.')
+      setUploadError('Please upload a PDF or plain text (.txt) file.')
     }
   }
 
@@ -500,7 +516,7 @@ export default function UploadPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="application/pdf"
+                accept=".pdf,.txt,application/pdf,text/plain"
                 style={{ display: 'none' }}
                 onChange={handleFileChange}
               />
@@ -560,9 +576,18 @@ export default function UploadPage() {
                     fontFamily: 'var(--font-inter), sans-serif',
                     fontSize: '14px',
                     color: '#8A8278',
-                    margin: 0,
+                    margin: '0 0 6px',
                   }}>
-                    PDF up to 50MB — or click to browse
+                    PDF or TXT up to 50MB — or click to browse
+                  </p>
+                  <p style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '12px',
+                    color: '#B0A898',
+                    margin: 0,
+                    fontStyle: 'italic',
+                  }}>
+                    Tip: Export directly from Word or Google Docs for best results
                   </p>
                 </div>
               )}
@@ -579,8 +604,12 @@ export default function UploadPage() {
                 fontSize: '14px',
                 color: '#C8402F',
                 marginBottom: '16px',
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'flex-start',
               }}>
-                {uploadError}
+                <span style={{ flexShrink: 0, fontSize: '16px' }}>⚠️</span>
+                <span>{uploadError}</span>
               </div>
             )}
 
