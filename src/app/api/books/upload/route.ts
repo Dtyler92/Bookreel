@@ -1,6 +1,7 @@
 import { createClient as createSupabaseDirectClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { PDFParse } from 'pdf-parse'
+import { CONTENT_POLICY_SYSTEM_ADDENDUM, sanitizeAppearanceDescription, sanitizeSceneDescription } from '@/lib/contentPolicy'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -20,7 +21,9 @@ const SYSTEM_PROMPT = `You are a book trailer screenplay writer. Analyze the pro
   "tone": "string",
   "music_mood": "string"
 }
-Extract 3-5 main characters, 3-5 key items, and 6-8 scenes. Use ONLY descriptions from the book text, do not invent details.`
+Extract 3-5 main characters, 3-5 key items, and 6-8 scenes. Use ONLY descriptions from the book text, do not invent details.
+
+${CONTENT_POLICY_SYSTEM_ADDENDUM}`
 
 function getServiceClient() {
   return createSupabaseDirectClient(
@@ -310,6 +313,24 @@ export async function POST(request: Request) {
         )
       }
       trailerData = trailerDataParsed
+
+      // Sanitize character appearances
+      if (trailerData.characters) {
+        trailerData.characters = trailerData.characters.map((char: any) => ({
+          ...char,
+          appearance: sanitizeAppearanceDescription(char.appearance || ''),
+          description: sanitizeAppearanceDescription(char.description || '')
+        }))
+      }
+
+      // Sanitize scene descriptions
+      if (trailerData.scenes) {
+        trailerData.scenes = trailerData.scenes.map((scene: any) => ({
+          ...scene,
+          description: sanitizeSceneDescription(scene.description || ''),
+          screenplay_text: sanitizeSceneDescription(scene.screenplay_text || '')
+        }))
+      }
 
       console.log('[upload] AI trailer data generated, scenes:', trailerData.scenes?.length)
     } catch (aiErr) {

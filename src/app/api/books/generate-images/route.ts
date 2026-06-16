@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { fal } from '@fal-ai/client'
+import { IMAGE_NEGATIVE_PROMPT, sanitizeAppearanceDescription } from '@/lib/contentPolicy'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -76,16 +77,18 @@ export async function POST(request: Request) {
 
       const appearance = character.appearance_notes ?? character.description ?? character.name
       const characterPrompt = `${appearance}, ${character.description ?? ''}, portrait, realistic, cinematic lighting, book cover style, detailed face, ${genre} genre aesthetic`
-      const imagePrompt = characterPrompt.substring(0, 500)
+      const imagePrompt = sanitizeAppearanceDescription(characterPrompt.substring(0, 500))
 
       try {
         console.log('[generate-images] Generating image for character:', character.name)
         const result = await fal.subscribe(falModel, {
           input: {
             prompt: imagePrompt,
+            negative_prompt: IMAGE_NEGATIVE_PROMPT,
             image_size: 'portrait_4_3',
             num_images: 1,
-          },
+            safety_tolerance: '2',
+          } as any,
         }) as { data: FalImageResult; requestId: string }
 
         const imageUrl = result.data.images[0]?.url
@@ -117,9 +120,11 @@ export async function POST(request: Request) {
         const result = await fal.subscribe(falModel, {
           input: {
             prompt: imagePrompt,
+            negative_prompt: IMAGE_NEGATIVE_PROMPT,
             image_size: 'square_hd',
             num_images: 1,
-          },
+            safety_tolerance: '2',
+          } as any,
         }) as { data: FalImageResult; requestId: string }
 
         const imageUrl = result.data.images[0]?.url

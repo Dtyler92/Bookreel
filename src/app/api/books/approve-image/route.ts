@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { fal } from '@fal-ai/client'
+import { sanitizeAppearanceDescription, IMAGE_NEGATIVE_PROMPT } from '@/lib/contentPolicy'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -71,7 +72,7 @@ export async function PATCH(request: Request) {
         basePrompt = `${record.description ?? record.name}, ${record.name}, detailed, cinematic, dramatic lighting, ${genre} genre aesthetic, isolated subject`
       }
 
-      const updatedPrompt = `${basePrompt}. Adjust: ${feedback}`.substring(0, 500)
+      const updatedPrompt = `${basePrompt}. Adjust: ${sanitizeAppearanceDescription(feedback)}`.substring(0, 500)
 
       try {
         const falModel = 'fal-ai/flux/schnell'
@@ -81,9 +82,11 @@ export async function PATCH(request: Request) {
         const result = await fal.subscribe(falModel, {
           input: {
             prompt: updatedPrompt,
+            negative_prompt: IMAGE_NEGATIVE_PROMPT,
             image_size: imageSize,
             num_images: 1,
-          },
+            safety_tolerance: '2',
+          } as any,
         }) as { data: FalImageResult; requestId: string }
 
         newImageUrl = result.data.images[0]?.url

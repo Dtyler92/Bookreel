@@ -19,7 +19,9 @@ export async function generateVideoClip(
       promptImage: imageUrl,
       promptText: sceneDescription,
       duration: durationSeconds,
-      ratio: '1280:768'
+      ratio: '1280:768',
+      // Content policy
+      contentModeration: true
     })
   })
 

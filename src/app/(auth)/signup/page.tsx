@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 import Link from 'next/link'
 import { signupAction } from '../actions'
 import { BrandLogo } from '@/components/shared/BrandLogo'
@@ -31,6 +31,7 @@ const labelStyle = {
 
 export default function SignupPage() {
   const [state, formAction, pending] = useActionState(signupAction, null)
+  const [policyAccepted, setPolicyAccepted] = useState(false)
 
   // Success state: show "Check your inbox" message
   if (state && !state.error && state.email) {
@@ -242,12 +243,48 @@ export default function SignupPage() {
             />
           </div>
 
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+            <input
+              id="policy_accepted"
+              type="checkbox"
+              checked={policyAccepted}
+              onChange={e => setPolicyAccepted(e.target.checked)}
+              style={{
+                marginTop: '2px',
+                width: '16px',
+                height: '16px',
+                flexShrink: 0,
+                cursor: 'pointer',
+                accentColor: '#C8402F',
+              }}
+            />
+            <label
+              htmlFor="policy_accepted"
+              style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '13px',
+                color: '#3D3D35',
+                lineHeight: 1.5,
+                cursor: 'pointer',
+              }}
+            >
+              I agree to BookReel&apos;s{' '}
+              <Link
+                href="/terms"
+                style={{ color: '#C8402F', textDecoration: 'underline' }}
+              >
+                content policy
+              </Link>
+              {' '}— I will not upload content intended to create pornographic or sexually explicit material
+            </label>
+          </div>
+
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || !policyAccepted}
             style={{
               width: '100%',
-              background: pending ? '#E8A090' : '#C8402F',
+              background: (pending || !policyAccepted) ? '#E8A090' : '#C8402F',
               color: '#FAFAF7',
               border: 'none',
               borderRadius: '8px',
@@ -256,8 +293,8 @@ export default function SignupPage() {
               fontWeight: 600,
               fontSize: '15px',
               letterSpacing: '0.02em',
-              cursor: pending ? 'not-allowed' : 'pointer',
-              opacity: pending ? 0.75 : 1,
+              cursor: (pending || !policyAccepted) ? 'not-allowed' : 'pointer',
+              opacity: (pending || !policyAccepted) ? 0.75 : 1,
               transition: 'background 150ms ease',
               marginTop: '4px',
             }}
