@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseDirectClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
 import { PDFParse } from 'pdf-parse'
 
 export const runtime = 'nodejs'
@@ -23,7 +24,7 @@ Guidelines:
 - Return ONLY valid JSON, no other text`
 
 function getServiceClient() {
-  return createClient(
+  return createSupabaseDirectClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
@@ -99,14 +100,24 @@ export async function POST(request: Request) {
     let authorId: string | null = null
 
     try {
-      const authHeader = request.headers.get('Authorization')
-      if (authHeader) {
-        const token = authHeader.replace('Bearer ', '')
-        const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
-        if (authErr) {
-          console.error('[upload] Auth error:', authErr)
+      // Primary: use the SSR server client which reads auth cookies automatically
+      const serverClient = await createClient()
+      const { data: { user }, error: authErr } = await serverClient.auth.getUser()
+      console.log('Auth check - user:', user?.id, 'error:', authErr?.message)
+      if (user) {
+        authorId = user.id
+      } else {
+        // Fallback: check Authorization: Bearer <token> header (for non-browser clients)
+        const authHeader = request.headers.get('Authorization')
+        if (authHeader) {
+          const token = authHeader.replace('Bearer ', '')
+          const { data: { user: tokenUser }, error: tokenErr } = await supabase.auth.getUser(token)
+          console.log('Auth check (bearer) - user:', tokenUser?.id, 'error:', tokenErr?.message)
+          if (tokenErr) {
+            console.error('[upload] Bearer auth error:', tokenErr)
+          }
+          authorId = tokenUser?.id ?? null
         }
-        authorId = user?.id ?? null
       }
     } catch (authErr) {
       console.error('[upload] Auth step threw:', authErr)
