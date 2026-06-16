@@ -20,6 +20,7 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
       .eq('book_id', bookId)
 
     // Fetch book, scenes, characters
+    console.log(`[Pipeline:${bookId}] Fetching book data...`)
     const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single()
     const { data: scenes } = await supabase.from('scenes').select('*').eq('book_id', bookId).eq('author_approved', true).order('scene_number')
     const { data: characters } = await supabase.from('characters').select('*').eq('book_id', bookId).eq('author_approved', true)
@@ -27,40 +28,52 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
     if (!book || !scenes || scenes.length === 0) {
       throw new Error('No approved scenes found')
     }
+    console.log(`[Pipeline:${bookId}] Found book "${book.title}", ${scenes.length} scenes`)
 
     // Suppress unused variable warning — characters fetched for future use
     void characters
 
     // Step 1: Generate voiceover script
-    console.log('📝 Generating voiceover script...')
-    const voiceoverScript = await generateVoiceoverScript(
-      book.title,
-      scenes,
-      book.genre || 'dramatic'
-    )
+    console.log(`[Pipeline:${bookId}] 📝 Step 1: Generating voiceover script...`)
+    let voiceoverScript: string | null = null
+    try {
+      voiceoverScript = await generateVoiceoverScript(
+        book.title,
+        scenes,
+        book.genre || 'dramatic'
+      )
+      console.log(`[Pipeline:${bookId}] ✅ Voiceover script generated (${voiceoverScript?.length ?? 0} chars)`)
+    } catch (voiceoverError) {
+      // Voiceover is non-critical — log and continue
+      console.error(`[Pipeline:${bookId}] ⚠️ Voiceover script generation failed (non-fatal):`, voiceoverError)
+    }
 
     // Suppress unused variable warning — voiceoverScript stored for future ElevenLabs integration
     void voiceoverScript
 
     // Step 2: Generate scene images and video clips
-    console.log('🎬 Generating video clips...')
+    console.log(`[Pipeline:${bookId}] 🎬 Step 2: Generating video clips (${Math.min(scenes.length, 6)} scenes)...`)
     const clipUrls: string[] = []
 
     for (const scene of scenes.slice(0, 6)) { // max 6 scenes
+      console.log(`[Pipeline:${bookId}]   Generating image for scene ${scene.scene_number}...`)
       // Generate scene image
       const imageUrl = await generateSceneImage(
         scene.description,
         book.genre || 'dramatic',
         tier
       )
+      console.log(`[Pipeline:${bookId}]   ✅ Image generated: ${imageUrl.substring(0, 80)}`)
 
       // Generate video clip from image
+      console.log(`[Pipeline:${bookId}]   Generating video clip for scene ${scene.scene_number}...`)
       const clipUrl = await generateVideoClip(
         imageUrl,
         scene.description,
-        scene.duration_seconds || 10,
+        scene.duration_seconds || 5,
         tier
       )
+      console.log(`[Pipeline:${bookId}]   ✅ Video clip generated: ${clipUrl.substring(0, 80)}`)
 
       clipUrls.push(clipUrl)
 
@@ -71,12 +84,14 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
     }
 
     // Step 3: Stitch clips together
-    console.log('✂️ Stitching clips together...')
+    console.log(`[Pipeline:${bookId}] ✂️ Step 3: Stitching ${clipUrls.length} clips together...`)
     const stitchedPath = await stitchVideoClips(clipUrls, bookId)
+    console.log(`[Pipeline:${bookId}] ✅ Stitched video at: ${stitchedPath}`)
 
     // Step 4: Upload to Supabase
-    console.log('☁️ Uploading final trailer...')
+    console.log(`[Pipeline:${bookId}] ☁️ Step 4: Uploading final trailer...`)
     const finalVideoUrl = await uploadFinalVideo(stitchedPath, bookId)
+    console.log(`[Pipeline:${bookId}] ✅ Upload complete: ${finalVideoUrl.substring(0, 80)}`)
 
     // Step 5: Update trailer record
     await supabase.from('trailers').update({
@@ -85,14 +100,26 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
       processing_completed_at: new Date().toISOString(),
     }).eq('book_id', bookId)
 
-    console.log('✅ Trailer pipeline complete!')
+    console.log(`[Pipeline:${bookId}] ✅ Trailer pipeline complete!`)
     return { success: true, videoUrl: finalVideoUrl }
 
   } catch (error) {
-    console.error('Pipeline error:', error)
-    await supabase.from('trailers')
-      .update({ status: 'failed' })
+    const errMsg = error instanceof Error ? error.message : String(error)
+    const errStack = error instanceof Error ? error.stack : undefined
+    console.error(`[Pipeline:${bookId}] ❌ Pipeline error:`, errMsg)
+    if (errStack) console.error(`[Pipeline:${bookId}] Stack:`, errStack)
+
+    // Try to store error message (requires scripts/update-schema.sql migration to add error_message column)
+    const { error: updateErr } = await supabase.from('trailers')
+      .update({ status: 'failed', error_message: errMsg })
       .eq('book_id', bookId)
+
+    if (updateErr) {
+      // Fallback: column may not exist yet — update without error_message
+      await supabase.from('trailers')
+        .update({ status: 'failed' })
+        .eq('book_id', bookId)
+    }
     throw error
   }
 }
