@@ -16,9 +16,15 @@ export async function PATCH(request: Request) {
       updates?: Record<string, unknown>
     }
 
-    const { type, id, approved, updates } = body
+    // Support both `approved` and `author_approved` field names from different callers
+    const approvedValue = typeof body.approved === 'boolean' ? body.approved : (body as Record<string, unknown>).author_approved
+    const { type, id, updates } = body
+    const approved = approvedValue as boolean | undefined
+
+    console.log('[approve] Incoming body:', JSON.stringify({ type, id, approved: approvedValue, updates }))
 
     if (!type || !id || typeof approved !== 'boolean') {
+      console.error('[approve] Missing required fields:', { type, id, approved, updates })
       return Response.json(
         { error: 'Missing required fields: type, id, approved' },
         { status: 400 }

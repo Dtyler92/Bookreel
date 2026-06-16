@@ -93,6 +93,10 @@ export default function UploadPage() {
   const [description, setDescription] = useState('')
   const [amazonLink, setAmazonLink] = useState('')
   const [storeLink, setStoreLink] = useState('')
+  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [generatingCover, setGeneratingCover] = useState(false)
+  const [coverError, setCoverError] = useState<string | null>(null)
+  const coverFileInputRef = useRef<HTMLInputElement>(null)
 
   // Step 2 fields
   const [file, setFile] = useState<File | null>(null)
@@ -118,6 +122,48 @@ export default function UploadPage() {
   const handleStep1Next = () => {
     if (!title.trim()) return
     setStep(2)
+  }
+
+  // ── Cover handlers ────────────────────────────────────────────────────────
+  const handleCoverFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (f.size > 5 * 1024 * 1024) {
+      setCoverError('File must be under 5MB')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setCoverPreview(reader.result as string)
+      setCoverError(null)
+    }
+    reader.readAsDataURL(f)
+  }
+
+  const handleGenerateCover = async () => {
+    if (!title.trim()) {
+      setCoverError('Enter a book title first')
+      return
+    }
+    setGeneratingCover(true)
+    setCoverError(null)
+    try {
+      const res = await fetch('/api/books/generate-cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, genre: genre || 'Fiction', description }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error ?? 'Failed to generate cover')
+      }
+      const data = await res.json()
+      setCoverPreview(data.imageUrl)
+    } catch (err) {
+      setCoverError(err instanceof Error ? err.message : 'Failed to generate cover')
+    } finally {
+      setGeneratingCover(false)
+    }
   }
 
   // ── Step 2 ────────────────────────────────────────────────────────────────
@@ -425,6 +471,88 @@ export default function UploadPage() {
                 marginTop: '4px',
               }}>
                 {description.length}/500
+              </p>
+            </div>
+
+            {/* Book Cover */}
+            <div style={fieldStyle}>
+              <label style={labelStyle}>
+                Book Cover <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+              </label>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => coverFileInputRef.current?.click()}
+                  disabled={generatingCover}
+                  style={{
+                    background: '#F4F1EB',
+                    border: '1.5px solid #E8E2D5',
+                    borderRadius: '8px',
+                    padding: '10px 16px',
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: '#2B2B2B',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📁 Upload your cover
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerateCover}
+                  disabled={generatingCover || !title.trim()}
+                  style={{
+                    background: generatingCover ? '#F4F1EB' : '#C8402F',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '10px 16px',
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: generatingCover ? '#8A8278' : '#FFFFFF',
+                    cursor: generatingCover ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {generatingCover ? 'Generating…' : '✨ Generate one for me'}
+                </button>
+                <input
+                  ref={coverFileInputRef}
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp"
+                  style={{ display: 'none' }}
+                  onChange={handleCoverFileChange}
+                />
+              </div>
+              {coverError && (
+                <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', color: '#C8402F', marginTop: '6px' }}>
+                  {coverError}
+                </p>
+              )}
+              {generatingCover && (
+                <div style={{ width: '100%', height: 3, background: '#E8E2D5', borderRadius: 2, overflow: 'hidden', marginTop: '8px', position: 'relative' }}>
+                  <style>{`@keyframes indBar{0%{left:-60%;width:60%}60%{left:100%;width:60%}100%{left:100%;width:60%}}`}</style>
+                  <div style={{ position: 'absolute', height: '100%', background: '#C8402F', borderRadius: 2, animation: 'indBar 1.4s ease-in-out infinite' }} />
+                </div>
+              )}
+              {coverPreview && (
+                <div style={{ marginTop: '12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={coverPreview} alt="Cover preview" style={{ width: 100, height: 150, objectFit: 'cover', borderRadius: '6px', border: '1px solid #E8E2D5', boxShadow: '0 2px 8px rgba(13,13,11,0.1)' }} />
+                  <div>
+                    <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', color: '#16A34A', fontWeight: 500, margin: '0 0 6px' }}>✓ Cover selected</p>
+                    <button
+                      type="button"
+                      onClick={() => setCoverPreview(null)}
+                      style={{ background: 'none', border: 'none', fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', color: '#8A8278', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              )}
+              <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '11px', color: '#8A8278', marginTop: '6px' }}>
+                .jpg, .png, .webp — max 5MB
               </p>
             </div>
 

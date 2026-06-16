@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     // Verify all characters for this book are approved
     const { data: characters, error: charError } = await supabase
       .from('characters')
-      .select('id, author_approved')
+      .select('id, name, author_approved')
       .eq('book_id', bookId)
 
     if (charError) {
@@ -100,12 +100,40 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Failed to fetch characters' }, { status: 500 })
     }
 
-    const unapprovedCharacters = (characters || []).filter((c) => !c.author_approved)
+    console.log('[generate] Characters found:', characters?.length ?? 0, characters?.map((c: { id: string; name: string; author_approved: boolean }) => ({ id: c.id, name: c.name, approved: c.author_approved })))
+
+    const unapprovedCharacters = (characters || []).filter((c: { author_approved: boolean }) => !c.author_approved)
     if (unapprovedCharacters.length > 0) {
+      console.log('[generate] Unapproved characters count:', unapprovedCharacters.length)
       return Response.json(
         {
           error: `${unapprovedCharacters.length} character(s) not yet approved`,
           unapprovedCount: unapprovedCharacters.length
+        },
+        { status: 400 }
+      )
+    }
+
+    // Verify all scenes for this book are approved
+    const { data: scenes, error: scenesError } = await supabase
+      .from('scenes')
+      .select('id, title, author_approved')
+      .eq('book_id', bookId)
+
+    if (scenesError) {
+      console.error('[generate] Scenes fetch error:', scenesError)
+      return Response.json({ error: 'Failed to fetch scenes' }, { status: 500 })
+    }
+
+    console.log('[generate] Scenes found:', scenes?.length ?? 0, scenes?.map((s: { id: string; title: string; author_approved: boolean }) => ({ id: s.id, title: s.title, approved: s.author_approved })))
+
+    const unapprovedScenes = (scenes || []).filter((s: { author_approved: boolean }) => !s.author_approved)
+    if (unapprovedScenes.length > 0) {
+      console.log('[generate] Unapproved scenes count:', unapprovedScenes.length)
+      return Response.json(
+        {
+          error: `${unapprovedScenes.length} scene(s) not yet approved`,
+          unapprovedCount: unapprovedScenes.length
         },
         { status: 400 }
       )
