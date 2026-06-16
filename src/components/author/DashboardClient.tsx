@@ -297,19 +297,51 @@ function BookCard({
         borderRadius: '10px',
         overflow: 'hidden',
         transition: 'box-shadow 150ms ease, border-color 150ms ease',
+        animation: isGenerating ? 'borderPulse 2s ease-in-out infinite' : undefined,
       }}
         onMouseEnter={e => {
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 20px rgba(13,13,11,0.08)'
-          ;(e.currentTarget as HTMLDivElement).style.borderColor = '#C8402F'
+          if (!isGenerating) {
+            (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 20px rgba(13,13,11,0.08)'
+            ;(e.currentTarget as HTMLDivElement).style.borderColor = '#C8402F'
+          }
         }}
         onMouseLeave={e => {
-          (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'
-          ;(e.currentTarget as HTMLDivElement).style.borderColor = '#E8E2D5'
+          if (!isGenerating) {
+            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'
+            ;(e.currentTarget as HTMLDivElement).style.borderColor = '#E8E2D5'
+          }
         }}
       >
         {/* Cover */}
         <div style={{ position: 'relative', width: '100%', aspectRatio: '2/3' }}>
-          {coverUrl ? (
+          {isGenerating ? (
+            /* Animated trailer-generating cover */
+            <div style={{
+              width: '100%',
+              height: '100%',
+              background: 'linear-gradient(135deg, #C8402F, #9E2F20, #1A0A06, #C8402F)',
+              backgroundSize: '300% 300%',
+              animation: 'gradientPan 3s ease infinite',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              gap: 8,
+            }}>
+              <span style={{ fontSize: 28, lineHeight: 1 }}>🎬</span>
+              <span style={{
+                fontFamily: 'var(--font-playfair), serif',
+                fontStyle: 'italic',
+                fontSize: 15,
+                color: '#FFFFFF',
+                opacity: 0.92,
+                textAlign: 'center',
+                padding: '0 12px',
+              }}>
+                Creating your trailer
+              </span>
+            </div>
+          ) : coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={coverUrl} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
@@ -388,12 +420,10 @@ function BookCard({
             </div>
           ) : isGenerating ? (
             <div style={{ marginTop: '4px' }}>
-              <IndeterminateBar height={3} />
-              <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', color: '#8A8278', margin: '6px 0 2px' }}>
-                Generating your trailer...
-              </p>
-              <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '11px', color: '#8A8278', margin: 0 }}>
-                Usually ready in 15–20 minutes
+              <IndeterminateBar height={4} />
+              <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '11px', color: '#8A8278', margin: '6px 0 2px' }}>
+                Usually ready in{' '}
+                <span style={{ color: '#C8402F', fontWeight: 500 }}>15–20 min</span>
               </p>
             </div>
           ) : trailerStatus ? (

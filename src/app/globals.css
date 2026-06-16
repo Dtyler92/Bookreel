@@ -142,3 +142,42 @@
     @apply font-sans;
   }
 }
+
+/* ─── BookReel Global Keyframes ─────────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+@keyframes indeterminate {
+  0%   { transform: translateX(-100%) scaleX(0.3); }
+  40%  { transform: translateX(0%)    scaleX(0.5); }
+  100% { transform: translateX(100%)  scaleX(0.3); }
+}
+
+@keyframes gradientPan {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes borderPulse {
+  0%, 100% { box-shadow: 0 0 0 0px rgba(200,64,47,0.0), 0 2px 8px rgba(13,13,11,0.05); }
+  50%       { box-shadow: 0 0 0 3px rgba(200,64,47,0.35), 0 8px 32px rgba(13,13,11,0.12); }
+}
+
+@keyframes watermarkPulse {
+  0%, 100% { opacity: 0.06; }
+  50%       { opacity: 0.11; }
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 1; transform: scale(1.25); }
+}
+
+@keyframes fadeInOut {
+  0%, 100% { opacity: 0; transform: translateY(4px); }
+  15%, 85% { opacity: 1; transform: translateY(0); }
+}

@@ -10,6 +10,7 @@ import type { Character, Item } from '@/types/database'
 
 interface Props {
   bookId: string
+  bookTitle?: string
   initialCharacters: Character[]
   initialItems: Item[]
 }
@@ -31,15 +32,58 @@ function StatusBadge({ role }: { role: string | null }) {
   )
 }
 
+// ─── Rotating status messages ─────────────────────────────────────────────────
+
+const STATUS_MESSAGES = [
+  'Composing character details…',
+  'Rendering portrait…',
+  'Applying finishing touches…',
+]
+
+function RotatingMessage() {
+  const [idx, setIdx] = useState(0)
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVisible(false)
+      setTimeout(() => {
+        setIdx((i) => (i + 1) % STATUS_MESSAGES.length)
+        setVisible(true)
+      }, 400)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <span
+      style={{
+        fontFamily: 'var(--font-playfair), serif',
+        fontStyle: 'italic',
+        fontSize: 12,
+        color: '#8A8278',
+        transition: 'opacity 400ms ease, transform 400ms ease',
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0)' : 'translateY(4px)',
+        display: 'inline-block',
+      }}
+    >
+      {STATUS_MESSAGES[idx]}
+    </span>
+  )
+}
+
 // ─── Generation Progress Banner ───────────────────────────────────────────────
 // Shown at the top of the page (inline, not full-screen) while images generate.
 
 function GenerationProgressBanner({
   current,
   total,
+  bookTitle,
 }: {
   current: number
   total: number
+  bookTitle?: string
 }) {
   const percentage = total > 0 ? Math.round((current / total) * 100) : 0
 
@@ -47,112 +91,168 @@ function GenerationProgressBanner({
     <div
       style={{
         width: '100%',
-        borderRadius: 12,
-        background: '#FFFDF9',
+        borderRadius: 14,
+        background: '#F4F1EB',
         border: '1px solid #E8E2D5',
-        padding: '20px 24px 18px',
+        padding: '28px 32px',
         marginBottom: 32,
+        position: 'relative',
       }}
     >
-      {/* Label row */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          marginBottom: 10,
-        }}
-      >
-        <span
-          style={{
-            fontFamily: "'Inter', system-ui, sans-serif",
-            fontSize: 15,
+      {/* Top row: eyebrow + count badge */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+        <div>
+          {/* Eyebrow */}
+          <p style={{
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: 10,
             fontWeight: 600,
-            color: '#2B2B2B',
-          }}
-        >
-          Generating your visuals&hellip;&nbsp;
-          <span style={{ color: '#C8402F' }}>
-            [{current} of {total} complete]
-          </span>
-        </span>
-        <span
-          style={{
-            fontFamily: "'Inter', system-ui, sans-serif",
-            fontSize: 13,
+            textTransform: 'uppercase',
+            letterSpacing: '1.4px',
+            color: '#C8402F',
+            margin: '0 0 6px',
+          }}>
+            Portrait Generation
+          </p>
+          {/* Title */}
+          <h2 style={{
+            fontFamily: 'var(--font-playfair), serif',
+            fontWeight: 700,
+            fontSize: 22,
+            color: '#0D0D0B',
+            margin: 0,
+          }}>
+            Generating portraits for{' '}
+            {bookTitle && (
+              <em style={{ color: '#C8402F', fontStyle: 'italic' }}>{bookTitle}</em>
+            )}
+          </h2>
+        </div>
+        {/* Count badge */}
+        <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 24 }}>
+          <div style={{
+            fontFamily: 'var(--font-playfair), serif',
+            fontSize: 26,
+            fontWeight: 700,
+            color: '#0D0D0B',
+            lineHeight: 1,
+          }}>
+            {current}/{total}
+          </div>
+          <div style={{
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: 10,
             color: '#8A8278',
-          }}
-        >
-          {percentage}%
-        </span>
+            marginTop: 3,
+          }}>
+            Images complete
+          </div>
+        </div>
       </div>
 
       {/* Progress track */}
-      <div
-        style={{
-          width: '100%',
-          height: 6,
-          backgroundColor: '#E8E2D5',
+      <div style={{
+        width: '100%',
+        height: 6,
+        backgroundColor: '#E8E2D5',
+        borderRadius: 3,
+        overflow: 'hidden',
+        marginBottom: 8,
+      }}>
+        <div style={{
+          height: '100%',
+          width: `${percentage}%`,
+          background: 'linear-gradient(90deg, #9E2F20, #C8402F)',
           borderRadius: 3,
-          overflow: 'hidden',
-          marginBottom: 8,
-        }}
-      >
-        <div
-          style={{
-            height: '100%',
-            width: `${percentage}%`,
-            background: '#C8402F',
-            borderRadius: 3,
-            transition: 'width 600ms ease',
-          }}
-        />
+          transition: 'width 600ms ease',
+        }} />
       </div>
 
-      {/* Sub-label */}
-      <p
-        style={{
-          fontFamily: "'Inter', system-ui, sans-serif",
-          fontSize: 13,
-          color: '#8A8278',
-          margin: 0,
-        }}
-      >
-        This usually takes 2–3 minutes
-      </p>
+      {/* Tick marks */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
+        {Array.from({ length: total }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              flex: 1,
+              height: 3,
+              borderRadius: 2,
+              background: i < current ? 'rgba(200,64,47,0.5)' : '#E8E2D5',
+              transition: 'background 400ms ease',
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Status dot + rotating message */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          background: '#C8402F',
+          flexShrink: 0,
+          animation: 'dotPulse 1.6s ease-in-out infinite',
+        }} />
+        <RotatingMessage />
+      </div>
     </div>
   )
 }
 
-// ─── Generating Placeholder (per-card, no image yet) ─────────────────────────
+// ─── Shimmer Loading Card (per-card, no image yet) ───────────────────────────
 
-function GeneratingPlaceholder() {
+function GeneratingPlaceholder({ name }: { name?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center w-full h-full min-h-[200px] bg-[#FDF2F0] rounded-lg border-2 border-dashed border-[#C8412C]/30">
-      {/* Animated shimmer bar */}
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Image shimmer area */}
       <div style={{
-        width: '60%',
-        height: 4,
-        backgroundColor: '#E8E2D5',
-        borderRadius: 2,
+        width: '100%',
+        aspectRatio: '2/3',
+        background: 'linear-gradient(135deg, #EAE6DE, #E0DDD4, #EAE6DE)',
+        position: 'relative',
         overflow: 'hidden',
-        marginBottom: 10,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}>
+        {/* Shimmer sweep */}
         <div style={{
-          height: '100%',
-          background: 'linear-gradient(90deg, #C8402F, #E8602F)',
-          borderRadius: 2,
-          animation: 'shimmerBar 1.8s ease-in-out infinite',
+          position: 'absolute',
+          inset: 0,
+          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%)',
+          animation: 'shimmer 1.8s ease-in-out infinite',
+          transform: 'translateX(-100%)',
         }} />
+        {/* BookReel watermark */}
+        <span style={{
+          fontFamily: 'var(--font-playfair), serif',
+          fontSize: 13,
+          fontWeight: 700,
+          color: '#0D0D0B',
+          opacity: 0.08,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          userSelect: 'none',
+          pointerEvents: 'none',
+          position: 'relative',
+          zIndex: 1,
+          animation: 'watermarkPulse 2.4s ease-in-out infinite',
+        }}>
+          BookReel
+        </span>
       </div>
-      <span className="text-[#C8412C] text-xs font-medium">Generating…</span>
-      <style>{`
-        @keyframes shimmerBar {
-          0%   { width: 0%; }
-          50%  { width: 80%; }
-          100% { width: 0%; }
-        }
-      `}</style>
+      {/* Footer */}
+      {name && (
+        <div style={{ padding: '10px 12px 8px' }}>
+          <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278', margin: '0 0 2px' }}>
+            {name}
+          </p>
+          <p style={{ fontFamily: 'var(--font-playfair), serif', fontStyle: 'italic', fontSize: 12, color: '#8A8278', margin: 0 }}>
+            Generating portrait…
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -166,32 +266,19 @@ function RegenerationOverlay({
   visible: boolean
   done: boolean
 }) {
-  // Track animated fill width via JS for the fake-progress → 100% jump
-  const [fillWidth, setFillWidth] = useState(0)
   const [fading, setFading] = useState(false)
   const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!visible) {
-      setFillWidth(0)
       setFading(false)
       return
     }
-    // Start fake progress: animate from 0 → 85% over 15 seconds
-    // We use a CSS animation (progressFill) and control via className
-    setFillWidth(0)
-    setFading(false)
-    // Kick the animation on next tick
-    const t = setTimeout(() => setFillWidth(85), 50)
-    animTimerRef.current = t
-    return () => clearTimeout(t)
   }, [visible])
 
   useEffect(() => {
     if (done && visible) {
-      // Jump to 100%, then fade the overlay out
       if (animTimerRef.current) clearTimeout(animTimerRef.current)
-      setFillWidth(100)
       const t = setTimeout(() => setFading(true), 400)
       animTimerRef.current = t
       return () => clearTimeout(t)
@@ -205,7 +292,8 @@ function RegenerationOverlay({
       style={{
         position: 'absolute',
         inset: 0,
-        background: 'rgba(250,250,247,0.90)',
+        background: 'rgba(13,13,11,0.58)',
+        backdropFilter: 'blur(2px)',
         zIndex: 10,
         display: 'flex',
         flexDirection: 'column',
@@ -214,51 +302,41 @@ function RegenerationOverlay({
         borderRadius: 'inherit',
         opacity: fading ? 0 : 1,
         transition: 'opacity 500ms ease',
-        padding: '0 10%',
+        gap: 10,
       }}
     >
-      <style>{`
-        @keyframes progressFill {
-          0%   { width: 0%; }
-          90%  { width: 85%; }
-          100% { width: 85%; }
-        }
-      `}</style>
-
-      <p
-        style={{
-          fontFamily: "'Inter', system-ui, sans-serif",
-          fontSize: 14,
-          fontStyle: 'italic',
-          color: '#8A8278',
-          marginBottom: 10,
-          textAlign: 'center',
-        }}
-      >
+      {/* Icon */}
+      <span style={{ fontSize: 28, lineHeight: 1 }}>🎬</span>
+      {/* Label */}
+      <p style={{
+        fontFamily: 'var(--font-playfair), serif',
+        fontStyle: 'italic',
+        fontSize: 14,
+        color: '#FFFFFF',
+        margin: 0,
+      }}>
         Regenerating…
       </p>
-
-      {/* Progress track */}
-      <div
-        style={{
-          width: '80%',
-          height: 4,
-          backgroundColor: '#E8E2D5',
+      {/* Indeterminate progress bar */}
+      <div style={{
+        width: 120,
+        height: 3,
+        background: '#4D3028',
+        borderRadius: 2,
+        overflow: 'hidden',
+        position: 'relative',
+      }}>
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          height: '100%',
+          width: '100%',
+          background: '#C8402F',
           borderRadius: 2,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            height: '100%',
-            width: done ? '100%' : undefined,
-            background: '#C8402F',
-            borderRadius: 2,
-            // Use CSS animation for fake progress; JS override for the 100% jump
-            animation: !done ? 'progressFill 15s ease-out forwards' : undefined,
-            transition: done ? 'width 300ms ease' : undefined,
-          }}
-        />
+          animation: 'indeterminate 1.4s ease-in-out infinite',
+          transformOrigin: 'left center',
+        }} />
       </div>
     </div>
   )
@@ -360,7 +438,7 @@ function CharacterCard({
             <RegenerationOverlay visible={regenerating} done={regenDone} />
           </>
         ) : (
-          <GeneratingPlaceholder />
+          <GeneratingPlaceholder name={character.name} />
         )}
       </div>
 
@@ -527,7 +605,7 @@ function ItemCard({
             <RegenerationOverlay visible={regenerating} done={regenDone} />
           </>
         ) : (
-          <GeneratingPlaceholder />
+          <GeneratingPlaceholder name={item.name} />
         )}
       </div>
 
@@ -598,7 +676,7 @@ function ItemCard({
 
 // ─── Main ReviewImagesClient ──────────────────────────────────────────────────
 
-export default function ReviewImagesClient({ bookId, initialCharacters, initialItems }: Props) {
+export default function ReviewImagesClient({ bookId, bookTitle, initialCharacters, initialItems }: Props) {
   const router = useRouter()
   const [characters, setCharacters] = useState<Character[]>(initialCharacters)
   const [items, setItems] = useState<Item[]>(initialItems)
@@ -724,7 +802,7 @@ export default function ReviewImagesClient({ bookId, initialCharacters, initialI
     <div className="space-y-12 pb-36">
       {/* ── Inline generation progress banner (replaces full-screen overlay) ── */}
       {showGeneratingBanner && (
-        <GenerationProgressBanner current={generatedCount} total={totalItems} />
+        <GenerationProgressBanner current={generatedCount} total={totalItems} bookTitle={bookTitle} />
       )}
 
       {/* ── Characters section ────────────────────────────────────── */}

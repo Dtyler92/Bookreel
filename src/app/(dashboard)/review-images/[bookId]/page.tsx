@@ -87,6 +87,7 @@ export default async function ReviewImagesPage({
 
         <ReviewImagesClient
           bookId={bookId}
+          bookTitle={typedBook.title}
           initialCharacters={typedCharacters}
           initialItems={typedItems}
         />
