@@ -311,7 +311,7 @@ export default function ReviewClient({ bookId, initialCharacters, initialScenes 
     setGenerating(true)
     setGenerateError(null)
     try {
-      router.push(`/dashboard/review-images/${bookId}`)
+      router.push(`/review-images/${bookId}`)
     } catch (err) {
       setGenerateError(err instanceof Error ? err.message : 'Failed to navigate.')
       setGenerating(false)

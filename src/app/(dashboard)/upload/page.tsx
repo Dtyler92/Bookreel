@@ -699,7 +699,7 @@ export default function UploadPage() {
               fullWidth
               onClick={() => {
                 if (bookId) {
-                  router.push(`/dashboard/review/${bookId}`)
+                  router.push(`/review/${bookId}`)
                 } else {
                   router.push('/dashboard')
                 }

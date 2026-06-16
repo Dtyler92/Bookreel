@@ -192,7 +192,7 @@ export function DashboardClient({
               gap: '20px',
             }}>
               {books.map((book) => (
-                <Link key={book.id} href={`/dashboard/review/${book.id}`} style={{ textDecoration: 'none' }}>
+                <Link key={book.id} href={`/review/${book.id}`} style={{ textDecoration: 'none' }}>
                   <div style={{
                     background: '#FFFFFF',
                     border: '1px solid #E8E2D5',
