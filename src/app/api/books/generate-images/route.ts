@@ -7,6 +7,13 @@ export const maxDuration = 120
 
 fal.config({ credentials: process.env.FAL_API_KEY })
 
+// Extract temperament from the combined description field
+function extractTemperament(description: string | null): string {
+  if (!description) return ''
+  const parts = description.split('**Temperament:**')
+  return parts[1]?.trim() || ''
+}
+
 function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -76,7 +83,8 @@ export async function POST(request: Request) {
       }
 
       const appearance = character.appearance_notes ?? character.description ?? character.name
-      const characterPrompt = `${appearance}, ${character.description ?? ''}, portrait, realistic, cinematic lighting, book cover style, detailed face, ${genre} genre aesthetic`
+      const temperamentHint = extractTemperament(character.description)
+      const characterPrompt = `${appearance}${temperamentHint ? `, ${temperamentHint}` : ''}, cinematic portrait, book cover style, dramatic lighting, detailed face, realistic, ${genre} genre aesthetic`
       const imagePrompt = sanitizeAppearanceDescription(characterPrompt.substring(0, 500))
 
       try {

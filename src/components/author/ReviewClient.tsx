@@ -20,22 +20,88 @@ interface Props {
   initialScenes: SceneWithApproval[]
 }
 
+// ─── Helper: parse combined description field ─────────────────────────────────
+
+function parseCharacterDescription(description: string | null) {
+  if (!description) return { story: '', temperament: '' }
+  const parts = description.split('**Temperament:**')
+  return {
+    story: parts[0].trim(),
+    temperament: parts[1]?.trim() || '',
+  }
+}
+
 // ─── Role badge ───────────────────────────────────────────────────────────────
 
 function RoleBadge({ role }: { role: string | null }) {
   const r = (role ?? '').toLowerCase()
-  const styles =
+  // Vermillion (#C8402F) badge for all roles, varying shade
+  const bg =
     r === 'protagonist'
-      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+      ? 'rgba(200,64,47,0.12)'
       : r === 'antagonist'
-      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-      : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+      ? 'rgba(200,64,47,0.20)'
+      : 'rgba(138,130,120,0.12)'
+  const color =
+    r === 'protagonist' || r === 'antagonist' ? '#C8402F' : '#8A8278'
 
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${styles}`}>
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        borderRadius: '999px',
+        padding: '2px 10px',
+        fontSize: '11px',
+        fontFamily: 'var(--font-inter), sans-serif',
+        fontWeight: 600,
+        textTransform: 'capitalize',
+        letterSpacing: '0.04em',
+        background: bg,
+        color,
+      }}
+    >
       {role ?? 'Supporting'}
     </span>
   )
+}
+
+// ─── Section label ────────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      style={{
+        display: 'block',
+        fontFamily: 'var(--font-inter), sans-serif',
+        fontSize: '10px',
+        fontWeight: 600,
+        textTransform: 'uppercase',
+        letterSpacing: '0.10em',
+        color: '#8A8278',
+        marginBottom: '3px',
+        fontVariant: 'small-caps',
+      }}
+    >
+      {children}
+    </span>
+  )
+}
+
+// ─── Shared input style ───────────────────────────────────────────────────────
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  background: '#FAFAF7',
+  border: '1.5px solid #E8E2D5',
+  borderRadius: '8px',
+  padding: '10px 12px',
+  fontFamily: 'var(--font-inter), sans-serif',
+  fontSize: '14px',
+  color: '#1A1A18',
+  outline: 'none',
+  boxSizing: 'border-box',
+  resize: 'none',
 }
 
 // ─── Character Card ───────────────────────────────────────────────────────────
@@ -51,15 +117,23 @@ function CharacterCard({
   onApprove: (id: string, approved: boolean) => void
   onUpdate: (id: string, data: Partial<Character>) => void
 }) {
+  const parsed = parseCharacterDescription(character.description)
+
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(character.name)
   const [role, setRole] = useState(character.role ?? '')
-  const [description, setDescription] = useState(character.description ?? '')
+  const [storyDescription, setStoryDescription] = useState(parsed.story)
+  const [temperament, setTemperament] = useState(parsed.temperament)
   const [appearance, setAppearance] = useState(character.appearance_notes ?? '')
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
     setSaving(true)
+    // Recombine story + temperament into description
+    const combinedDescription = temperament
+      ? `${storyDescription}\n\n**Temperament:** ${temperament}`.trim()
+      : storyDescription
+
     try {
       const res = await fetch('/api/books/approve', {
         method: 'PATCH',
@@ -69,12 +143,17 @@ function CharacterCard({
           id: character.id,
           name,
           role,
-          description,
+          description: combinedDescription,
           appearance_notes: appearance,
         }),
       })
       if (res.ok) {
-        onUpdate(character.id, { name, role, description, appearance_notes: appearance })
+        onUpdate(character.id, {
+          name,
+          role,
+          description: combinedDescription,
+          appearance_notes: appearance,
+        })
         setEditing(false)
       }
     } finally {
@@ -91,107 +170,260 @@ function CharacterCard({
     })
   }
 
+  // Re-parse in view mode in case onUpdate changed the character
+  const viewParsed = parseCharacterDescription(character.description)
+
   return (
     <div
-      className={`rounded-xl border bg-white dark:bg-gray-900 p-5 space-y-3 transition-colors ${
-        approved
-          ? 'border-green-300 dark:border-green-700'
-          : 'border-gray-200 dark:border-gray-800'
-      }`}
+      style={{
+        borderRadius: '12px',
+        border: `1.5px solid ${approved ? '#6DBF8A' : '#E8E2D5'}`,
+        background: '#FFFFFF',
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        transition: 'border-color 200ms ease',
+      }}
     >
       {editing ? (
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Name</label>
+        // ── Edit form ──────────────────────────────────────────────────────────
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* Name */}
+          <div>
+            <SectionLabel>Name</SectionLabel>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              style={inputStyle}
             />
           </div>
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Role</label>
+
+          {/* Role */}
+          <div>
+            <SectionLabel>Role</SectionLabel>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              style={{ ...inputStyle, appearance: 'auto' }}
             >
               <option value="protagonist">Protagonist</option>
               <option value="antagonist">Antagonist</option>
               <option value="supporting">Supporting</option>
             </select>
           </div>
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Description</label>
+
+          {/* Appearance */}
+          <div>
+            <SectionLabel>Appearance</SectionLabel>
             <textarea
               rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Appearance</label>
-            <textarea
-              rows={2}
               value={appearance}
               onChange={(e) => setAppearance(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              style={inputStyle}
+              placeholder="Height, build, hair, eyes, age, skin tone, distinguishing features, typical clothing…"
             />
           </div>
-          <div className="flex gap-2">
+
+          {/* Temperament */}
+          <div>
+            <SectionLabel>Temperament</SectionLabel>
+            <textarea
+              rows={3}
+              value={temperament}
+              onChange={(e) => setTemperament(e.target.value)}
+              style={inputStyle}
+              placeholder="Personality traits, emotional tendencies, speech patterns, mannerisms…"
+            />
+          </div>
+
+          {/* Role in Story */}
+          <div>
+            <SectionLabel>Role in Story</SectionLabel>
+            <textarea
+              rows={3}
+              value={storyDescription}
+              onChange={(e) => setStoryDescription(e.target.value)}
+              style={inputStyle}
+              placeholder="Personality, backstory, role in story…"
+            />
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-4 py-1.5 text-xs font-semibold text-white transition-colors"
+              style={{
+                background: '#C8402F',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '8px 18px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#FAFAF7',
+                cursor: saving ? 'not-allowed' : 'pointer',
+                opacity: saving ? 0.6 : 1,
+                transition: 'opacity 150ms ease',
+              }}
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button
               onClick={() => setEditing(false)}
-              className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              style={{
+                background: '#FAFAF7',
+                border: '1.5px solid #E8E2D5',
+                borderRadius: '8px',
+                padding: '8px 18px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#1A1A18',
+                cursor: 'pointer',
+              }}
             >
               Cancel
             </button>
           </div>
         </div>
       ) : (
+        // ── View mode ──────────────────────────────────────────────────────────
         <>
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold text-gray-900 dark:text-white">{character.name}</h3>
-                <RoleBadge role={character.role} />
-              </div>
-              {character.description && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">{character.description}</p>
-              )}
-              {character.appearance_notes && (
-                <p className="text-xs text-gray-500 dark:text-gray-500 italic">{character.appearance_notes}</p>
-              )}
+          {/* Header: name + badge + edit */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+              <h3
+                style={{
+                  fontFamily: 'var(--font-playfair), serif',
+                  fontWeight: 700,
+                  fontSize: '17px',
+                  color: '#0D0D0B',
+                  margin: 0,
+                }}
+              >
+                {character.name}
+              </h3>
+              <RoleBadge role={character.role} />
             </div>
             <button
               onClick={() => setEditing(true)}
-              className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-700 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              style={{
+                flexShrink: 0,
+                background: '#FAFAF7',
+                border: '1.5px solid #E8E2D5',
+                borderRadius: '8px',
+                padding: '5px 14px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#8A8278',
+                cursor: 'pointer',
+                transition: 'border-color 150ms ease',
+              }}
             >
               Edit
             </button>
           </div>
-          <div className="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-800">
+
+          {/* Appearance */}
+          {character.appearance_notes && (
+            <div>
+              <SectionLabel>Appearance</SectionLabel>
+              <p
+                style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '13px',
+                  color: '#4A4642',
+                  margin: 0,
+                  lineHeight: 1.55,
+                }}
+              >
+                {character.appearance_notes}
+              </p>
+            </div>
+          )}
+
+          {/* Temperament */}
+          {viewParsed.temperament && (
+            <div>
+              <SectionLabel>Temperament</SectionLabel>
+              <p
+                style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '13px',
+                  color: '#4A4642',
+                  margin: 0,
+                  lineHeight: 1.55,
+                }}
+              >
+                {viewParsed.temperament}
+              </p>
+            </div>
+          )}
+
+          {/* Role in Story */}
+          {viewParsed.story && (
+            <div>
+              <SectionLabel>Role in Story</SectionLabel>
+              <p
+                style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '13px',
+                  color: '#4A4642',
+                  margin: 0,
+                  lineHeight: 1.55,
+                }}
+              >
+                {viewParsed.story}
+              </p>
+            </div>
+          )}
+
+          {/* Approve toggle */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              paddingTop: '10px',
+              borderTop: '1px solid #F0EBE2',
+            }}
+          >
             <input
               type="checkbox"
               id={`char-approve-${character.id}`}
               checked={approved}
               onChange={(e) => handleApproveChange(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              style={{ accentColor: '#C8402F', width: '15px', height: '15px', cursor: 'pointer' }}
             />
             <label
               htmlFor={`char-approve-${character.id}`}
-              className="text-sm font-medium text-gray-700 dark:text-gray-300 select-none cursor-pointer"
+              style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: '#4A4642',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
             >
               Approve character
             </label>
-            {approved && <span className="ml-auto text-xs text-green-600 dark:text-green-400 font-medium">✓ Approved</span>}
+            {approved && (
+              <span
+                style={{
+                  marginLeft: 'auto',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#3C9E5E',
+                }}
+              >
+                ✓ Approved
+              </span>
+            )}
           </div>
         </>
       )}
@@ -223,21 +455,62 @@ function SceneCard({
 
   return (
     <div
-      className={`rounded-xl border bg-white dark:bg-gray-900 p-5 space-y-3 transition-colors ${
-        approved
-          ? 'border-green-300 dark:border-green-700'
-          : 'border-gray-200 dark:border-gray-800'
-      }`}
+      style={{
+        borderRadius: '12px',
+        border: `1.5px solid ${approved ? '#6DBF8A' : '#E8E2D5'}`,
+        background: '#FFFFFF',
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        transition: 'border-color 200ms ease',
+      }}
     >
-      <div className="flex items-start gap-3">
-        <span className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-bold">
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+        {/* Scene number badge */}
+        <span
+          style={{
+            flexShrink: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '32px',
+            height: '32px',
+            borderRadius: '8px',
+            background: 'rgba(200,64,47,0.10)',
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: '13px',
+            fontWeight: 700,
+            color: '#C8402F',
+          }}
+        >
           {scene.scene_number}
         </span>
-        <div className="flex-1 min-w-0">
+        <div style={{ flex: 1, minWidth: 0 }}>
           {scene.title && (
-            <h3 className="font-semibold text-gray-900 dark:text-white">{scene.title}</h3>
+            <h3
+              style={{
+                fontFamily: 'var(--font-playfair), serif',
+                fontWeight: 700,
+                fontSize: '16px',
+                color: '#0D0D0B',
+                margin: '0 0 4px',
+              }}
+            >
+              {scene.title}
+            </h3>
           )}
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{scene.description}</p>
+          <p
+            style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '13px',
+              color: '#4A4642',
+              margin: 0,
+              lineHeight: 1.55,
+            }}
+          >
+            {scene.description}
+          </p>
         </div>
       </div>
 
@@ -245,34 +518,86 @@ function SceneCard({
         <div>
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="flex items-center gap-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 transition-colors"
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: '#C8402F',
+            }}
           >
             <span>{expanded ? '▲' : '▼'}</span>
             {expanded ? 'Hide screenplay' : 'View screenplay'}
           </button>
           {expanded && (
-            <pre className="mt-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 text-xs text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap overflow-x-auto">
+            <pre
+              style={{
+                marginTop: '8px',
+                borderRadius: '8px',
+                background: '#F5F1EB',
+                border: '1px solid #E8E2D5',
+                padding: '14px',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                color: '#4A4642',
+                whiteSpace: 'pre-wrap',
+                overflowX: 'auto',
+              }}
+            >
               {scene.screenplay_text}
             </pre>
           )}
         </div>
       )}
 
-      <div className="flex items-center gap-2 pt-1 border-t border-gray-100 dark:border-gray-800">
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          paddingTop: '10px',
+          borderTop: '1px solid #F0EBE2',
+        }}
+      >
         <input
           type="checkbox"
           id={`scene-approve-${scene.id}`}
           checked={approved}
           onChange={(e) => handleApproveChange(e.target.checked)}
-          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          style={{ accentColor: '#C8402F', width: '15px', height: '15px', cursor: 'pointer' }}
         />
         <label
           htmlFor={`scene-approve-${scene.id}`}
-          className="text-sm font-medium text-gray-700 dark:text-gray-300 select-none cursor-pointer"
+          style={{
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: '13px',
+            fontWeight: 500,
+            color: '#4A4642',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
         >
           Approve scene
         </label>
-        {approved && <span className="ml-auto text-xs text-green-600 dark:text-green-400 font-medium">✓ Approved</span>}
+        {approved && (
+          <span
+            style={{
+              marginLeft: 'auto',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: '#3C9E5E',
+            }}
+          >
+            ✓ Approved
+          </span>
+        )}
       </div>
     </div>
   )
@@ -322,26 +647,62 @@ export default function ReviewClient({ bookId, initialCharacters, initialScenes 
   const approvedItems = approvedCharacters.size + approvedScenes.size
 
   return (
-    <div className="space-y-10 pb-32">
-      {/* ── Characters ──────────────────────────────────────────────── */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '40px', paddingBottom: '120px' }}>
+      {/* ── Characters ──────────────────────────────────────────────────────── */}
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              Your Characters
-              <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
-                ({approvedCharacters.size}/{characters.length} approved)
-              </span>
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              These are the characters we found in your manuscript. Confirm the ones you&apos;d like featured in your trailer.
-            </p>
-          </div>
+        <div style={{ marginBottom: '20px' }}>
+          <h2
+            style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontWeight: 700,
+              fontSize: '22px',
+              color: '#0D0D0B',
+              margin: '0 0 4px',
+            }}
+          >
+            Your Characters
+            <span
+              style={{
+                marginLeft: '10px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontWeight: 400,
+                fontSize: '14px',
+                color: '#8A8278',
+              }}
+            >
+              ({approvedCharacters.size}/{characters.length} approved)
+            </span>
+          </h2>
+          <p
+            style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '14px',
+              color: '#8A8278',
+              margin: 0,
+            }}
+          >
+            These are the characters we found in your manuscript. Confirm the ones you&apos;d like featured in your trailer.
+          </p>
         </div>
         {characters.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400 italic">No characters found.</p>
+          <p
+            style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '14px',
+              color: '#8A8278',
+              fontStyle: 'italic',
+            }}
+          >
+            No characters found.
+          </p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gap: '16px',
+            }}
+          >
             {characters.map((c) => (
               <CharacterCard
                 key={c.id}
@@ -355,25 +716,55 @@ export default function ReviewClient({ bookId, initialCharacters, initialScenes 
         )}
       </section>
 
-      {/* ── Scenes ──────────────────────────────────────────────────── */}
+      {/* ── Scenes ──────────────────────────────────────────────────────────── */}
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              Your Key Scenes
-              <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
-                ({approvedScenes.size}/{scenes.length} approved)
-              </span>
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              These are the moments from your book that we think will resonate most on screen. Keep the ones that feel right, swap any that don&apos;t.
-            </p>
-          </div>
+        <div style={{ marginBottom: '20px' }}>
+          <h2
+            style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontWeight: 700,
+              fontSize: '22px',
+              color: '#0D0D0B',
+              margin: '0 0 4px',
+            }}
+          >
+            Your Key Scenes
+            <span
+              style={{
+                marginLeft: '10px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontWeight: 400,
+                fontSize: '14px',
+                color: '#8A8278',
+              }}
+            >
+              ({approvedScenes.size}/{scenes.length} approved)
+            </span>
+          </h2>
+          <p
+            style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '14px',
+              color: '#8A8278',
+              margin: 0,
+            }}
+          >
+            These are the moments from your book that we think will resonate most on screen. Keep the ones that feel right, swap any that don&apos;t.
+          </p>
         </div>
         {scenes.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400 italic">No scenes found.</p>
+          <p
+            style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '14px',
+              color: '#8A8278',
+              fontStyle: 'italic',
+            }}
+          >
+            No scenes found.
+          </p>
         ) : (
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {scenes.map((s) => (
               <SceneCard
                 key={s.id}
@@ -386,50 +777,147 @@ export default function ReviewClient({ bookId, initialCharacters, initialScenes 
         )}
       </section>
 
-      {/* ── Bottom bar ──────────────────────────────────────────────── */}
-      <div className="fixed bottom-0 inset-x-0 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-lg">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
+      {/* ── Bottom bar ──────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          borderTop: '1px solid #E8E2D5',
+          background: 'rgba(250,250,247,0.97)',
+          backdropFilter: 'blur(8px)',
+          boxShadow: '0 -4px 24px rgba(0,0,0,0.06)',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '960px',
+            margin: '0 auto',
+            padding: '14px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '20px',
+          }}
+        >
           {/* Progress */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '12px',
+                  color: '#8A8278',
+                }}
+              >
                 {approvedItems} of {totalItems} items approved
               </span>
               {allApproved && (
-                <span className="text-xs text-green-600 dark:text-green-400 font-semibold">All approved! 🎉</span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: '#3C9E5E',
+                  }}
+                >
+                  All approved! 🎉
+                </span>
               )}
             </div>
-            <div className="h-1.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+            <div
+              style={{
+                height: '5px',
+                width: '100%',
+                borderRadius: '999px',
+                background: '#E8E2D5',
+                overflow: 'hidden',
+              }}
+            >
               <div
-                className="h-full rounded-full bg-indigo-600 transition-all duration-300"
-                style={{ width: totalItems > 0 ? `${(approvedItems / totalItems) * 100}%` : '0%' }}
+                style={{
+                  height: '100%',
+                  borderRadius: '999px',
+                  background: '#C8402F',
+                  width: totalItems > 0 ? `${(approvedItems / totalItems) * 100}%` : '0%',
+                  transition: 'width 300ms ease',
+                }}
               />
             </div>
           </div>
 
           {/* Generate button */}
-          <div className="shrink-0 text-right">
+          <div style={{ flexShrink: 0, textAlign: 'right' }}>
             {generateError && (
-              <p className="text-xs text-red-500 mb-1">{generateError}</p>
+              <p
+                style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '12px',
+                  color: '#C8402F',
+                  marginBottom: '4px',
+                }}
+              >
+                {generateError}
+              </p>
             )}
             <button
               onClick={handleGenerate}
               disabled={!allApproved || generating}
-              className="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-2.5 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              style={{
+                background: allApproved ? '#C8402F' : '#E8E2D5',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '12px 24px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '14px',
+                fontWeight: 600,
+                color: allApproved ? '#FAFAF7' : '#8A8278',
+                cursor: allApproved && !generating ? 'pointer' : 'not-allowed',
+                transition: 'background 200ms ease, color 200ms ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
             >
               {generating ? (
-                <span className="flex items-center gap-2">
-                  <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: '14px',
+                      height: '14px',
+                      border: '2px solid rgba(250,250,247,0.4)',
+                      borderTopColor: '#FAFAF7',
+                      borderRadius: '50%',
+                      animation: 'spin 0.7s linear infinite',
+                    }}
+                  />
                   Opening…
-                </span>
+                </>
               ) : (
                 'Continue to Visual Review →'
               )}
             </button>
-            <p className="text-xs text-gray-400 mt-1">Your trailer usually takes 15–20 minutes to produce.</p>
+            <p
+              style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '11px',
+                color: '#8A8278',
+                marginTop: '4px',
+                textAlign: 'right',
+              }}
+            >
+              Your trailer usually takes 15–20 minutes to produce.
+            </p>
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }

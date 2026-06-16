@@ -8,7 +8,15 @@ export const maxDuration = 60
 
 const SYSTEM_PROMPT = `You are a book trailer screenplay writer. Analyze the book excerpt and return ONLY a JSON object (no markdown, no code blocks) with this exact structure:
 {
-  "characters": [{"name": "string", "role": "protagonist", "description": "string", "appearance": "string"}],
+  "characters": [
+    {
+      "name": "string",
+      "role": "protagonist|antagonist|supporting",
+      "description": "string — personality, backstory, role in story",
+      "appearance": "string — detailed physical description: height, build, hair color, eye color, age, distinguishing features, typical clothing style",
+      "temperament": "string — personality traits, emotional tendencies, how they behave under pressure, speech patterns, mannerisms"
+    }
+  ],
   "scenes": [{"scene_number": 1, "title": "string", "description": "string", "screenplay_text": "string", "duration_seconds": 10}],
   "items": [{"name": "string", "description": "string"}],
   "voiceover": "string",
@@ -22,6 +30,10 @@ Rules:
 - Keep descriptions book-accurate
 - No explicit sexual content
 - Return ONLY the JSON object, nothing else
+
+For each character extract:
+- appearance: Be as specific as possible about physical traits drawn directly from the book text. Include height, build, hair, eyes, age, skin tone, distinguishing features, and typical clothing.
+- temperament: Describe their personality, emotional tendencies, how they react under pressure, speech patterns, and key mannerisms as described in the book.
 
 ${CONTENT_POLICY_SYSTEM_ADDENDUM}`
 
@@ -208,7 +220,7 @@ export async function POST(request: Request) {
 
     // ── Step 4: Call OpenRouter API ───────────────────────────────────────────
     let trailerData: {
-      characters: Array<{ name: string; role: string; description: string; appearance: string }>
+      characters: Array<{ name: string; role: string; description: string; appearance: string; temperament?: string }>
       items?: Array<{ name: string; description: string }>
       scenes: Array<{ scene_number: number; title: string; description: string; screenplay_text: string; duration_seconds: number }>
       voiceover: string
@@ -335,7 +347,8 @@ export async function POST(request: Request) {
         trailerData.characters = trailerData.characters.map((char: any) => ({
           ...char,
           appearance: sanitizeAppearanceDescription(char.appearance || ''),
-          description: sanitizeAppearanceDescription(char.description || '')
+          description: sanitizeAppearanceDescription(char.description || ''),
+          temperament: char.temperament || ''
         }))
       }
 
@@ -400,7 +413,11 @@ export async function POST(request: Request) {
           book_id: bookId,
           name: c.name,
           role: c.role || null,
-          description: c.description || null,
+          // TODO: add temperament as separate column once schema migration is run.
+          // For now, store temperament embedded in description using a marker.
+          description: c.temperament
+            ? `${c.description || ''}\n\n**Temperament:** ${c.temperament}`.trim()
+            : c.description || null,
           appearance_notes: c.appearance || null,
           author_approved: false
         }))
