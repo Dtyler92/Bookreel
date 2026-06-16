@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { BrandLogo } from '@/components/shared/BrandLogo'
@@ -31,122 +31,100 @@ function StatusBadge({ role }: { role: string | null }) {
   )
 }
 
-// ─── Generation Progress Bar ──────────────────────────────────────────────────
+// ─── Generation Progress Banner ───────────────────────────────────────────────
+// Shown at the top of the page (inline, not full-screen) while images generate.
 
-const GENERATION_LABELS = [
-  'Generating character portraits…',
-  'Creating scene visuals…',
-  'Bringing your story to life…',
-  'Almost there…',
-]
-
-function GenerationProgressBar({
+function GenerationProgressBanner({
   current,
   total,
-  currentLabel,
 }: {
   current: number
   total: number
-  currentLabel: string
 }) {
   const percentage = total > 0 ? Math.round((current / total) * 100) : 0
 
   return (
-    <div style={{
-      width: '100%',
-      maxWidth: 480,
-      margin: '0 auto',
-      textAlign: 'center',
-    }}>
-      {/* Current action label */}
-      <p style={{
-        fontFamily: "'Playfair Display', Georgia, serif",
-        fontStyle: 'italic',
-        fontSize: 18,
-        color: '#8A8278',
-        marginBottom: 20,
-        minHeight: 28,
-      }}>
-        {currentLabel}
-      </p>
-
-      {/* Progress bar track */}
-      <div style={{
+    <div
+      style={{
         width: '100%',
-        height: 6,
-        backgroundColor: '#E8E2D5',
-        borderRadius: 3,
-        overflow: 'hidden',
-        marginBottom: 12,
-      }}>
-        {/* Fill */}
-        <div style={{
-          height: '100%',
-          width: `${percentage}%`,
-          background: 'linear-gradient(90deg, #C8402F, #E8602F)',
+        borderRadius: 12,
+        background: '#FFFDF9',
+        border: '1px solid #E8E2D5',
+        padding: '20px 24px 18px',
+        marginBottom: 32,
+      }}
+    >
+      {/* Label row */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          marginBottom: 10,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontSize: 15,
+            fontWeight: 600,
+            color: '#2B2B2B',
+          }}
+        >
+          Generating your visuals&hellip;&nbsp;
+          <span style={{ color: '#C8402F' }}>
+            [{current} of {total} complete]
+          </span>
+        </span>
+        <span
+          style={{
+            fontFamily: "'Inter', system-ui, sans-serif",
+            fontSize: 13,
+            color: '#8A8278',
+          }}
+        >
+          {percentage}%
+        </span>
+      </div>
+
+      {/* Progress track */}
+      <div
+        style={{
+          width: '100%',
+          height: 6,
+          backgroundColor: '#E8E2D5',
           borderRadius: 3,
-          transition: 'width 600ms ease',
-        }} />
+          overflow: 'hidden',
+          marginBottom: 8,
+        }}
+      >
+        <div
+          style={{
+            height: '100%',
+            width: `${percentage}%`,
+            background: '#C8402F',
+            borderRadius: 3,
+            transition: 'width 600ms ease',
+          }}
+        />
       </div>
 
-      {/* Percentage + count */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        fontFamily: "'Inter', system-ui, sans-serif",
-        fontSize: 13,
-        color: '#8A8278',
-      }}>
-        <span>{percentage}% complete</span>
-        <span>{current} of {total} images</span>
-      </div>
+      {/* Sub-label */}
+      <p
+        style={{
+          fontFamily: "'Inter', system-ui, sans-serif",
+          fontSize: 13,
+          color: '#8A8278',
+          margin: 0,
+        }}
+      >
+        This usually takes 2–3 minutes
+      </p>
     </div>
   )
 }
 
-// ─── Generation Overlay ───────────────────────────────────────────────────────
-
-function GenerationOverlay({
-  current,
-  total,
-}: {
-  current: number
-  total: number
-}) {
-  const [labelIndex, setLabelIndex] = useState(0)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLabelIndex((i) => (i + 1) % GENERATION_LABELS.length)
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [])
-
-  return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(250,248,245,0.96)',
-      backdropFilter: 'blur(4px)',
-      zIndex: 50,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 32,
-      padding: '0 24px',
-    }}>
-      <BrandLogo size={32} />
-      <GenerationProgressBar
-        current={current}
-        total={total}
-        currentLabel={GENERATION_LABELS[labelIndex]}
-      />
-    </div>
-  )
-}
-
-// ─── Generating Placeholder (per-card) ───────────────────────────────────────
+// ─── Generating Placeholder (per-card, no image yet) ─────────────────────────
 
 function GeneratingPlaceholder() {
   return (
@@ -179,6 +157,113 @@ function GeneratingPlaceholder() {
   )
 }
 
+// ─── Regeneration Overlay (per-card, while re-generating with feedback) ────────
+
+function RegenerationOverlay({
+  visible,
+  done,
+}: {
+  visible: boolean
+  done: boolean
+}) {
+  // Track animated fill width via JS for the fake-progress → 100% jump
+  const [fillWidth, setFillWidth] = useState(0)
+  const [fading, setFading] = useState(false)
+  const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (!visible) {
+      setFillWidth(0)
+      setFading(false)
+      return
+    }
+    // Start fake progress: animate from 0 → 85% over 15 seconds
+    // We use a CSS animation (progressFill) and control via className
+    setFillWidth(0)
+    setFading(false)
+    // Kick the animation on next tick
+    const t = setTimeout(() => setFillWidth(85), 50)
+    animTimerRef.current = t
+    return () => clearTimeout(t)
+  }, [visible])
+
+  useEffect(() => {
+    if (done && visible) {
+      // Jump to 100%, then fade the overlay out
+      if (animTimerRef.current) clearTimeout(animTimerRef.current)
+      setFillWidth(100)
+      const t = setTimeout(() => setFading(true), 400)
+      animTimerRef.current = t
+      return () => clearTimeout(t)
+    }
+  }, [done, visible])
+
+  if (!visible) return null
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        background: 'rgba(250,250,247,0.90)',
+        zIndex: 10,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 'inherit',
+        opacity: fading ? 0 : 1,
+        transition: 'opacity 500ms ease',
+        padding: '0 10%',
+      }}
+    >
+      <style>{`
+        @keyframes progressFill {
+          0%   { width: 0%; }
+          90%  { width: 85%; }
+          100% { width: 85%; }
+        }
+      `}</style>
+
+      <p
+        style={{
+          fontFamily: "'Inter', system-ui, sans-serif",
+          fontSize: 14,
+          fontStyle: 'italic',
+          color: '#8A8278',
+          marginBottom: 10,
+          textAlign: 'center',
+        }}
+      >
+        Regenerating…
+      </p>
+
+      {/* Progress track */}
+      <div
+        style={{
+          width: '80%',
+          height: 4,
+          backgroundColor: '#E8E2D5',
+          borderRadius: 2,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            height: '100%',
+            width: done ? '100%' : undefined,
+            background: '#C8402F',
+            borderRadius: 2,
+            // Use CSS animation for fake progress; JS override for the 100% jump
+            animation: !done ? 'progressFill 15s ease-out forwards' : undefined,
+            transition: done ? 'width 300ms ease' : undefined,
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
 // ─── Character Card ───────────────────────────────────────────────────────────
 
 function CharacterCard({
@@ -192,6 +277,8 @@ function CharacterCard({
 }) {
   const [feedback, setFeedback] = useState('')
   const [loading, setLoading] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+  const [regenDone, setRegenDone] = useState(false)
   const [approved, setApproved] = useState(character.author_approved)
 
   const handleApprove = async () => {
@@ -214,6 +301,8 @@ function CharacterCard({
   const handleRegenerate = async () => {
     if (!feedback.trim()) return
     setLoading(true)
+    setRegenerating(true)
+    setRegenDone(false)
     try {
       const res = await fetch('/api/books/approve-image', {
         method: 'PATCH',
@@ -228,12 +317,22 @@ function CharacterCard({
       if (res.ok) {
         const data = await res.json()
         if (data.newImageUrl) {
-          onImageUpdate(character.id, data.newImageUrl)
-          setFeedback('')
+          setRegenDone(true)
+          // Wait for fade-out animation (500ms) before updating image
+          setTimeout(() => {
+            onImageUpdate(character.id, data.newImageUrl)
+            setFeedback('')
+            setRegenerating(false)
+            setRegenDone(false)
+          }, 600)
+          return
         }
       }
     } finally {
-      setLoading(false)
+      if (!regenDone) {
+        setLoading(false)
+        setRegenerating(false)
+      }
     }
   }
 
@@ -257,6 +356,8 @@ function CharacterCard({
                 </span>
               </div>
             )}
+            {/* Per-image regeneration overlay */}
+            <RegenerationOverlay visible={regenerating} done={regenDone} />
           </>
         ) : (
           <GeneratingPlaceholder />
@@ -296,7 +397,7 @@ function CharacterCard({
                 disabled={loading || !character.image_url}
                 className="flex-1 rounded-lg bg-[#C8412C] hover:bg-[#A8351F] disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm font-semibold text-white transition-colors"
               >
-                {loading ? (
+                {loading && !regenerating ? (
                   <span className="flex items-center justify-center gap-2">
                     <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Working…
@@ -344,6 +445,8 @@ function ItemCard({
 }) {
   const [feedback, setFeedback] = useState('')
   const [loading, setLoading] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+  const [regenDone, setRegenDone] = useState(false)
   const [approved, setApproved] = useState(item.author_approved)
 
   const handleApprove = async () => {
@@ -366,6 +469,8 @@ function ItemCard({
   const handleRegenerate = async () => {
     if (!feedback.trim()) return
     setLoading(true)
+    setRegenerating(true)
+    setRegenDone(false)
     try {
       const res = await fetch('/api/books/approve-image', {
         method: 'PATCH',
@@ -380,12 +485,21 @@ function ItemCard({
       if (res.ok) {
         const data = await res.json()
         if (data.newImageUrl) {
-          onImageUpdate(item.id, data.newImageUrl)
-          setFeedback('')
+          setRegenDone(true)
+          setTimeout(() => {
+            onImageUpdate(item.id, data.newImageUrl)
+            setFeedback('')
+            setRegenerating(false)
+            setRegenDone(false)
+          }, 600)
+          return
         }
       }
     } finally {
-      setLoading(false)
+      if (!regenDone) {
+        setLoading(false)
+        setRegenerating(false)
+      }
     }
   }
 
@@ -409,6 +523,8 @@ function ItemCard({
                 </span>
               </div>
             )}
+            {/* Per-image regeneration overlay */}
+            <RegenerationOverlay visible={regenerating} done={regenDone} />
           </>
         ) : (
           <GeneratingPlaceholder />
@@ -445,7 +561,7 @@ function ItemCard({
                 disabled={loading || !item.image_url}
                 className="flex-1 rounded-lg bg-[#C8412C] hover:bg-[#A8351F] disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm font-semibold text-white transition-colors"
               >
-                {loading ? (
+                {loading && !regenerating ? (
                   <span className="flex items-center justify-center gap-2">
                     <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Working…
@@ -498,8 +614,17 @@ export default function ReviewImagesClient({ bookId, initialCharacters, initialI
   const approvedCharacters = characters.filter((c) => c.author_approved).length
   const approvedItems = items.filter((i) => i.author_approved).length
   const totalApproved = approvedCharacters + approvedItems
+
   const totalItems = characters.length + items.length
   const allApproved = totalItems > 0 && totalApproved === totalItems
+
+  // Count how many images have been generated so far (for the banner progress bar)
+  const generatedCount =
+    characters.filter((c) => !!c.image_url).length +
+    items.filter((i) => !!i.image_url).length
+
+  // Show inline banner while we're actively generating (trigger in-flight OR images still missing)
+  const showGeneratingBanner = generating || needsGeneration
 
   // Trigger image generation
   const triggerGeneration = useCallback(async () => {
@@ -595,19 +720,11 @@ export default function ReviewImagesClient({ bookId, initialCharacters, initialI
 
   const progressPct = totalItems > 0 ? (totalApproved / totalItems) * 100 : 0
 
-  // Count how many images have been generated so far (for the overlay progress bar)
-  const generatedCount =
-    characters.filter((c) => !!c.image_url).length +
-    items.filter((i) => !!i.image_url).length
-
-  // Show overlay while we're actively generating (trigger in-flight OR images still missing)
-  const showGeneratingOverlay = generating || needsGeneration
-
   return (
     <div className="space-y-12 pb-36">
-      {/* Generation overlay (replaces old spinner banner) */}
-      {showGeneratingOverlay && (
-        <GenerationOverlay current={generatedCount} total={totalItems} />
+      {/* ── Inline generation progress banner (replaces full-screen overlay) ── */}
+      {showGeneratingBanner && (
+        <GenerationProgressBanner current={generatedCount} total={totalItems} />
       )}
 
       {/* ── Characters section ────────────────────────────────────── */}

@@ -111,28 +111,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // Verify all scenes for this book are approved
-    const { data: scenes, error: sceneError } = await supabase
-      .from('scenes')
-      .select('id, author_approved')
-      .eq('book_id', bookId)
-
-    if (sceneError) {
-      console.error('Scenes fetch error:', sceneError)
-      return Response.json({ error: 'Failed to fetch scenes' }, { status: 500 })
-    }
-
-    const unapprovedScenes = (scenes || []).filter((s) => !s.author_approved)
-    if (unapprovedScenes.length > 0) {
-      return Response.json(
-        {
-          error: `${unapprovedScenes.length} scene(s) not yet approved`,
-          unapprovedCount: unapprovedScenes.length
-        },
-        { status: 400 }
-      )
-    }
-
     // Update trailer status to 'generating'
     const { error: trailerError } = await supabase
       .from('trailers')
