@@ -37,7 +37,9 @@ export interface Character {
   description: string | null
   appearance_notes: string | null
   image_url: string | null
+  image_prompt: string | null
   author_approved: boolean
+  author_feedback: string | null
   created_at: string
 }
 
@@ -64,8 +66,21 @@ export interface Trailer {
   duration_seconds: number | null
   view_count: number
   click_count: number
+  images_approved: boolean
   processing_started_at: string | null
   processing_completed_at: string | null
   created_at: string
   updated_at: string
+}
+
+export interface Item {
+  id: string
+  book_id: string
+  name: string
+  description: string | null
+  image_url: string | null
+  image_prompt: string | null
+  author_approved: boolean
+  author_feedback: string | null
+  created_at: string
 }

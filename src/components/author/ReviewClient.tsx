@@ -311,18 +311,9 @@ export default function ReviewClient({ bookId, initialCharacters, initialScenes 
     setGenerating(true)
     setGenerateError(null)
     try {
-      const res = await fetch('/api/books/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data?.error ?? `Failed to start generation (${res.status})`)
-      }
-      router.push('/dashboard')
+      router.push(`/dashboard/review-images/${bookId}`)
     } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : 'Failed to start generation.')
+      setGenerateError(err instanceof Error ? err.message : 'Failed to navigate.')
       setGenerating(false)
     }
   }
@@ -429,10 +420,10 @@ export default function ReviewClient({ bookId, initialCharacters, initialScenes 
               {generating ? (
                 <span className="flex items-center gap-2">
                   <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Starting…
+                  Opening…
                 </span>
               ) : (
-                'Build My Trailer'
+                'Continue to Visual Review →'
               )}
             </button>
             <p className="text-xs text-gray-400 mt-1">Your trailer usually takes 15–20 minutes to produce.</p>

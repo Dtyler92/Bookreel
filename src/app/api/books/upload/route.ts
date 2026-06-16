@@ -5,19 +5,22 @@ import { PDFParse } from 'pdf-parse'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const SYSTEM_PROMPT = `You are a screenplay writer. Return ONLY a valid JSON object with no markdown, no code blocks, no explanation. Just raw JSON.
-
-The JSON must match this exact structure:
-{"characters":[{"name":"","role":"","description":"","appearance":""}],"scenes":[{"scene_number":1,"title":"","description":"","screenplay_text":"","duration_seconds":10}],"voiceover":"","tone":"","music_mood":""}
-
-Guidelines:
-- Extract 2-5 main characters with vivid descriptions
-- Create 4-6 cinematic scenes that would work as a book trailer
-- Each scene should be 8-15 seconds (duration_seconds between 8 and 15)
-- Voiceover should be compelling and mysterious (2-3 sentences)
-- Tone: one of dramatic, mysterious, romantic, thrilling, inspiring, dark
-- Music mood: one of orchestral, ambient, upbeat, suspenseful, emotional, epic
-- Return ONLY raw JSON. No markdown fences, no backticks, no explanation before or after.`
+const SYSTEM_PROMPT = `You are a book trailer screenplay writer. Analyze the provided book text and return ONLY a valid JSON object (no markdown, no code blocks) in exactly this format:
+{
+  "characters": [
+    {"name": "string", "role": "protagonist|antagonist|supporting", "description": "string", "appearance": "string - describe exactly as in the book: hair, eyes, build, clothing, age"}
+  ],
+  "items": [
+    {"name": "string", "description": "string - describe exactly as mentioned in the book"}
+  ],
+  "scenes": [
+    {"scene_number": 1, "title": "string", "description": "string", "screenplay_text": "string", "duration_seconds": 10}
+  ],
+  "voiceover": "string - max 120 words",
+  "tone": "string",
+  "music_mood": "string"
+}
+Extract 3-5 main characters, 3-5 key items, and 6-8 scenes. Use ONLY descriptions from the book text, do not invent details.`
 
 function getServiceClient() {
   return createSupabaseDirectClient(
@@ -195,6 +198,7 @@ export async function POST(request: Request) {
     // ── Step 4: Call OpenRouter API ───────────────────────────────────────────
     let trailerData: {
       characters: Array<{ name: string; role: string; description: string; appearance: string }>
+      items?: Array<{ name: string; description: string }>
       scenes: Array<{ scene_number: number; title: string; description: string; screenplay_text: string; duration_seconds: number }>
       voiceover: string
       tone: string
@@ -202,18 +206,28 @@ export async function POST(request: Request) {
     }
 
     try {
-      console.log('OpenRouter key present:', !!process.env.OPENROUTER_API_KEY)
-      console.log('OpenRouter key prefix:', process.env.OPENROUTER_API_KEY?.substring(0, 10))
-
-      // Treat placeholder/masked values as unset
-      const isPlaceholder = (v: string | undefined) => !v || v === '***' || v === 'xxx'
       const rawOpenRouterKey = process.env.OPENROUTER_API_KEY
       const rawOpenAiKey = process.env.OPENAI_API_KEY
+
+      // Log first 20 chars for debugging — never log full keys
+      console.log('[upload] OPENROUTER_API_KEY first 20:', rawOpenRouterKey ? rawOpenRouterKey.substring(0, 20) : '(not set)')
+      console.log('[upload] OPENAI_API_KEY first 20:', rawOpenAiKey ? rawOpenAiKey.substring(0, 20) : '(not set)')
+
+      // Treat placeholder/masked values as unset — be conservative: only reject obviously fake values
+      const isPlaceholder = (v: string | undefined) =>
+        !v ||
+        v === '***' ||
+        v === 'xxx' ||
+        v === 'your-key-here' ||
+        v === 'placeholder' ||
+        v.toLowerCase().startsWith('your_') ||
+        v.length < 10
+
       const openRouterKey = isPlaceholder(rawOpenRouterKey) ? undefined : rawOpenRouterKey
       const openAiKey = isPlaceholder(rawOpenAiKey) ? undefined : rawOpenAiKey
 
-      console.log('[upload] OpenRouter key available:', !!openRouterKey)
-      console.log('[upload] OpenAI key available:', !!openAiKey)
+      console.log('[upload] OpenRouter key usable:', !!openRouterKey, openRouterKey ? `(len=${openRouterKey.length})` : '')
+      console.log('[upload] OpenAI key usable:', !!openAiKey, openAiKey ? `(len=${openAiKey.length})` : '')
 
       const apiKey = openRouterKey || openAiKey
       const apiUrl = openRouterKey
@@ -385,7 +399,23 @@ export async function POST(request: Request) {
       }
     }
 
-    // ── Step 8: Save trailer record ───────────────────────────────────────────
+    // ── Step 8: Save items ────────────────────────────────────────────────────
+    if (trailerData.items && Array.isArray(trailerData.items)) {
+      try {
+        for (const item of trailerData.items) {
+          await supabase.from('items').insert({
+            book_id: bookId,
+            name: item.name,
+            description: item.description,
+          })
+        }
+        console.log('[upload] Items saved:', trailerData.items.length)
+      } catch (itemErr) {
+        console.error('[upload] Items step threw:', itemErr)
+      }
+    }
+
+    // ── Step 9: Save trailer record ───────────────────────────────────────────
     try {
       const { error: trailerError } = await supabase.from('trailers').insert({
         book_id: bookId,

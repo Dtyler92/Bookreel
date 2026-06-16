@@ -70,6 +70,25 @@ export async function POST(request: Request) {
       console.log(`Generating trailer for tier "${tier}" using models:`, modelConfig)
     }
 
+    // Verify images have been approved before generating video
+    const { data: trailer, error: trailerFetchError } = await supabase
+      .from('trailers')
+      .select('id, images_approved')
+      .eq('book_id', bookId)
+      .single()
+
+    if (trailerFetchError) {
+      console.error('Trailer fetch error:', trailerFetchError)
+      return Response.json({ error: 'Failed to fetch trailer record' }, { status: 500 })
+    }
+
+    if (trailer && !trailer.images_approved) {
+      return Response.json(
+        { error: 'Character and item images must be approved before generating your trailer', requiresImageApproval: true },
+        { status: 400 }
+      )
+    }
+
     // Verify all characters for this book are approved
     const { data: characters, error: charError } = await supabase
       .from('characters')
