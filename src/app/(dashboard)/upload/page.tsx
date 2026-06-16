@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { GlobalNav } from '@/components/shared/GlobalNav'
+import { BrandLogo } from '@/components/shared/BrandLogo'
+import { PrimaryButton } from '@/components/shared/PrimaryButton'
 
 const GENRES = [
   'Fantasy',
@@ -18,16 +21,68 @@ const GENRES = [
 ]
 
 const LOADING_MESSAGES = [
-  '📖 Reading your manuscript...',
-  '🎬 Finding your story\'s cinematic moments...',
-  '🎙️ Crafting a voiceover from your words...',
-  '✂️ Putting your trailer together...',
+  'Turning pages into frames…',
+  'Meeting your characters…',
+  'Crafting your story\'s arc…',
+  'Almost ready to roll…',
 ]
 
 type Step = 1 | 2 | 3
 
+const STEPS = [
+  { label: 'Book Details' },
+  { label: 'Upload PDF' },
+  { label: 'Processing' },
+]
+
+// ─── Shared input style ──────────────────────────────────────────────────────
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  background: '#FAFAF7',
+  border: '1.5px solid #E8E2D5',
+  borderRadius: '8px',
+  padding: '12px 14px',
+  fontFamily: 'var(--font-inter), sans-serif',
+  fontSize: '15px',
+  color: '#1A1A18',
+  outline: 'none',
+  boxSizing: 'border-box',
+  transition: 'border-color 150ms ease, box-shadow 150ms ease',
+}
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontFamily: 'var(--font-inter), sans-serif',
+  fontSize: '11px',
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.08em',
+  color: '#8A8278',
+  marginBottom: '6px',
+}
+
+const fieldStyle: React.CSSProperties = {
+  marginBottom: '20px',
+}
+
+// ─── Focus management ────────────────────────────────────────────────────────
+
+function useFocusStyle() {
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    e.target.style.borderColor = '#C8402F'
+    e.target.style.boxShadow = '0 0 0 3px rgba(200,64,47,0.10)'
+  }
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    e.target.style.borderColor = '#E8E2D5'
+    e.target.style.boxShadow = 'none'
+  }
+  return { onFocus: handleFocus, onBlur: handleBlur }
+}
+
 export default function UploadPage() {
   const router = useRouter()
+  const focusHandlers = useFocusStyle()
 
   // Step state
   const [step, setStep] = useState<Step>(1)
@@ -59,13 +114,13 @@ export default function UploadPage() {
     return () => clearInterval(interval)
   }, [uploading])
 
-  // ── Step 1 helpers ──────────────────────────────────────────────────────────
+  // ── Step 1 ────────────────────────────────────────────────────────────────
   const handleStep1Next = () => {
     if (!title.trim()) return
     setStep(2)
   }
 
-  // ── Step 2 helpers ──────────────────────────────────────────────────────────
+  // ── Step 2 ────────────────────────────────────────────────────────────────
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     setDragging(true)
@@ -127,58 +182,177 @@ export default function UploadPage() {
     }
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      {/* Top nav */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-2">
-          <Link href="/dashboard" className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">
-            <span className="text-xl">🎬</span>
-            <span className="font-bold text-lg">BookReel</span>
-          </Link>
-        </div>
-      </header>
+    <div style={{ minHeight: '100vh', background: '#FAFAF7' }}>
+      <GlobalNav />
 
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
-        {/* Step indicator */}
-        <div className="mb-10 flex items-center gap-0">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex items-center flex-1 last:flex-none">
-              <div
-                className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold border-2 transition-colors ${
-                  step === s
-                    ? 'border-indigo-600 bg-indigo-600 text-white'
-                    : step > s
-                    ? 'border-indigo-600 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                    : 'border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-600'
-                }`}
-              >
-                {step > s ? '✓' : s}
+      {/* Loading Overlay */}
+      {uploading && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(250,250,247,0.95)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 999,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '28px',
+        }}>
+          <BrandLogo size={32} />
+
+          {/* Progress bar */}
+          <div style={{
+            width: '280px',
+            height: '4px',
+            background: '#E8E2D5',
+            borderRadius: '4px',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%',
+              background: '#C8402F',
+              borderRadius: '4px',
+              animation: 'progressFill 8s ease-in-out infinite',
+            }} />
+          </div>
+
+          {/* Message */}
+          <p style={{
+            fontFamily: 'var(--font-playfair), serif',
+            fontStyle: 'italic',
+            fontSize: '18px',
+            color: '#8A8278',
+            margin: 0,
+            transition: 'opacity 0.5s ease',
+          }}>
+            {LOADING_MESSAGES[loadingMsgIndex]}
+          </p>
+
+          <style>{`
+            @keyframes progressFill {
+              0% { width: 0%; }
+              20% { width: 30%; }
+              50% { width: 60%; }
+              80% { width: 85%; }
+              95% { width: 92%; }
+              100% { width: 96%; }
+            }
+          `}</style>
+        </div>
+      )}
+
+      <main style={{
+        paddingTop: '88px',
+        maxWidth: '680px',
+        margin: '0 auto',
+        padding: '88px 24px 48px',
+      }}>
+        {/* Step Indicator */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'center',
+          marginBottom: '40px',
+        }}>
+          {STEPS.map((s, i) => {
+            const stepNum = (i + 1) as Step
+            const isActive = step === stepNum
+            const isCompleted = step > stepNum
+
+            const circleStyle: React.CSSProperties = {
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '14px',
+              fontWeight: 600,
+              flexShrink: 0,
+              ...(isActive ? {
+                background: '#C8402F',
+                color: '#FAFAF7',
+                border: 'none',
+                boxShadow: '0 0 0 4px rgba(200,64,47,0.15)',
+              } : isCompleted ? {
+                background: '#FAFAF7',
+                color: '#C8402F',
+                border: '2px solid #C8402F',
+              } : {
+                background: '#EDE9E0',
+                color: '#8A8278',
+                border: '2px solid #E8E2D5',
+              }),
+            }
+
+            return (
+              <div key={stepNum} style={{ display: 'flex', alignItems: 'flex-start', flex: i < STEPS.length - 1 ? 1 : 'none' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                  <div style={circleStyle}>
+                    {isCompleted ? '✓' : stepNum}
+                  </div>
+                  <span style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    color: isActive ? '#C8402F' : '#8A8278',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {s.label}
+                  </span>
+                </div>
+                {i < STEPS.length - 1 && (
+                  <div style={{
+                    height: '2px',
+                    flex: 1,
+                    background: isCompleted ? '#C8402F' : '#E8E2D5',
+                    marginTop: '17px',
+                    marginLeft: '8px',
+                    marginRight: '8px',
+                    transition: 'background 300ms ease',
+                  }} />
+                )}
               </div>
-              {s < 3 && (
-                <div
-                  className={`h-0.5 flex-1 mx-2 transition-colors ${
-                    step > s ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
-                  }`}
-                />
-              )}
-            </div>
-          ))}
+            )
+          })}
         </div>
 
-        {/* ── STEP 1: Book Details ─────────────────────────────────────── */}
+        {/* ── STEP 1: Book Details ─────────────────────────────────────────── */}
         {step === 1 && (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 space-y-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tell us about your book.</h1>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">A few quick details help us shape your trailer to match your genre and tone. Think of it as giving your film crew a brief before the shoot.</p>
-            </div>
+          <div style={{
+            background: '#FFFFFF',
+            border: '1px solid #E8E2D5',
+            borderRadius: '12px',
+            padding: '36px 40px',
+          }}>
+            <h1 style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontWeight: 700,
+              fontSize: '24px',
+              color: '#0D0D0B',
+              margin: '0 0 8px',
+            }}>
+              Tell us about your book.
+            </h1>
+            <p style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '15px',
+              color: '#8A8278',
+              margin: '0 0 28px',
+            }}>
+              A few quick details help us shape your trailer.
+            </p>
 
-            {/* Title */}
-            <div className="space-y-1">
-              <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Book Title <span className="text-red-500">*</span>
+            {/* Book Title */}
+            <div style={fieldStyle}>
+              <label htmlFor="title" style={labelStyle}>
+                Book Title <span style={{ color: '#C8402F' }}>*</span>
               </label>
               <input
                 id="title"
@@ -187,20 +361,22 @@ export default function UploadPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="The Name of the Wind"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                style={inputStyle}
+                {...focusHandlers}
               />
             </div>
 
             {/* Genre */}
-            <div className="space-y-1">
-              <label htmlFor="genre" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <div style={fieldStyle}>
+              <label htmlFor="genre" style={labelStyle}>
                 Genre
               </label>
               <select
                 id="genre"
                 value={genre}
                 onChange={(e) => setGenre(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                style={{ ...inputStyle, appearance: 'auto' }}
+                {...focusHandlers}
               >
                 <option value="">Select a genre…</option>
                 {GENRES.map((g) => (
@@ -210,8 +386,8 @@ export default function UploadPage() {
             </div>
 
             {/* Description */}
-            <div className="space-y-1">
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <div style={fieldStyle}>
+              <label htmlFor="description" style={labelStyle}>
                 Description
               </label>
               <textarea
@@ -221,15 +397,24 @@ export default function UploadPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="A brief synopsis of your book…"
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                style={{ ...inputStyle, resize: 'none' }}
+                {...focusHandlers}
               />
-              <p className="text-xs text-right text-gray-400">{description.length}/500</p>
+              <p style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '12px',
+                color: '#8A8278',
+                textAlign: 'right',
+                marginTop: '4px',
+              }}>
+                {description.length}/500
+              </p>
             </div>
 
             {/* Amazon Link */}
-            <div className="space-y-1">
-              <label htmlFor="amazon" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Amazon Link <span className="text-gray-400 font-normal">(optional)</span>
+            <div style={fieldStyle}>
+              <label htmlFor="amazon" style={labelStyle}>
+                Amazon Link <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
               </label>
               <input
                 id="amazon"
@@ -237,14 +422,15 @@ export default function UploadPage() {
                 value={amazonLink}
                 onChange={(e) => setAmazonLink(e.target.value)}
                 placeholder="https://amazon.com/dp/..."
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                style={inputStyle}
+                {...focusHandlers}
               />
             </div>
 
             {/* Author Store Link */}
-            <div className="space-y-1">
-              <label htmlFor="store" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Author Store Link <span className="text-gray-400 font-normal">(optional)</span>
+            <div style={{ ...fieldStyle, marginBottom: '28px' }}>
+              <label htmlFor="store" style={labelStyle}>
+                Author Store Link <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
               </label>
               <input
                 id="store"
@@ -252,122 +438,235 @@ export default function UploadPage() {
                 value={storeLink}
                 onChange={(e) => setStoreLink(e.target.value)}
                 placeholder="https://yourstore.com/..."
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                style={inputStyle}
+                {...focusHandlers}
               />
             </div>
 
-            <button
+            <PrimaryButton
+              fullWidth
               onClick={handleStep1Next}
               disabled={!title.trim()}
-              className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             >
-              Next →
-            </button>
+              Continue →
+            </PrimaryButton>
           </div>
         )}
 
-        {/* ── STEP 2: Upload PDF ───────────────────────────────────────── */}
+        {/* ── STEP 2: Upload PDF ───────────────────────────────────────────── */}
         {step === 2 && (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 space-y-6">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Upload your manuscript.</h1>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Drop in your PDF and we&apos;ll read through your story to find your characters, key scenes, and the moments that make readers lean in. Only your manuscript is used — nothing else.
-              </p>
-            </div>
+          <div style={{
+            background: '#FFFFFF',
+            border: '1px solid #E8E2D5',
+            borderRadius: '12px',
+            padding: '36px 40px',
+          }}>
+            <h1 style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontWeight: 700,
+              fontSize: '24px',
+              color: '#0D0D0B',
+              margin: '0 0 8px',
+            }}>
+              Upload your manuscript.
+            </h1>
+            <p style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '15px',
+              color: '#8A8278',
+              margin: '0 0 24px',
+            }}>
+              Only your manuscript is used — nothing else.
+            </p>
 
-            {/* Drop zone */}
+            {/* Drop Zone */}
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed cursor-pointer p-12 transition-colors ${
-                dragging
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                  : file
-                  ? 'border-green-400 bg-green-50 dark:bg-green-900/10'
-                  : 'border-gray-300 dark:border-gray-700 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/10'
-              }`}
+              style={{
+                border: `2.5px dashed ${dragging ? '#C8402F' : '#E8E2D5'}`,
+                borderRadius: '12px',
+                padding: '60px 40px',
+                textAlign: 'center',
+                background: dragging ? 'rgba(200,64,47,0.03)' : '#FAFAF7',
+                cursor: 'pointer',
+                transition: 'border-color 150ms ease, background 150ms ease',
+                marginBottom: '20px',
+              }}
             >
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="application/pdf"
-                className="hidden"
+                style={{ display: 'none' }}
                 onChange={handleFileChange}
               />
-              <span className="text-4xl">{file ? '📄' : '☁️'}</span>
+              <div style={{ fontSize: '40px', color: '#8A8278', marginBottom: '12px' }}>
+                {file ? '📄' : '⬆'}
+              </div>
               {file ? (
-                <div className="text-center">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{file.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {(file.size / 1024 / 1024).toFixed(2)} MB — click to change
+                <div>
+                  <p style={{
+                    fontFamily: 'var(--font-playfair), serif',
+                    fontSize: '20px',
+                    color: '#0D0D0B',
+                    margin: '0 0 4px',
+                    fontWeight: 700,
+                  }}>
+                    {file.name}
                   </p>
+                  <p style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '14px',
+                    color: '#8A8278',
+                    margin: '0 0 8px',
+                  }}>
+                    {(file.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setFile(null)
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      fontSize: '13px',
+                      color: '#C8402F',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      padding: 0,
+                    }}
+                  >
+                    Remove
+                  </button>
                 </div>
               ) : (
-                <div className="text-center">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Drag & drop your PDF here, or <span className="text-indigo-600 dark:text-indigo-400">browse</span>
+                <div>
+                  <p style={{
+                    fontFamily: 'var(--font-playfair), serif',
+                    fontSize: '20px',
+                    fontWeight: 700,
+                    color: '#0D0D0B',
+                    margin: '0 0 6px',
+                  }}>
+                    Drop your manuscript here
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">Accepted format: PDF · Max file size: 50MB</p>
+                  <p style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '14px',
+                    color: '#8A8278',
+                    margin: 0,
+                  }}>
+                    PDF up to 50MB — or click to browse
+                  </p>
                 </div>
               )}
             </div>
 
             {/* Error */}
             {uploadError && (
-              <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+              <div style={{
+                borderRadius: '8px',
+                background: 'rgba(200,64,47,0.06)',
+                border: '1px solid rgba(200,64,47,0.25)',
+                padding: '12px 16px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '14px',
+                color: '#C8402F',
+                marginBottom: '16px',
+              }}>
                 {uploadError}
               </div>
             )}
 
-            {/* Loading message */}
-            {uploading && (
-              <div className="flex items-center gap-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 px-4 py-3">
-                <span className="inline-block w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin shrink-0" />
-                <p className="text-sm text-indigo-700 dark:text-indigo-300 font-medium transition-all">
-                  {LOADING_MESSAGES[loadingMsgIndex]}
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-3">
+            {/* Back + Upload buttons */}
+            <div style={{ display: 'flex', gap: '12px' }}>
               <button
                 onClick={() => setStep(1)}
                 disabled={uploading}
-                className="flex-1 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                style={{
+                  flex: 1,
+                  background: '#FAFAF7',
+                  border: '1.5px solid #E8E2D5',
+                  borderRadius: '8px',
+                  padding: '14px 24px',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontWeight: 600,
+                  fontSize: '15px',
+                  color: '#1A1A18',
+                  cursor: 'pointer',
+                  opacity: uploading ? 0.55 : 1,
+                }}
               >
                 ← Back
               </button>
-              <button
+              <PrimaryButton
+                style={{ flex: 2 }}
                 onClick={handleUpload}
                 disabled={!file || uploading}
-                className="flex-[2] rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
               >
-                {uploading ? 'Building your trailer…' : 'Upload & Build My Trailer'}
-              </button>
+                Upload &amp; Build My Trailer
+              </PrimaryButton>
             </div>
           </div>
         )}
 
-        {/* ── STEP 3: Success ──────────────────────────────────────────── */}
+        {/* ── STEP 3: Success ──────────────────────────────────────────────── */}
         {step === 3 && (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-12 flex flex-col items-center text-center gap-6">
-            <div className="flex items-center justify-center w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30">
-              <svg className="w-10 h-10 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+          <div style={{
+            background: '#FFFFFF',
+            border: '1px solid #E8E2D5',
+            borderRadius: '12px',
+            padding: '56px 40px',
+            textAlign: 'center',
+          }}>
+            {/* Checkmark circle */}
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: 'rgba(200,64,47,0.10)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 28px',
+            }}>
+              <span style={{
+                color: '#C8402F',
+                fontSize: '36px',
+                lineHeight: 1,
+              }}>
+                ✓
+              </span>
             </div>
 
-            <div className="space-y-2">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Your trailer is ready.</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                We built it from your manuscript — your characters, your scenes, your story.
-              </p>
-            </div>
+            <h1 style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontWeight: 700,
+              fontSize: '28px',
+              color: '#0D0D0B',
+              margin: '0 0 12px',
+            }}>
+              Your manuscript is ready.
+            </h1>
+            <p style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '15px',
+              color: '#8A8278',
+              margin: '0 0 32px',
+              maxWidth: '360px',
+              marginLeft: 'auto',
+              marginRight: 'auto',
+            }}>
+              We&apos;ve analyzed your book and found your key characters and scenes.
+            </p>
 
-            <button
+            <PrimaryButton
+              fullWidth
               onClick={() => {
                 if (bookId) {
                   router.push(`/dashboard/review/${bookId}`)
@@ -375,14 +674,20 @@ export default function UploadPage() {
                   router.push('/dashboard')
                 }
               }}
-              className="mt-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-8 py-3 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             >
               Review Your Story →
-            </button>
+            </PrimaryButton>
 
-            <Link href="/dashboard" className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-              Back to Dashboard
-            </Link>
+            <div style={{ marginTop: '16px' }}>
+              <Link href="/dashboard" style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '14px',
+                color: '#8A8278',
+                textDecoration: 'none',
+              }}>
+                ← Back to Dashboard
+              </Link>
+            </div>
           </div>
         )}
       </main>
