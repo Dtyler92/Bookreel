@@ -56,7 +56,9 @@ export async function POST(request: Request) {
 
     try {
       const formData = await request.formData()
-      file = formData.get('file') as File | null
+      console.log('Upload received fields:', Array.from(formData.keys()))
+      console.log('File field:', formData.get('pdf'))
+      file = formData.get('pdf') as File | null
       title = formData.get('title') as string | null
       genre = formData.get('genre') as string | null
       description = formData.get('description') as string | null
@@ -70,8 +72,12 @@ export async function POST(request: Request) {
       )
     }
 
-    if (!file) {
-      return Response.json({ error: 'No file provided' }, { status: 400 })
+    if (!file || !(file instanceof File)) {
+      console.error('[upload] No PDF file found in form data. Received keys:', file)
+      return Response.json(
+        { error: 'No file provided. Please select a PDF file and try again.' },
+        { status: 400 }
+      )
     }
     if (!title) {
       return Response.json({ error: 'Title is required' }, { status: 400 })
