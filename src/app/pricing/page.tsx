@@ -33,16 +33,16 @@ export default function PricingPage() {
 
   const authorNote =
     billing === 'yearly'
-      ? 'Billed $228/yr. That\'s two months free.'
+      ? "Billed $228/yr. That's two months free."
       : billing === 'beta'
-      ? 'Founding Member rate. Yours forever.'
+      ? 'Billed $108/yr — Founding Member rate. Yours forever.'
       : null;
 
   const proNote =
     billing === 'yearly'
       ? 'Billed $588/yr. Save $120 a year.'
       : billing === 'beta'
-      ? 'Billed $348/yr. Founding Member rate — yours forever.'
+      ? 'Billed $348/yr — Founding Member rate. Yours forever.'
       : null;
 
   return (
