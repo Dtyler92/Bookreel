@@ -188,25 +188,41 @@ export async function POST(request: Request) {
     }
 
     try {
-      const openRouterKey = process.env.OPENROUTER_API_KEY
-      if (!openRouterKey) {
-        console.error('[upload] OPENROUTER_API_KEY is not set')
+      console.log('OpenRouter key present:', !!process.env.OPENROUTER_API_KEY)
+      console.log('OpenRouter key prefix:', process.env.OPENROUTER_API_KEY?.substring(0, 10))
+
+      const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY
+      const apiUrl = process.env.OPENROUTER_API_KEY
+        ? 'https://openrouter.ai/api/v1/chat/completions'
+        : 'https://api.openai.com/v1/chat/completions'
+      const model = process.env.OPENROUTER_API_KEY
+        ? 'openai/gpt-4o-mini'
+        : 'gpt-4o-mini'
+
+      if (!apiKey) {
+        console.error('[upload] Neither OPENROUTER_API_KEY nor OPENAI_API_KEY is set')
         return Response.json(
           { error: 'AI service not configured' },
           { status: 500 }
         )
       }
 
-      const aiResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      console.log('[upload] Using AI endpoint:', apiUrl, 'model:', model)
+
+      const aiHeaders: Record<string, string> = {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      }
+      if (process.env.OPENROUTER_API_KEY) {
+        aiHeaders['HTTP-Referer'] = 'https://bookreel.app'
+        aiHeaders['X-Title'] = 'BookReel'
+      }
+
+      const aiResponse = await fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openRouterKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://bookreel.app',
-          'X-Title': 'BookReel'
-        },
+        headers: aiHeaders,
         body: JSON.stringify({
-          model: 'openai/gpt-4o-mini',
+          model,
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: `Analyze this book excerpt and generate trailer data:\n\n${truncatedText}` }
