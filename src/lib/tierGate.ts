@@ -11,7 +11,7 @@ export function getVideoConfig(tier: PlanName) {
   if (tier === 'pro') {
     return {
       maxDurationSeconds: 90,    // 60-90 seconds
-      scenesCount: 8,            // more scenes for longer trailer
+      scenesCount: 9,            // 9 clips × ~10 sec = 90 seconds max
       sceneLength: 10,           // 10 seconds per clip
       quality: 'cinematic' as const
     }
@@ -19,10 +19,16 @@ export function getVideoConfig(tier: PlanName) {
   // author tier (standard) - max 30 seconds
   return {
     maxDurationSeconds: 30,
-    scenesCount: 4,              // fewer scenes for 30 sec trailer
-    sceneLength: 7,              // ~7 seconds per clip (4 clips = 28 sec)
+    scenesCount: 3,              // 3 clips × ~10 sec = 30 seconds
+    sceneLength: 10,             // 10 seconds per clip
     quality: 'standard' as const
   }
+}
+
+export function getTrailerDuration(tier: 'standard' | 'cinematic') {
+  return tier === 'cinematic'
+    ? { maxScenes: 9, targetDuration: '60-90 seconds', clipsPerTrailer: 9 }
+    : { maxScenes: 3, targetDuration: '~30 seconds', clipsPerTrailer: 3 }
 }
 
 export function getModelForTier(tier: PlanName) {

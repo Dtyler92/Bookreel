@@ -53,11 +53,15 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
     // Suppress unused variable warning — voiceoverScript stored for future ElevenLabs integration
     void voiceoverScript
 
+    // Determine max scenes based on tier
+    const maxScenes = tier === 'cinematic' ? 9 : 3
+    const scenesToGenerate = scenes.slice(0, maxScenes)
+
     // Step 2: Generate scene images and video clips
-    console.log(`[Pipeline:${bookId}] 🎬 Step 2: Generating video clips (${Math.min(scenes.length, videoConfig.scenesCount)} scenes)...`)
+    console.log(`[Pipeline:${bookId}] 🎬 Step 2: Generating video clips (${scenesToGenerate.length} scenes, max ${maxScenes} for ${tier} tier)...`)
     const clipUrls: string[] = []
 
-    for (const scene of scenes.slice(0, videoConfig.scenesCount)) { // tier-based scene limit
+    for (const scene of scenesToGenerate) { // tier-based scene limit
       console.log(`[Pipeline:${bookId}]   Generating image for scene ${scene.scene_number}...`)
       // Generate scene image
       const imageUrl = await generateSceneImage(
