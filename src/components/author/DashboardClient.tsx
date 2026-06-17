@@ -415,7 +415,14 @@ function BookCard({
           </span>
           {/* Retry button — stops link propagation */}
           <button
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTrailerStatus('generating') }}
+            onClick={async (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setTrailerStatus('generating')
+              try {
+                await fetch(`/api/books/${book.id}/retry-trailer`, { method: 'POST' })
+              } catch (_) { /* ignore */ }
+            }}
             onMouseEnter={() => setRetryHover(true)}
             onMouseLeave={() => setRetryHover(false)}
             style={{

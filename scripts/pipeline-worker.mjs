@@ -288,7 +288,7 @@ async function generateVoiceoverScript(bookTitle, scenes, tone) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'openai/gpt-4o-mini',
+      model: 'anthropic/claude-sonnet-4-5',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent }
