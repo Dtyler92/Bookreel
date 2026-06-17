@@ -73,7 +73,10 @@ export async function POST(request: Request) {
     }
 
     const genre = book.genre ?? 'general fiction'
-    const falModel = tier === 'pro' ? 'fal-ai/flux-pro' : 'fal-ai/flux/schnell'
+    // Use flux-pro/v1.1-ultra for characters (best photorealism / faces)
+    // Use flux-pro/v1.1 for standard items, ultra for pro
+    const falCharacterModel = 'fal-ai/flux-pro/v1.1-ultra'
+    const falItemModel = tier === 'pro' ? 'fal-ai/flux-pro/v1.1-ultra' : 'fal-ai/flux-pro/v1.1'
 
     // Fetch characters
     const { data: characters, error: charError } = await supabase
@@ -109,15 +112,15 @@ export async function POST(request: Request) {
 
       const appearance = character.appearance_notes ?? character.description ?? character.name
       const temperamentHint = extractTemperament(character.description)
-      const characterPrompt = `${appearance}${temperamentHint ? `, ${temperamentHint}` : ''}, cinematic portrait, book cover style, dramatic lighting, detailed face, realistic, ${genre} genre aesthetic`
+      const characterPrompt = `${appearance}${temperamentHint ? `, ${temperamentHint}` : ''}, natural skin texture, photorealistic portrait, editorial photography, soft cinematic lighting, sharp focus on face, book cover style, ${genre} genre aesthetic`
       const imagePrompt = sanitizeAppearanceDescription(characterPrompt.substring(0, 500))
 
       try {
         console.log('[generate-images] Generating image for character:', character.name)
-        const result = await fal.subscribe(falModel, {
+        const result = await fal.subscribe(falCharacterModel, {
           input: {
             prompt: imagePrompt,
-            negative_prompt: IMAGE_NEGATIVE_PROMPT,
+            negative_prompt: IMAGE_NEGATIVE_PROMPT + ', artificial, plastic skin, overly smooth, CGI, digital art, illustration, text, watermark',
             image_size: 'portrait_4_3',
             num_images: 1,
             safety_tolerance: '2',
@@ -145,15 +148,15 @@ export async function POST(request: Request) {
         continue
       }
 
-      const itemPrompt = `${item.description ?? item.name}, ${item.name}, detailed, cinematic, dramatic lighting, ${genre} genre aesthetic, isolated subject`
+      const itemPrompt = `${item.description ?? item.name}, ${item.name}, detailed, cinematic, dramatic lighting, ${genre} genre aesthetic, isolated subject, no text, no words`
       const imagePrompt = itemPrompt.substring(0, 500)
 
       try {
         console.log('[generate-images] Generating image for item:', item.name)
-        const result = await fal.subscribe(falModel, {
+        const result = await fal.subscribe(falItemModel, {
           input: {
             prompt: imagePrompt,
-            negative_prompt: IMAGE_NEGATIVE_PROMPT,
+            negative_prompt: IMAGE_NEGATIVE_PROMPT + ', text, words, letters, watermark, caption',
             image_size: 'square_hd',
             num_images: 1,
             safety_tolerance: '2',

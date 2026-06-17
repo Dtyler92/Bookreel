@@ -307,7 +307,7 @@ function BookCard({
   const [retryHover, setRetryHover] = useState(false)
   const [playHover, setPlayHover] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const isGenerating = trailerStatus === 'processing' || trailerStatus === 'generating'
+  const isGenerating = trailerStatus === 'pending' || trailerStatus === 'processing' || trailerStatus === 'generating'
   const isFailed = trailerStatus === 'failed'
   const isComplete = trailerStatus === 'complete'
 

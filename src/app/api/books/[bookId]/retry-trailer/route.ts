@@ -39,19 +39,24 @@ export async function POST(
   }
 
   // Reset the trailer status to pending so the worker picks it up
-  const { error } = await supabase
+  const { error, count } = await supabase
     .from('trailers')
     .update({
       status: 'pending',
       error_message: null,
       processing_started_at: null,
       processing_completed_at: null,
-    })
+    }, { count: 'exact' })
     .eq('book_id', bookId)
 
   if (error) {
     console.error('[retry-trailer] DB error:', error)
     return Response.json({ error: error.message }, { status: 500 })
+  }
+
+  if (!count || count === 0) {
+    console.error('[retry-trailer] No trailer row found for book:', bookId)
+    return Response.json({ error: 'No trailer record found to retry' }, { status: 404 })
   }
 
   return Response.json({ success: true })
