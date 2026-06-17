@@ -2,6 +2,12 @@ import { createClient as createSupabaseDirectClient } from '@supabase/supabase-j
 import { createClient } from '@/lib/supabase/server'
 import { PDFParse } from 'pdf-parse'
 import { CONTENT_POLICY_SYSTEM_ADDENDUM, sanitizeAppearanceDescription, sanitizeSceneDescription } from '@/lib/contentPolicy'
+import Anthropic from '@anthropic-ai/sdk'
+
+// Required Vercel env vars:
+// ANTHROPIC_API_KEY - primary AI provider (Anthropic Claude Sonnet)
+// OPENROUTER_API_KEY - fallback AI provider (OpenRouter)
+// OPENAI_API_KEY - secondary fallback (OpenAI direct)
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -218,7 +224,7 @@ export async function POST(request: Request) {
     const truncatedText = userMessage.slice(0, 15000)
     console.log('[upload] First 200 chars of text being sent:', truncatedText.substring(0, 200))
 
-    // ── Step 4: Call OpenRouter API ───────────────────────────────────────────
+    // ── Step 4: Call AI API (Anthropic primary, OpenRouter fallback) ──────────
     let trailerData: {
       characters: Array<{ name: string; role: string; description: string; appearance: string; temperament?: string }>
       items?: Array<{ name: string; description: string }>
@@ -229,14 +235,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      const rawOpenRouterKey = process.env.OPENROUTER_API_KEY
-      const rawOpenAiKey = process.env.OPENAI_API_KEY
-
-      // Log first 20 chars for debugging — never log full keys
-      console.log('[upload] OPENROUTER_API_KEY first 20:', rawOpenRouterKey ? rawOpenRouterKey.substring(0, 20) : '(not set)')
-      console.log('[upload] OPENAI_API_KEY first 20:', rawOpenAiKey ? rawOpenAiKey.substring(0, 20) : '(not set)')
-
-      // Treat placeholder/masked values as unset — be conservative: only reject obviously fake values
+      // Treat placeholder/masked values as unset
       const isPlaceholder = (v: string | undefined) =>
         !v ||
         v === '***' ||
@@ -246,78 +245,104 @@ export async function POST(request: Request) {
         v.toLowerCase().startsWith('your_') ||
         v.length < 10
 
+      const rawAnthropicKey = process.env.ANTHROPIC_API_KEY
+      const rawOpenRouterKey = process.env.OPENROUTER_API_KEY
+      const rawOpenAiKey = process.env.OPENAI_API_KEY
+
+      const useAnthropic = rawAnthropicKey && !isPlaceholder(rawAnthropicKey)
       const openRouterKey = isPlaceholder(rawOpenRouterKey) ? undefined : rawOpenRouterKey
       const openAiKey = isPlaceholder(rawOpenAiKey) ? undefined : rawOpenAiKey
 
-      console.log('[upload] OpenRouter key usable:', !!openRouterKey, openRouterKey ? `(len=${openRouterKey.length})` : '')
-      console.log('[upload] OpenAI key usable:', !!openAiKey, openAiKey ? `(len=${openAiKey.length})` : '')
-
-      const apiKey = openRouterKey || openAiKey
-      const apiUrl = openRouterKey
-        ? 'https://openrouter.ai/api/v1/chat/completions'
-        : 'https://api.openai.com/v1/chat/completions'
-      const model = openRouterKey
-        ? 'openai/gpt-4o-mini'
-        : 'gpt-4o-mini'
-
-      if (!apiKey) {
-        console.error('[upload] Neither OPENROUTER_API_KEY nor OPENAI_API_KEY is set (or both are placeholder values)')
-        return Response.json(
-          { error: 'AI service not configured. Please check API key configuration.' },
-          { status: 500 }
-        )
-      }
-
       console.log('=== AI CALL START ===')
-      console.log('[upload] Using AI endpoint:', apiUrl)
-      console.log('[upload] Using model:', model)
-      console.log('[upload] Key is placeholder:', ['***', 'xxx', ''].includes(apiKey || ''))
-      console.log('[upload] Key prefix:', apiKey?.substring(0, 15))
+      console.log('[upload] ANTHROPIC_API_KEY usable:', !!useAnthropic)
+      console.log('[upload] OpenRouter key usable:', !!openRouterKey)
+      console.log('[upload] OpenAI key usable:', !!openAiKey)
       console.log('[upload] Text length being sent:', truncatedText.length)
 
-      const aiHeaders: Record<string, string> = {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      }
-      if (openRouterKey) {
-        aiHeaders['HTTP-Referer'] = 'https://bookreel.app'
-        aiHeaders['X-Title'] = 'BookReel'
-      }
+      let rawContent: string
 
-      const aiResponse = await fetch(apiUrl, {
-        method: 'POST',
-        headers: aiHeaders,
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: truncatedText }
-          ],
-          response_format: { type: 'json_object' }
+      if (useAnthropic) {
+        // ── Primary: Anthropic Claude Sonnet ────────────────────────────────
+        console.log('[upload] Using Anthropic Claude claude-sonnet-4-5')
+        const anthropic = new Anthropic({
+          apiKey: rawAnthropicKey,
         })
-      })
 
-      console.log('[upload] AI response status:', aiResponse.status)
-      const responseText = await aiResponse.text()
-      console.log('[upload] AI raw response (first 500 chars):', responseText.substring(0, 500))
+        const message = await anthropic.messages.create({
+          model: 'claude-sonnet-4-5',
+          max_tokens: 4096,
+          system: SYSTEM_PROMPT,
+          messages: [
+            {
+              role: 'user',
+              content: truncatedText
+            }
+          ]
+        })
 
-      if (!aiResponse.ok) {
-        console.error('[upload] AI call failed:', aiResponse.status, responseText.substring(0, 300))
-        return Response.json(
-          { error: `AI service failed to generate trailer data. Status: ${aiResponse.status}`, detail: responseText.substring(0, 300) },
-          { status: 500 }
-        )
-      }
+        rawContent = message.content[0].type === 'text' ? message.content[0].text : ''
+        console.log('[upload] Anthropic response received, content length:', rawContent.length)
+      } else {
+        // ── Fallback: OpenRouter or OpenAI ───────────────────────────────────
+        const apiKey = openRouterKey || openAiKey
+        const apiUrl = openRouterKey
+          ? 'https://openrouter.ai/api/v1/chat/completions'
+          : 'https://api.openai.com/v1/chat/completions'
+        const model = openRouterKey ? 'openai/gpt-4o-mini' : 'gpt-4o-mini'
 
-      const aiJson = JSON.parse(responseText)
-      const rawContent = aiJson.choices?.[0]?.message?.content
+        if (!apiKey) {
+          console.error('[upload] No AI API key configured (ANTHROPIC_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY)')
+          return Response.json(
+            { error: 'AI service not configured. Please check API key configuration.' },
+            { status: 500 }
+          )
+        }
 
-      if (!rawContent) {
-        console.error('[upload] OpenRouter returned no content:', JSON.stringify(aiJson))
-        return Response.json(
-          { error: 'AI service returned no data. Please try again.' },
-          { status: 500 }
-        )
+        console.log('[upload] Falling back to:', apiUrl, 'model:', model)
+
+        const aiHeaders: Record<string, string> = {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        }
+        if (openRouterKey) {
+          aiHeaders['HTTP-Referer'] = 'https://bookreel.app'
+          aiHeaders['X-Title'] = 'BookReel'
+        }
+
+        const aiResponse = await fetch(apiUrl, {
+          method: 'POST',
+          headers: aiHeaders,
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: truncatedText }
+            ],
+            response_format: { type: 'json_object' }
+          })
+        })
+
+        console.log('[upload] AI response status:', aiResponse.status)
+        const responseText = await aiResponse.text()
+
+        if (!aiResponse.ok) {
+          console.error('[upload] AI call failed:', aiResponse.status, responseText.substring(0, 300))
+          return Response.json(
+            { error: `AI service failed to generate trailer data. Status: ${aiResponse.status}`, detail: responseText.substring(0, 300) },
+            { status: 500 }
+          )
+        }
+
+        const aiJson = JSON.parse(responseText)
+        rawContent = aiJson.choices?.[0]?.message?.content ?? ''
+
+        if (!rawContent) {
+          console.error('[upload] OpenRouter/OpenAI returned no content:', JSON.stringify(aiJson))
+          return Response.json(
+            { error: 'AI service returned no data. Please try again.' },
+            { status: 500 }
+          )
+        }
       }
 
       console.log('[upload] AI raw response (first 500 chars):', rawContent.substring(0, 500))
@@ -363,7 +388,7 @@ export async function POST(request: Request) {
 
       console.log('[upload] AI trailer data generated, scenes:', trailerData.scenes?.length)
     } catch (aiErr) {
-      console.error('[upload] OpenRouter step threw:', aiErr)
+      console.error('[upload] AI step threw:', aiErr)
       return Response.json(
         { error: 'AI service error', detail: String(aiErr) },
         { status: 500 }

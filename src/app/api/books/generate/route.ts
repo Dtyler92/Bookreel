@@ -2,7 +2,6 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { canGenerateTrailer, getModelForTier } from '@/lib/tierGate'
 import { PlanName } from '@/lib/stripe'
-import { runTrailerPipeline } from '@/lib/pipeline/runPipeline'
 
 function getServiceClient() {
   return createClient(
@@ -144,10 +143,12 @@ export async function POST(request: Request) {
     // (not the image review step), so we do NOT re-check scenes here.
     // The images_approved flag on the trailer record is the final gate before video generation.
 
-    // Update trailer status to 'generating'
+    // Update trailer status to 'pending' for VPS worker to pick up
+    // (previously 'generating' + setImmediate, but Vercel times out after 60s on Hobby / 300s on Pro)
+    // The VPS pipeline-worker.mjs polls /api/pipeline/queue and runs the pipeline locally with no timeout.
     const { error: trailerError } = await supabase
       .from('trailers')
-      .update({ status: 'generating' })
+      .update({ status: 'pending' })
       .eq('book_id', bookId)
 
     if (trailerError) {
@@ -169,14 +170,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // Trigger pipeline in background (non-blocking)
-    setImmediate(async () => {
-      try {
-        await runTrailerPipeline(bookId, pipelineTier)
-      } catch (error) {
-        console.error('Pipeline failed:', error)
-      }
-    })
+    // Log for debugging
+    console.log(`[generate] Queued pipeline for bookId=${bookId} tier=${pipelineTier} — VPS worker will pick up`)
 
     return Response.json({ success: true, message: 'Your trailer is being built!' })
   } catch (error) {
