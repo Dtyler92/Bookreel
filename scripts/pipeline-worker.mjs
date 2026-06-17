@@ -91,6 +91,10 @@ const SOFTEN_MAP = [
   [/\b(wound|wounded|injury|gash|gunshot)\b/gi, 'a marked, weary figure'],
   [/\b(torture|tortured|brutal|brutally)\b/gi, 'tense and harrowing'],
   [/\b(suicide|self-harm|hang\w* (himself|herself|themselves))\b/gi, 'a moment of despair'],
+  // Violence against a person/child (trampling, beating, striking) — softened to implied menace
+  [/\b(knock\w* down|trampl\w*|walk\w* over|stomp\w*|beat\w* (up|down)|struck down|assault\w*)\b.{0,40}?\b(girl|boy|child|children|woman|man|victim|her|him|them)\b/gi, 'looms menacingly over a frightened bystander in the shadows'],
+  [/\b(young girl|young boy|child|children)\b.{0,30}?\b(knocked|trampled|struck|hurt|harmed|attacked)\b/gi, 'a frightened child shrinks back from a sinister figure'],
+  [/\b(victim|body)\b.{0,20}?\b(on the (ground|floor|street))\b/gi, 'a shaken figure in the street'],
 ]
 
 function softenForModeration(text) {
