@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { fal } from '@fal-ai/client'
 import { IMAGE_NEGATIVE_PROMPT, sanitizeAppearanceDescription } from '@/lib/contentPolicy'
+import { NextResponse } from 'next/server'
+import { PlanName } from '@/lib/stripe'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
@@ -27,14 +29,37 @@ interface FalImageResult {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { bookId: string; tier?: string }
-    const { bookId, tier = 'standard' } = body
+    const body = await request.json() as { bookId: string; tier?: string; userId?: string }
+    const { bookId, tier = 'standard', userId } = body
 
     if (!bookId) {
       return Response.json({ error: 'bookId is required' }, { status: 400 })
     }
 
     const supabase = getServiceClient()
+
+    // --- Tier gate: free users cannot generate images ---
+    if (userId) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('subscription_tier')
+        .eq('id', userId)
+        .single()
+
+      if (profileError) {
+        console.error('[generate-images] Profile fetch error:', profileError)
+        return Response.json({ error: 'Failed to fetch user profile' }, { status: 500 })
+      }
+
+      const userTier = (profile?.subscription_tier || 'free') as PlanName
+
+      if (userTier === 'free') {
+        return NextResponse.json({
+          error: 'Image generation requires an Author or Pro subscription. Upgrade your plan to generate images.',
+          upgradeRequired: true
+        }, { status: 403 })
+      }
+    }
 
     // Fetch book
     const { data: book, error: bookError } = await supabase

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
 import { canGenerateTrailer, getModelForTier } from '@/lib/tierGate'
 import { PlanName } from '@/lib/stripe'
 import { runTrailerPipeline } from '@/lib/pipeline/runPipeline'
@@ -37,10 +38,10 @@ export async function POST(request: Request) {
       const tier = (profile?.subscription_tier || 'free') as PlanName
 
       if (tier === 'free') {
-        return Response.json(
-          { error: 'Upgrade your plan to generate trailers' },
-          { status: 403 }
-        )
+        return NextResponse.json({ 
+          error: 'Trailer generation requires an Author or Pro subscription. Upgrade your plan to create trailers.',
+          upgradeRequired: true
+        }, { status: 403 })
       }
 
       // Count trailers generated this month for this user's books

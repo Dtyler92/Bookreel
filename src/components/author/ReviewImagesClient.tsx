@@ -13,6 +13,7 @@ interface Props {
   bookTitle?: string
   initialCharacters: Character[]
   initialItems: Item[]
+  userId?: string
 }
 
 // ─── Role Badge ───────────────────────────────────────────────────────────────
@@ -676,13 +677,14 @@ function ItemCard({
 
 // ─── Main ReviewImagesClient ──────────────────────────────────────────────────
 
-export default function ReviewImagesClient({ bookId, bookTitle, initialCharacters, initialItems }: Props) {
+export default function ReviewImagesClient({ bookId, bookTitle, initialCharacters, initialItems, userId }: Props) {
   const router = useRouter()
   const [characters, setCharacters] = useState<Character[]>(initialCharacters)
   const [items, setItems] = useState<Item[]>(initialItems)
   const [generating, setGenerating] = useState(false)
   const [continuing, setContinuing] = useState(false)
   const [continueError, setContinueError] = useState<string | null>(null)
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   // Check if any images still need generation
   const needsGeneration =
@@ -708,17 +710,24 @@ export default function ReviewImagesClient({ bookId, bookTitle, initialCharacter
   const triggerGeneration = useCallback(async () => {
     setGenerating(true)
     try {
-      await fetch('/api/books/generate-images', {
+      const res = await fetch('/api/books/generate-images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId }),
+        body: JSON.stringify({ bookId, ...(userId ? { userId } : {}) }),
       })
+      if (res.status === 403) {
+        const data = await res.json().catch(() => ({})) as { upgradeRequired?: boolean }
+        if (data.upgradeRequired) {
+          setShowUpgradeModal(true)
+          return
+        }
+      }
     } catch (err) {
       console.error('Image generation trigger failed:', err)
     } finally {
       setGenerating(false)
     }
-  }, [bookId])
+  }, [bookId, userId])
 
   // Poll for updated images
   const pollImages = useCallback(async () => {
@@ -783,10 +792,15 @@ export default function ReviewImagesClient({ bookId, bookTitle, initialCharacter
       const res = await fetch('/api/books/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId }),
+        body: JSON.stringify({ bookId, ...(userId ? { userId } : {}) }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { error?: string }
+        const data = await res.json().catch(() => ({})) as { error?: string; upgradeRequired?: boolean }
+        if (res.status === 403 && data.upgradeRequired) {
+          setShowUpgradeModal(true)
+          setContinuing(false)
+          return
+        }
         throw new Error(data?.error ?? `Generation failed (${res.status})`)
       }
       router.push('/dashboard?generated=1')
@@ -800,7 +814,88 @@ export default function ReviewImagesClient({ bookId, bookTitle, initialCharacter
 
   return (
     <div className="space-y-12 pb-36">
-      {/* ── Inline generation progress banner (replaces full-screen overlay) ── */}
+      {/* ── Upgrade Required Modal ─────────────────────────────────────── */}
+      {showUpgradeModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(13,13,11,0.55)',
+          zIndex: 2000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+        }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowUpgradeModal(false) }}
+        >
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            padding: '40px 36px',
+            width: '100%',
+            maxWidth: '420px',
+            boxShadow: '0 20px 60px rgba(13,13,11,0.18)',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎬</div>
+            <h2 style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontWeight: 700,
+              fontSize: '22px',
+              color: '#0D0D0B',
+              margin: '0 0 12px',
+            }}>
+              Upgrade to Create Trailers
+            </h2>
+            <p style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '15px',
+              color: '#8A8278',
+              margin: '0 0 28px',
+              lineHeight: 1.6,
+            }}>
+              Trailer generation requires an Author or Pro plan. Upgrade your plan to bring your book to life with a cinematic trailer.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={() => setShowUpgradeModal(false)}
+                style={{
+                  background: 'none',
+                  border: '1.5px solid #E8E2D5',
+                  borderRadius: '8px',
+                  padding: '12px 20px',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '14px',
+                  color: '#8A8278',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <a
+                href="/pricing"
+                style={{
+                  background: '#C8402F',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '12px 24px',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: '#FFFFFF',
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                Upgrade Now →
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
       {showGeneratingBanner && (
         <GenerationProgressBanner current={generatedCount} total={totalItems} bookTitle={bookTitle} />
       )}

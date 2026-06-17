@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { GlobalNav } from '@/components/shared/GlobalNav'
 import { StatusBadge } from '@/components/shared/StatusBadge'
@@ -26,18 +26,33 @@ interface DashboardClientProps {
   totalViews: number
 }
 
+// ─── Shared Keyframe Styles ────────────────────────────────────────────────────
+
+const CARD_KEYFRAMES = `
+  @keyframes indeterminate {
+    0%   { left: -60%; width: 60%; }
+    60%  { left: 100%; width: 60%; }
+    100% { left: 100%; width: 60%; }
+  }
+  @keyframes shimmer {
+    0%   { left: -100%; }
+    100% { left: 100%; }
+  }
+  @keyframes filmPulse {
+    0%, 100% { opacity: 0.2; transform: scaleY(0.8); }
+    50%       { opacity: 1;   transform: scaleY(1); }
+  }
+  @keyframes borderPulse {
+    0%, 100% { border-color: #E8E2D5; }
+    50%       { border-color: rgba(200,64,47,0.45); }
+  }
+`
+
 // ─── Indeterminate Progress Bar ───────────────────────────────────────────────
 
 function IndeterminateBar({ height = 3, color = '#C8402F', bg = '#E8E2D5' }: { height?: number; color?: string; bg?: string }) {
   return (
     <div style={{ width: '100%', height, background: bg, borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
-      <style>{`
-        @keyframes indeterminate {
-          0%   { left: -60%; width: 60%; }
-          60%  { left: 100%; width: 60%; }
-          100% { left: 100%; width: 60%; }
-        }
-      `}</style>
       <div style={{
         position: 'absolute',
         height: '100%',
@@ -45,6 +60,40 @@ function IndeterminateBar({ height = 3, color = '#C8402F', bg = '#E8E2D5' }: { h
         borderRadius: 2,
         animation: 'indeterminate 1.4s ease-in-out infinite',
       }} />
+    </div>
+  )
+}
+
+// ─── Shimmer Progress Bar ─────────────────────────────────────────────────────
+
+function ShimmerBar() {
+  return (
+    <div style={{ width: '100%', height: 3, background: '#EDE9E0', borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        background: 'linear-gradient(90deg, transparent 0%, #C8402F 40%, #E8735F 60%, transparent 100%)',
+        animation: 'shimmer 1.6s ease-in-out infinite',
+      }} />
+    </div>
+  )
+}
+
+// ─── Film Frame Loader ────────────────────────────────────────────────────────
+
+function FilmFrames() {
+  const frameBase: React.CSSProperties = {
+    width: 12,
+    height: 18,
+    background: '#C8402F',
+    borderRadius: 2,
+    flexShrink: 0,
+  }
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <div style={{ ...frameBase, animation: 'filmPulse 1.5s ease-in-out 0s infinite' }} />
+      <div style={{ ...frameBase, animation: 'filmPulse 1.5s ease-in-out 0.3s infinite' }} />
+      <div style={{ ...frameBase, animation: 'filmPulse 1.5s ease-in-out 0.6s infinite' }} />
     </div>
   )
 }
@@ -255,8 +304,12 @@ function BookCard({
 }) {
   const [trailerStatus, setTrailerStatus] = useState<TrailerStatus | null>(book.trailerStatus)
   const [coverUrl, setCoverUrl] = useState<string | null | undefined>(book.coverImageUrl)
+  const [retryHover, setRetryHover] = useState(false)
+  const [playHover, setPlayHover] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isGenerating = trailerStatus === 'processing' || trailerStatus === 'generating'
+  const isFailed = trailerStatus === 'failed'
+  const isComplete = trailerStatus === 'complete'
 
   useEffect(() => {
     if (isGenerating) {
@@ -289,59 +342,112 @@ function BookCard({
     onChangeCover(book)
   }
 
-  return (
-    <Link key={book.id} href={`/review/${book.id}`} style={{ textDecoration: 'none' }}>
-      <div style={{
-        background: '#FFFFFF',
-        border: '1px solid #E8E2D5',
-        borderRadius: '10px',
-        overflow: 'hidden',
-        transition: 'box-shadow 150ms ease, border-color 150ms ease',
-        animation: isGenerating ? 'borderPulse 2s ease-in-out infinite' : undefined,
-      }}
-        onMouseEnter={e => {
-          if (!isGenerating) {
-            (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 20px rgba(13,13,11,0.08)'
-            ;(e.currentTarget as HTMLDivElement).style.borderColor = '#C8402F'
-          }
-        }}
-        onMouseLeave={e => {
-          if (!isGenerating) {
-            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'
-            ;(e.currentTarget as HTMLDivElement).style.borderColor = '#E8E2D5'
-          }
-        }}
-      >
-        {/* Cover */}
-        <div style={{ position: 'relative', width: '100%', aspectRatio: '2/3' }}>
-          {isGenerating ? (
-            /* Animated trailer-generating cover */
-            <div style={{
-              width: '100%',
-              height: '100%',
-              background: 'linear-gradient(135deg, #C8402F, #9E2F20, #1A0A06, #C8402F)',
-              backgroundSize: '300% 300%',
-              animation: 'gradientPan 3s ease infinite',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              gap: 8,
-            }}>
-              <span style={{ fontSize: 28, lineHeight: 1 }}>🎬</span>
-              <span style={{
-                fontFamily: 'var(--font-playfair), serif',
-                fontStyle: 'italic',
-                fontSize: 15,
-                color: '#FFFFFF',
-                opacity: 0.92,
-                textAlign: 'center',
-                padding: '0 12px',
-              }}>
-                Creating your trailer
-              </span>
-            </div>
-          ) : coverUrl ? (
+  // ── Cover area content ────────────────────────────────────────────────────
+
+  const renderCover = () => {
+    if (isGenerating) {
+      return (
+        /* ── Generating State: warm editorial light background ── */
+        <div style={{
+          width: '100%',
+          height: '100%',
+          background: 'linear-gradient(145deg, #F4F1EB 0%, #EDE9E0 50%, #E8E2D5 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: 12,
+        }}>
+          <FilmFrames />
+          <span style={{
+            fontFamily: 'var(--font-playfair), serif',
+            fontStyle: 'italic',
+            fontSize: 14,
+            color: '#8A8278',
+            textAlign: 'center',
+            padding: '0 16px',
+            lineHeight: 1.4,
+          }}>
+            Crafting your trailer…
+          </span>
+          <span style={{
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: 11,
+            color: '#B0A99E',
+            textAlign: 'center',
+          }}>
+            Usually ready in 15–20 min
+          </span>
+        </div>
+      )
+    }
+
+    if (isFailed) {
+      return (
+        /* ── Failed State ── */
+        <div style={{
+          width: '100%',
+          height: '100%',
+          background: 'linear-gradient(145deg, #F4F1EB 0%, #EDE9E0 50%, #E8E2D5 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          gap: 10,
+        }}>
+          <span style={{ fontSize: 22, color: '#C8402F', lineHeight: 1 }}>⚠</span>
+          <span style={{
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: 14,
+            fontWeight: 500,
+            color: '#C8402F',
+            textAlign: 'center',
+            padding: '0 12px',
+          }}>
+            Generation failed
+          </span>
+          <span style={{
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: 11,
+            color: '#8A8278',
+          }}>
+            Please try again
+          </span>
+          {/* Retry button — stops link propagation */}
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTrailerStatus('generating') }}
+            onMouseEnter={() => setRetryHover(true)}
+            onMouseLeave={() => setRetryHover(false)}
+            style={{
+              marginTop: 4,
+              background: retryHover ? '#C8402F' : 'transparent',
+              border: '1.5px solid #C8402F',
+              borderRadius: '6px',
+              padding: '5px 14px',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: retryHover ? '#FFFFFF' : '#C8402F',
+              cursor: 'pointer',
+              transition: 'background 150ms ease, color 150ms ease',
+              letterSpacing: '0.02em',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )
+    }
+
+    if (isComplete && book.trailerStatus === 'complete') {
+      return (
+        /* ── Complete State: cover image + play button overlay ── */
+        <div
+          style={{ position: 'relative', width: '100%', height: '100%' }}
+          onMouseEnter={() => setPlayHover(true)}
+          onMouseLeave={() => setPlayHover(false)}
+        >
+          {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={coverUrl} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
@@ -358,82 +464,215 @@ function BookCard({
               📖
             </div>
           )}
-          {/* Change cover button */}
-          <button
-            onClick={handleChangeCover}
-            style={{
-              position: 'absolute',
-              bottom: '8px',
-              right: '8px',
-              background: 'rgba(13,13,11,0.65)',
-              border: 'none',
-              borderRadius: '6px',
-              padding: '4px 8px',
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '11px',
-              fontWeight: 500,
-              color: '#FAFAF7',
-              cursor: 'pointer',
-            }}
-          >
-            📷 Change Cover
-          </button>
-        </div>
-
-        {/* Card body */}
-        <div style={{ padding: '16px' }}>
-          <p style={{
-            fontFamily: 'var(--font-playfair), serif',
-            fontWeight: 700,
-            fontSize: '16px',
-            color: '#0D0D0B',
-            margin: '0 0 8px',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+          {/* Dark scrim + play button on hover */}
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: playHover ? 'rgba(13,13,11,0.35)' : 'rgba(13,13,11,0)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background 200ms ease',
           }}>
-            {book.title}
-          </p>
-          {book.genre && (
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 16px rgba(13,13,11,0.25)',
+              transform: playHover ? 'scale(1.05)' : 'scale(1)',
+              opacity: playHover ? 1 : 0,
+              transition: 'opacity 200ms ease, transform 200ms ease',
+            }}>
+              {/* Vermillion play triangle */}
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <polygon points="6,4 14,9 6,14" fill="#C8402F" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    // Default: cover image or placeholder
+    if (coverUrl) {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={coverUrl} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      )
+    }
+    return (
+      <div style={{
+        width: '100%',
+        height: '100%',
+        background: 'linear-gradient(145deg, #C8402F 0%, #8A1C10 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'rgba(255,255,255,0.2)',
+        fontSize: '48px',
+      }}>
+        📖
+      </div>
+    )
+  }
+
+  // ── Card body status section ──────────────────────────────────────────────
+
+  const renderStatusSection = () => {
+    if (isComplete) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '14px' }}>✅</span>
+          <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', fontWeight: 500, color: '#16A34A' }}>
+            Ready to view!
+          </span>
+        </div>
+      )
+    }
+
+    if (isGenerating) {
+      return (
+        /* In Production badge + shimmer progress bar */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span style={{
+            display: 'inline-flex',
+            alignSelf: 'flex-start',
+            alignItems: 'center',
+            gap: 5,
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: '11px',
+            fontWeight: 700,
+            textTransform: 'uppercase' as const,
+            letterSpacing: '0.06em',
+            padding: '3px 10px',
+            borderRadius: '100px',
+            background: '#FDF3DC',
+            color: '#A16207',
+          }}>
             <span style={{
               display: 'inline-block',
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '11px',
-              fontWeight: 600,
-              padding: '3px 10px',
-              borderRadius: '100px',
-              background: '#EDE9E0',
-              color: '#8A8278',
-              marginBottom: '10px',
-            }}>
-              {book.genre}
-            </span>
-          )}
-
-          {/* Trailer status / progress */}
-          {trailerStatus === 'complete' ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '14px' }}>✅</span>
-              <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', fontWeight: 500, color: '#16A34A' }}>
-                Ready to view!
-              </span>
-            </div>
-          ) : isGenerating ? (
-            <div style={{ marginTop: '4px' }}>
-              <IndeterminateBar height={4} />
-              <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '11px', color: '#8A8278', margin: '6px 0 2px' }}>
-                Usually ready in{' '}
-                <span style={{ color: '#C8402F', fontWeight: 500 }}>15–20 min</span>
-              </p>
-            </div>
-          ) : trailerStatus ? (
-            <div>
-              <StatusBadge status={trailerStatus} />
-            </div>
-          ) : null}
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: '#D97706',
+              animation: 'filmPulse 1.5s ease-in-out infinite',
+            }} />
+            In Production
+          </span>
+          <ShimmerBar />
         </div>
-      </div>
-    </Link>
+      )
+    }
+
+    if (isFailed) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '13px' }}>⚠</span>
+          <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', fontWeight: 500, color: '#C8402F' }}>
+            Generation failed
+          </span>
+        </div>
+      )
+    }
+
+    if (trailerStatus) {
+      return <div><StatusBadge status={trailerStatus} /></div>
+    }
+
+    return null
+  }
+
+  return (
+    <>
+      {/* Inject keyframes once per card mount — React dedupes style tags */}
+      <style>{CARD_KEYFRAMES}</style>
+      <Link key={book.id} href={`/review/${book.id}`} style={{ textDecoration: 'none' }}>
+        <div style={{
+          background: '#FFFFFF',
+          border: `1px solid ${isGenerating ? 'rgba(200,64,47,0.3)' : '#E8E2D5'}`,
+          borderRadius: '10px',
+          overflow: 'hidden',
+          transition: 'box-shadow 150ms ease, border-color 150ms ease',
+          animation: isGenerating ? 'borderPulse 2s ease-in-out infinite' : undefined,
+        }}
+          onMouseEnter={e => {
+            if (!isGenerating) {
+              (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 20px rgba(13,13,11,0.08)'
+              ;(e.currentTarget as HTMLDivElement).style.borderColor = '#C8402F'
+            }
+          }}
+          onMouseLeave={e => {
+            if (!isGenerating) {
+              (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'
+              ;(e.currentTarget as HTMLDivElement).style.borderColor = '#E8E2D5'
+            }
+          }}
+        >
+          {/* Cover */}
+          <div style={{ position: 'relative', width: '100%', aspectRatio: '2/3' }}>
+            {renderCover()}
+            {/* Change cover button — always visible */}
+            <button
+              onClick={handleChangeCover}
+              style={{
+                position: 'absolute',
+                bottom: '8px',
+                right: '8px',
+                background: 'rgba(13,13,11,0.65)',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '4px 8px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '11px',
+                fontWeight: 500,
+                color: '#FAFAF7',
+                cursor: 'pointer',
+              }}
+            >
+              📷 Change Cover
+            </button>
+          </div>
+
+          {/* Card body */}
+          <div style={{ padding: '16px' }}>
+            <p style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontWeight: 700,
+              fontSize: '16px',
+              color: '#0D0D0B',
+              margin: '0 0 8px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              {book.title}
+            </p>
+            {book.genre && (
+              <span style={{
+                display: 'inline-block',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '11px',
+                fontWeight: 600,
+                padding: '3px 10px',
+                borderRadius: '100px',
+                background: '#EDE9E0',
+                color: '#8A8278',
+                marginBottom: '10px',
+              }}>
+                {book.genre}
+              </span>
+            )}
+
+            {/* Trailer status / progress */}
+            {renderStatusSection()}
+          </div>
+        </div>
+      </Link>
+    </>
   )
 }
 

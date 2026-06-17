@@ -12,7 +12,7 @@ export async function generateVideoClip(
 
   // Runway public API hostname: https://api.dev.runwayml.com
   // Docs: https://docs.runwayml.com/api
-  // Auth: Authorization: Bearer key_xxx (Bearer scheme with key_ prefix)
+  // Auth: Authorization: Bearer *** (Bearer scheme with key_ prefix)
   // Valid ratios: '1280:720' | '720:1280' | '1104:832' | '832:1104' | '960:960' | '1584:672'
   // Valid duration: 5 or 10 seconds.
   // Models: gen4_turbo (standard/faster), gen4 (cinematic/higher quality)

@@ -11,7 +11,7 @@ export function getVideoConfig(tier: PlanName) {
   if (tier === 'pro') {
     return {
       maxDurationSeconds: 90,    // 60-90 seconds
-      scenesCount: 9,            // 9 clips × ~10 sec = 90 seconds max
+      scenesCount: 9,            // 9 clips × 10 sec = 90 seconds max
       sceneLength: 10,           // 10 seconds per clip
       quality: 'cinematic' as const
     }
@@ -19,8 +19,26 @@ export function getVideoConfig(tier: PlanName) {
   // author tier (standard) - max 30 seconds
   return {
     maxDurationSeconds: 30,
-    scenesCount: 3,              // 3 clips × ~10 sec = 30 seconds
-    sceneLength: 10,             // 10 seconds per clip
+    scenesCount: 6,              // 6 clips × 5 sec = 30 seconds
+    sceneLength: 5,              // 5 seconds per clip
+    quality: 'standard' as const
+  }
+}
+
+export function getTrailerConfig(tier: PlanName) {
+  if (tier === 'pro') {
+    return {
+      maxScenes: 9,
+      clipDuration: 10,
+      maxTrailerSeconds: 90,
+      quality: 'cinematic' as const
+    }
+  }
+  // author tier
+  return {
+    maxScenes: 6,
+    clipDuration: 5,
+    maxTrailerSeconds: 30,
     quality: 'standard' as const
   }
 }
@@ -47,6 +65,18 @@ export function getModelForTier(tier: PlanName) {
     videoModel: 'runway-gen4-turbo',
     voiceModel: 'eleven_turbo_v2'
   }
+}
+
+export function getMaxTrailerDuration(tier: PlanName): number {
+  if (tier === 'pro') return 90 // 60-90 seconds
+  if (tier === 'author') return 30 // max 30 seconds
+  return 0 // free: no trailer
+}
+
+export function getSceneCount(tier: PlanName): number {
+  if (tier === 'pro') return 6 // 6 scenes x ~10-15s = 60-90s
+  if (tier === 'author') return 3 // 3 scenes x ~10s = 30s
+  return 0
 }
 
 export function getSocialCutsLimit(tier: PlanName): number {

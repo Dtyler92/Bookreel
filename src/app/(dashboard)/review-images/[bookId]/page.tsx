@@ -90,6 +90,7 @@ export default async function ReviewImagesPage({
           bookTitle={typedBook.title}
           initialCharacters={typedCharacters}
           initialItems={typedItems}
+          userId={user.id}
         />
       </main>
     </div>

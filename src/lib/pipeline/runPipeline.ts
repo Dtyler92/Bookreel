@@ -4,7 +4,7 @@ import { generateSceneImage } from './generateImages'
 import { generateVideoClip } from './generateVideo'
 import { stitchVideoClips } from './stitchVideo'
 import { uploadFinalVideo } from './uploadVideo'
-import { getVideoConfig } from '../tierGate'
+import { getVideoConfig, getSceneCount } from '../tierGate'
 
 export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 'pro') {
   const supabase = createClient(
@@ -54,7 +54,7 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
     void voiceoverScript
 
     // Determine max scenes based on tier
-    const maxScenes = tier === 'cinematic' ? 9 : 3
+    const maxScenes = getSceneCount(authorTier)
     const scenesToGenerate = scenes.slice(0, maxScenes)
 
     // Step 2: Generate scene images and video clips
