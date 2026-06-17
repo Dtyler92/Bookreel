@@ -31,7 +31,7 @@ const SYSTEM_PROMPT = `You are a book trailer screenplay writer. Analyze the boo
 }
 Rules:
 - 3-5 characters max
-- 5-7 scenes max
+- 8-10 scenes (these become trailer clips — more scenes allow longer trailers)
 - 2-4 key items/objects max
 - Keep descriptions book-accurate
 - No explicit sexual content

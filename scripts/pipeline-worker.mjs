@@ -404,8 +404,11 @@ async function runPipeline(job) {
     console.error('[worker]   Voiceover failed (non-fatal):', e.message)
   }
 
-  // Determine max scenes based on tier
-  const maxScenes = tier === 'pro' ? 6 : 3
+  // Determine max scenes based on tier — targets: Author ≈30s, Pro ≈80s
+  // (Runway gen4_turbo renders 5s or 10s clips)
+  //   Author: 6 clips × 5s  = 30s
+  //   Pro:    8 clips × 10s = 80s
+  const maxScenes = tier === 'pro' ? 8 : 6
   const sceneLength = tier === 'pro' ? 10 : 5
   const scenesToGenerate = scenes.slice(0, maxScenes)
 
