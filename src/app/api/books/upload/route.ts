@@ -1,7 +1,7 @@
 import { createClient as createSupabaseDirectClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { PDFParse } from 'pdf-parse'
-import { CONTENT_POLICY_SYSTEM_ADDENDUM, sanitizeAppearanceDescription, sanitizeSceneDescription } from '@/lib/contentPolicy'
+import { CONTENT_POLICY_SYSTEM_ADDENDUM, SCREENPLAY_MODERATION_GUIDANCE, sanitizeAppearanceDescription, sanitizeSceneDescription } from '@/lib/contentPolicy'
 import Anthropic from '@anthropic-ai/sdk'
 
 // Required Vercel env vars:
@@ -41,7 +41,9 @@ For each character extract:
 - appearance: Be as specific as possible about physical traits drawn directly from the book text. Include height, build, hair, eyes, age, skin tone, distinguishing features, and typical clothing.
 - temperament: Describe their personality, emotional tendencies, how they react under pressure, speech patterns, and key mannerisms as described in the book.
 
-${CONTENT_POLICY_SYSTEM_ADDENDUM}`
+${CONTENT_POLICY_SYSTEM_ADDENDUM}
+
+${SCREENPLAY_MODERATION_GUIDANCE}`
 
 function getServiceClient() {
   return createSupabaseDirectClient(

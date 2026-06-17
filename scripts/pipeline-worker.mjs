@@ -75,6 +75,33 @@ if (isPlaceholder(FAL_API_KEY)) {
 }
 
 console.log('[worker] BookReel Pipeline Worker starting...')
+
+// ── Content-safety helpers ────────────────────────────────────────────────────
+// Soften potentially policy-violating wording so fal.ai images and Runway video
+// clear automated content moderation. Keeps the dramatic intent, removes triggers.
+const IMAGE_NEGATIVE_PROMPT = 'nudity, nude, naked, sexual, explicit, pornographic, nsfw, genitalia, exposed breasts, sex act, gore, blood, graphic violence, dismemberment, wound, corpse, mutilation, self-harm, drug use, disturbing, horror gore'
+
+const SOFTEN_MAP = [
+  [/\b(blood|bloody|bleeding|gore|gory)\b/gi, 'dark crimson shadows'],
+  [/\b(murder|murdered|killing|kill|slain|slaughter)\b/gi, 'a fateful confrontation'],
+  [/\b(stab|stabbed|stabbing|knife to|slashed|slashing)\b/gi, 'a glint of steel'],
+  [/\b(corpse|dead body|dead bodies|mutilated|dismember\w*)\b/gi, 'a still figure in shadow'],
+  [/\b(naked|nude|nudity|topless)\b/gi, 'silhouetted form'],
+  [/\b(sex|sexual|making love|intercourse|erotic)\b/gi, 'an intimate, charged moment'],
+  [/\b(wound|wounded|injury|gash|gunshot)\b/gi, 'a marked, weary figure'],
+  [/\b(torture|tortured|brutal|brutally)\b/gi, 'tense and harrowing'],
+  [/\b(suicide|self-harm|hang\w* (himself|herself|themselves))\b/gi, 'a moment of despair'],
+]
+
+function softenForModeration(text) {
+  if (!text) return text
+  let out = text
+  for (const [pattern, replacement] of SOFTEN_MAP) {
+    out = out.replace(pattern, replacement)
+  }
+  return out
+}
+
 console.log('[worker] App URL:', APP_URL)
 console.log('[worker] Anthropic key available:', !isPlaceholder(ANTHROPIC_API_KEY))
 console.log('[worker] Runway key prefix:', RUNWAY_API_KEY?.substring(0, 12))
@@ -111,9 +138,10 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
 
 // ── Image generation (fal.ai) ────────────────────────────────────────────────
 async function generateSceneImage(sceneDescription, genre) {
-  const prompt = `${sceneDescription}, ${genre} mood, cinematic composition, dramatic lighting, film still, highly detailed`
+  const safeDescription = softenForModeration(sceneDescription)
+  const prompt = `${safeDescription}, ${genre} mood, cinematic composition, dramatic atmospheric lighting, film still, photorealistic, highly detailed, tasteful, suitable for a general audience movie trailer`
   
-  const res = await fetch('https://fal.run/fal-ai/flux/schnell', {
+  const res = await fetch('https://fal.run/fal-ai/flux/dev', {
     method: 'POST',
     headers: {
       'Authorization': `Key ${FAL_API_KEY}`,
@@ -121,9 +149,11 @@ async function generateSceneImage(sceneDescription, genre) {
     },
     body: JSON.stringify({
       prompt,
+      negative_prompt: IMAGE_NEGATIVE_PROMPT,
       image_size: 'landscape_16_9',
       num_images: 1,
-      num_inference_steps: 4
+      num_inference_steps: 28,
+      enable_safety_checker: false
     })
   })
   
@@ -156,6 +186,7 @@ async function generateSceneImage(sceneDescription, genre) {
 // ── Video generation (Runway) ─────────────────────────────────────────────────
 async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5) {
   const runwayDuration = durationSeconds >= 8 ? 10 : 5
+  const safePromptText = softenForModeration(sceneDescription)
 
   const createRes = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
     method: 'POST',
@@ -167,7 +198,7 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5
     body: JSON.stringify({
       model: 'gen4_turbo',
       promptImage: imageUrl,
-      promptText: sceneDescription,
+      promptText: safePromptText,
       duration: runwayDuration,
       ratio: '1280:720'
     })

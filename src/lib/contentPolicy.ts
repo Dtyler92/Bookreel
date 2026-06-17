@@ -11,6 +11,23 @@ CONTENT POLICY (strictly enforced):
 - Violence may be depicted cinematically but not gratuitously
 `
 
+// Guidance for the screenplay-writing step: proactively choose/frame scenes that will
+// survive an automated video content-moderation filter (Runway), while staying true to the story.
+export const SCREENPLAY_MODERATION_GUIDANCE = `
+SCENE SELECTION FOR VIDEO (critical — these become AI-generated video clips that pass through a strict automated content-moderation filter):
+- These scene descriptions are sent to a video generator with automated content moderation. Scenes depicting graphic violence, gore, blood, wounds, death, nudity, sexual acts, drug use, self-harm, or explicit horror WILL be rejected and cannot be filmed.
+- When a pivotal story moment involves something that would be rejected (e.g. a murder, an assault, a transformation into a monster, an intimate encounter, a gory injury), DO ONE OF THESE:
+  1. PREFER choosing a different, equally compelling scene from the same story that captures the mood/stakes WITHOUT the rejectable content (e.g. the tense moment before, the aftermath shown through atmosphere, a character's haunted reaction).
+  2. If the rejectable moment is essential, write it IMPLIED and ATMOSPHERIC rather than literal — use shadow, silhouette, suggestion, environment, weather, facial expression, and symbolic imagery. Show the emotional truth, not the graphic act.
+- Examples of safe reframing:
+  - Instead of "a bloody murder with a knife" → "a shadowed figure in a dim alley, a glint of steel, the victim's terrified eyes widening" 
+  - Instead of "a monstrous violent transformation" → "a man clutching his face in agony before a mirror, his reflection distorting into something inhuman, shrouded in shadow"
+  - Instead of "an explicit intimate scene" → "two figures drawing close in candlelight, a charged glance, a hand brushing a shoulder"
+- Keep scenes cinematic and evocative. Atmosphere, lighting, and emotion sell a trailer better than graphic content anyway.
+- The goal: every scene should be FILMABLE by a moderated video generator on the first try, while remaining faithful to the book's tone and story.
+`
+
+
 export const IMAGE_NEGATIVE_PROMPT = 'nudity, nude, naked, sexual, explicit, pornographic, nsfw, genitalia, exposed breasts, sex act'
 
 export const FAL_CONTENT_POLICY = {
