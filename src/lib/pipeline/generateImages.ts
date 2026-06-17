@@ -1,8 +1,9 @@
 import { fal } from '@fal-ai/client'
 import { IMAGE_NEGATIVE_PROMPT, sanitizeAppearanceDescription } from '@/lib/contentPolicy'
 
+// Explicitly configure with our env var name
 fal.config({
-  credentials: process.env.FAL_API_KEY
+  credentials: process.env.FAL_API_KEY || process.env.FAL_KEY || ''
 })
 
 interface FalImageResult {

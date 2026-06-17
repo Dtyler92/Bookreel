@@ -5,7 +5,7 @@ import { IMAGE_NEGATIVE_PROMPT } from '@/lib/contentPolicy'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-fal.config({ credentials: process.env.FAL_API_KEY })
+fal.config({ credentials: process.env.FAL_API_KEY || process.env.FAL_KEY || '' })
 
 function getServiceClient() {
   return createClient(

@@ -5,7 +5,7 @@ import { IMAGE_NEGATIVE_PROMPT, sanitizeAppearanceDescription } from '@/lib/cont
 export const runtime = 'nodejs'
 export const maxDuration = 120
 
-fal.config({ credentials: process.env.FAL_API_KEY })
+fal.config({ credentials: process.env.FAL_API_KEY || process.env.FAL_KEY || '' })
 
 // Extract temperament from the combined description field
 function extractTemperament(description: string | null): string {
