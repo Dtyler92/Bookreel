@@ -6,13 +6,16 @@ export async function generateVideoClip(
 ): Promise<string> {
   const RUNWAY_API_KEY = process.env.RUNWAYML_API_KEY
 
-  // Runway API hostname is api.dev.runwayml.com (not api.runwayml.com)
+  // Runway public API is hosted at api.dev.runwayml.com (NOT api.runwayml.com).
+  // Confirmed: api.runwayml.com returns 401 "Incorrect hostname for API key" for all keys.
+  // Docs: https://docs.dev.runwayml.com/api
   // Valid ratios: '1280:720' | '720:1280' | '1104:832' | '832:1104' | '960:960' | '1584:672'
   // Valid duration: 5 or 10 seconds. gen4 model is unavailable; use gen4_turbo for all tiers.
+  const RUNWAY_API_BASE = 'https://api.dev.runwayml.com'
   const clampedDuration = durationSeconds <= 5 ? 5 : 10
 
   // Create generation task
-  const createResponse = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
+  const createResponse = await fetch(`${RUNWAY_API_BASE}/v1/image_to_video`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${RUNWAY_API_KEY}`,
@@ -42,7 +45,7 @@ export async function generateVideoClip(
   while (attempts < maxAttempts) {
     await new Promise(resolve => setTimeout(resolve, 5000)) // wait 5 seconds
 
-    const statusResponse = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
+    const statusResponse = await fetch(`${RUNWAY_API_BASE}/v1/tasks/${taskId}`, {
       headers: {
         'Authorization': `Bearer ${RUNWAY_API_KEY}`,
         'X-Runway-Version': '2024-11-06'
