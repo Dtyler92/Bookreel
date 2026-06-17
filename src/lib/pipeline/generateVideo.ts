@@ -10,13 +10,13 @@ export async function generateVideoClip(
 ): Promise<string> {
   const RUNWAY_API_KEY = process.env.RUNWAYML_API_KEY
 
-  // Runway public API hostname: https://api.runwayml.com
+  // Runway public API hostname: https://api.dev.runwayml.com
   // Docs: https://docs.runwayml.com/api
   // Auth: Authorization: Bearer key_xxx (Bearer scheme with key_ prefix)
   // Valid ratios: '1280:720' | '720:1280' | '1104:832' | '832:1104' | '960:960' | '1584:672'
   // Valid duration: 5 or 10 seconds.
   // Models: gen4_turbo (standard/faster), gen4 (cinematic/higher quality)
-  const RUNWAY_API_BASE = 'https://api.runwayml.com'
+  const RUNWAY_API_BASE = 'https://api.dev.runwayml.com'
   const runwayDuration = getRunwayDuration(durationSeconds)
 
   // Select model based on tier: gen4_turbo for standard (faster), gen4 for cinematic (higher quality)
