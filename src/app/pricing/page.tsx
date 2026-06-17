@@ -554,7 +554,7 @@ export default function PricingPage() {
 
               <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px 0' }}>
                 {[
-                  '1 book trailer per month',
+                  '1 trailer per month (up to 30 seconds)',
                   'Standard cinematic quality',
                   '3 short-form social cuts',
                   '3 custom quote graphics',
@@ -751,7 +751,7 @@ export default function PricingPage() {
 
                 <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px 0' }}>
                   {[
-                    '2 book trailers per month',
+                    '2 trailers per month (60-90 seconds)',
                     'Cinematic quality — director\'s cut',
                     'Unlimited short-form social cuts',
                     '5 custom quote graphics',

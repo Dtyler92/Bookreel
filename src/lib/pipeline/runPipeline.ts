@@ -4,6 +4,7 @@ import { generateSceneImage } from './generateImages'
 import { generateVideoClip } from './generateVideo'
 import { stitchVideoClips } from './stitchVideo'
 import { uploadFinalVideo } from './uploadVideo'
+import { getVideoConfig } from '../tierGate'
 
 export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 'pro') {
   const supabase = createClient(
@@ -11,7 +12,8 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const tier = authorTier === 'pro' ? 'cinematic' : 'standard'
+  const videoConfig = getVideoConfig(authorTier)
+  const tier = videoConfig.quality
 
   try {
     // Update status to processing
@@ -52,10 +54,10 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
     void voiceoverScript
 
     // Step 2: Generate scene images and video clips
-    console.log(`[Pipeline:${bookId}] 🎬 Step 2: Generating video clips (${Math.min(scenes.length, 6)} scenes)...`)
+    console.log(`[Pipeline:${bookId}] 🎬 Step 2: Generating video clips (${Math.min(scenes.length, videoConfig.scenesCount)} scenes)...`)
     const clipUrls: string[] = []
 
-    for (const scene of scenes.slice(0, 6)) { // max 6 scenes
+    for (const scene of scenes.slice(0, videoConfig.scenesCount)) { // tier-based scene limit
       console.log(`[Pipeline:${bookId}]   Generating image for scene ${scene.scene_number}...`)
       // Generate scene image
       const imageUrl = await generateSceneImage(
@@ -70,7 +72,7 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
       const clipUrl = await generateVideoClip(
         imageUrl,
         scene.description,
-        scene.duration_seconds || 5,
+        videoConfig.sceneLength,
         tier
       )
       console.log(`[Pipeline:${bookId}]   ✅ Video clip generated: ${clipUrl.substring(0, 80)}`)

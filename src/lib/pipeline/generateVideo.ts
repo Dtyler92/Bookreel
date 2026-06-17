@@ -1,3 +1,7 @@
+function getRunwayDuration(targetSeconds: number): 5 | 10 {
+  return targetSeconds >= 8 ? 10 : 5
+}
+
 export async function generateVideoClip(
   imageUrl: string,
   sceneDescription: string,
@@ -6,13 +10,15 @@ export async function generateVideoClip(
 ): Promise<string> {
   const RUNWAY_API_KEY = process.env.RUNWAYML_API_KEY
 
-  // Runway public API is hosted at api.dev.runwayml.com (NOT api.runwayml.com).
-  // Confirmed: api.runwayml.com returns 401 "Incorrect hostname for API key" for all keys.
-  // Docs: https://docs.dev.runwayml.com/api
+  // Runway public API hostname: https://api.runwayml.com
+  // Docs: https://docs.runwayml.com/api
   // Valid ratios: '1280:720' | '720:1280' | '1104:832' | '832:1104' | '960:960' | '1584:672'
   // Valid duration: 5 or 10 seconds. gen4 model is unavailable; use gen4_turbo for all tiers.
-  const RUNWAY_API_BASE = 'https://api.dev.runwayml.com'
-  const clampedDuration = durationSeconds <= 5 ? 5 : 10
+  const RUNWAY_API_BASE = 'https://api.runwayml.com'
+  const runwayDuration = getRunwayDuration(durationSeconds)
+
+  // Suppress unused variable warning — tier reserved for future quality differentiation
+  void tier
 
   // Create generation task
   const createResponse = await fetch(`${RUNWAY_API_BASE}/v1/image_to_video`, {
@@ -26,7 +32,7 @@ export async function generateVideoClip(
       model: 'gen4_turbo',
       promptImage: imageUrl,
       promptText: sceneDescription,
-      duration: clampedDuration,
+      duration: runwayDuration,
       ratio: '1280:720',
     })
   })

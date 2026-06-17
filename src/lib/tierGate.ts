@@ -7,6 +7,24 @@ export function canGenerateTrailer(tier: PlanName, trailersUsedThisMonth: number
   return false
 }
 
+export function getVideoConfig(tier: PlanName) {
+  if (tier === 'pro') {
+    return {
+      maxDurationSeconds: 90,    // 60-90 seconds
+      scenesCount: 8,            // more scenes for longer trailer
+      sceneLength: 10,           // 10 seconds per clip
+      quality: 'cinematic' as const
+    }
+  }
+  // author tier (standard) - max 30 seconds
+  return {
+    maxDurationSeconds: 30,
+    scenesCount: 4,              // fewer scenes for 30 sec trailer
+    sceneLength: 7,              // ~7 seconds per clip (4 clips = 28 sec)
+    quality: 'standard' as const
+  }
+}
+
 export function getModelForTier(tier: PlanName) {
   if (tier === 'pro') {
     return {
