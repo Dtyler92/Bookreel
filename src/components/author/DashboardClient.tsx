@@ -24,6 +24,8 @@ interface DashboardClientProps {
   books: BookWithStatus[]
   trailersGenerated: number
   totalViews: number
+  trailerCredits: number
+  creditsResetAt: string | null
 }
 
 // ─── Shared Keyframe Styles ────────────────────────────────────────────────────
@@ -298,9 +300,11 @@ function CoverModal({
 function BookCard({
   book,
   onChangeCover,
+  onDelete,
 }: {
   book: BookWithStatus
   onChangeCover: (book: BookWithStatus) => void
+  onDelete: (book: BookWithStatus) => void
 }) {
   const [trailerStatus, setTrailerStatus] = useState<TrailerStatus | null>(book.trailerStatus)
   const [coverUrl, setCoverUrl] = useState<string | null | undefined>(book.coverImageUrl)
@@ -622,6 +626,29 @@ function BookCard({
           {/* Cover */}
           <div style={{ position: 'relative', width: '100%', aspectRatio: '2/3' }}>
             {renderCover()}
+            {/* Delete book button — top right */}
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(book) }}
+              title="Remove this book"
+              style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                background: 'rgba(13,13,11,0.65)',
+                border: 'none',
+                borderRadius: '6px',
+                width: '28px',
+                height: '28px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                color: '#FAFAF7',
+                cursor: 'pointer',
+              }}
+            >
+              🗑
+            </button>
             {/* Change cover button — always visible */}
             <button
               onClick={handleChangeCover}
@@ -683,6 +710,201 @@ function BookCard({
   )
 }
 
+// ─── Delete Book Modal ─────────────────────────────────────────────────────────
+
+function DeleteBookModal({
+  book,
+  creditsResetAt,
+  onClose,
+  onDeleted,
+}: {
+  book: BookWithStatus
+  creditsResetAt: string | null
+  onClose: () => void
+  onDeleted: (bookId: string) => void
+}) {
+  const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+  const [info, setInfo] = useState<{
+    creditAlreadyUsed: boolean
+    currentCredits: number
+    resetAt: string | null
+  } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/books/${book.id}/delete`)
+        const data = await res.json()
+        if (active && res.ok) {
+          setInfo({
+            creditAlreadyUsed: data.creditAlreadyUsed,
+            currentCredits: data.currentCredits,
+            resetAt: data.resetAt,
+          })
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    })()
+    return () => { active = false }
+  }, [book.id])
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/books/${book.id}/delete`, { method: 'DELETE' })
+      if (res.ok) {
+        onDeleted(book.id)
+      } else {
+        const data = await res.json()
+        setError(data.error || 'Failed to delete book')
+        setDeleting(false)
+      }
+    } catch {
+      setError('Network error. Please try again.')
+      setDeleting(false)
+    }
+  }
+
+  const resetDate = (info?.resetAt || creditsResetAt)
+    ? new Date((info?.resetAt || creditsResetAt) as string).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+    : 'your next billing date'
+
+  const confirmed = confirmText.trim().toUpperCase() === 'DELETE'
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(13,13,11,0.55)',
+        zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '24px',
+      }}
+    >
+      <div style={{
+        background: '#FFFFFF', borderRadius: '16px', maxWidth: '480px', width: '100%',
+        padding: '32px', boxShadow: '0 20px 60px rgba(13,13,11,0.3)',
+      }}>
+        <h2 style={{
+          fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: '22px',
+          color: '#0D0D0B', margin: '0 0 12px',
+        }}>
+          Remove &ldquo;{book.title}&rdquo;?
+        </h2>
+
+        <p style={{
+          fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px',
+          color: '#1A1A18', lineHeight: 1.6, margin: '0 0 16px',
+        }}>
+          This permanently deletes your book and <strong>all of its data</strong> — the
+          screenplay, characters, scene images, and any generated trailer. This
+          <strong> cannot be undone.</strong>
+        </p>
+
+        {loading ? (
+          <p style={{
+            fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px',
+            color: '#8A8278', margin: '0 0 20px',
+          }}>
+            Checking your credits…
+          </p>
+        ) : (
+          <div style={{
+            background: '#FDF4E3', border: '1px solid #E8A23D', borderRadius: '10px',
+            padding: '16px', marginBottom: '20px',
+          }}>
+            <p style={{
+              fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px',
+              fontWeight: 600, color: '#8A5A12', margin: '0 0 6px',
+            }}>
+              ⚠️ Heads up about your trailer credit
+            </p>
+            {info?.creditAlreadyUsed ? (
+              <p style={{
+                fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px',
+                color: '#6B4E1F', margin: 0, lineHeight: 1.55,
+              }}>
+                You already used a trailer credit on this book. Deleting it
+                <strong> will not refund that credit.</strong> You currently have{' '}
+                <strong>{info.currentCredits} credit{info.currentCredits === 1 ? '' : 's'}</strong> left.
+                {info.currentCredits < 1 && (
+                  <> Your next free credit arrives <strong>{resetDate}</strong> — until then you&rsquo;d need to buy a redo credit to make a new trailer.</>
+                )}
+              </p>
+            ) : (
+              <p style={{
+                fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px',
+                color: '#6B4E1F', margin: 0, lineHeight: 1.55,
+              }}>
+                This book hasn&rsquo;t used a trailer credit yet, so nothing is lost there.
+                You have <strong>{info?.currentCredits ?? 0} credit{(info?.currentCredits ?? 0) === 1 ? '' : 's'}</strong> available.
+              </p>
+            )}
+          </div>
+        )}
+
+        <label style={{
+          display: 'block', fontFamily: 'var(--font-inter), sans-serif',
+          fontSize: '12px', fontWeight: 600, color: '#8A8278', margin: '0 0 6px',
+        }}>
+          Type DELETE to confirm
+        </label>
+        <input
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          placeholder="DELETE"
+          style={{
+            width: '100%', padding: '10px 12px', fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: '14px', border: '1px solid #E8E2D5', borderRadius: '8px',
+            outline: 'none', marginBottom: '20px', boxSizing: 'border-box',
+          }}
+        />
+
+        {error && (
+          <p style={{
+            fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px',
+            color: '#C8402F', margin: '0 0 12px',
+          }}>
+            {error}
+          </p>
+        )}
+
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onClose}
+            disabled={deleting}
+            style={{
+              background: 'transparent', border: '1px solid #E8E2D5', borderRadius: '8px',
+              padding: '10px 18px', fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '14px', fontWeight: 600, color: '#1A1A18', cursor: 'pointer',
+            }}
+          >
+            Keep my book
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={!confirmed || deleting}
+            style={{
+              background: confirmed && !deleting ? '#C8402F' : '#E0B5AE',
+              color: '#FFFFFF', border: 'none', borderRadius: '8px',
+              padding: '10px 18px', fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '14px', fontWeight: 600,
+              cursor: confirmed && !deleting ? 'pointer' : 'not-allowed',
+            }}
+          >
+            {deleting ? 'Removing…' : 'Permanently remove'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main DashboardClient ──────────────────────────────────────────────────────
 
 export function DashboardClient({
@@ -692,8 +914,12 @@ export function DashboardClient({
   books: initialBooks,
   trailersGenerated,
   totalViews,
+  trailerCredits,
+  creditsResetAt,
 }: DashboardClientProps) {
   const [books, setBooks] = useState<BookWithStatus[]>(initialBooks)
+  const [credits, setCredits] = useState<number>(trailerCredits)
+  const [deleteBook, setDeleteBook] = useState<BookWithStatus | null>(null)
   const [coverModalBook, setCoverModalBook] = useState<BookWithStatus | null>(null)
 
   const stats = [
@@ -708,7 +934,7 @@ export function DashboardClient({
 
   return (
     <div style={{ minHeight: '100vh', background: '#FAFAF7' }}>
-      <GlobalNav userName={userName} userTier={userTier} />
+      <GlobalNav userName={userName} userTier={userTier} credits={credits} />
 
       <main style={{
         paddingTop: '64px',
@@ -864,6 +1090,7 @@ export function DashboardClient({
                   key={book.id}
                   book={book}
                   onChangeCover={(b) => setCoverModalBook(b)}
+                  onDelete={(b) => setDeleteBook(b)}
                 />
               ))}
             </div>
@@ -904,6 +1131,19 @@ export function DashboardClient({
           bookGenre={coverModalBook.genre}
           onClose={() => setCoverModalBook(null)}
           onCoverUpdated={handleCoverUpdated}
+        />
+      )}
+
+      {/* Delete Book Modal */}
+      {deleteBook && (
+        <DeleteBookModal
+          book={deleteBook}
+          creditsResetAt={creditsResetAt}
+          onClose={() => setDeleteBook(null)}
+          onDeleted={(id) => {
+            setBooks((prev) => prev.filter((b) => b.id !== id))
+            setDeleteBook(null)
+          }}
         />
       )}
     </div>

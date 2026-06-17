@@ -36,6 +36,38 @@ export async function POST(request: Request) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
+
+        // One-time trailer credit purchase
+        if (session.mode === 'payment' && session.metadata?.type === 'trailer_credit') {
+          const userId = session.metadata.userId
+          if (userId) {
+            // Grant 1 credit + log to ledger
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('trailer_credits, purchased_credits_total')
+              .eq('id', userId)
+              .single()
+
+            const newBalance = (profile?.trailer_credits ?? 0) + 1
+            await supabase
+              .from('profiles')
+              .update({
+                trailer_credits: newBalance,
+                purchased_credits_total: (profile?.purchased_credits_total ?? 0) + 1,
+              })
+              .eq('id', userId)
+
+            await supabase.from('credit_ledger').insert({
+              user_id: userId,
+              delta: 1,
+              reason: 'purchase',
+              balance_after: newBalance,
+            })
+          }
+          break
+        }
+
+        // Subscription checkout
         const customerId = session.customer as string
         const subscriptionId = session.subscription as string
 

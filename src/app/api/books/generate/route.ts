@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { canGenerateTrailer, getModelForTier } from '@/lib/tierGate'
+import { getModelForTier } from '@/lib/tierGate'
 import { PlanName } from '@/lib/stripe'
+import { getCreditState, consumeCredit } from '@/lib/credits'
 
 function getServiceClient() {
   return createClient(
@@ -43,26 +44,25 @@ export async function POST(request: Request) {
         }, { status: 403 })
       }
 
-      // Count trailers generated this month for this user's books
-      const now = new Date()
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-
-      const { count: trailersThisMonth, error: countError } = await supabase
+      // --- Credit gate ---
+      // Has this book's trailer already consumed a credit? (retry of a paid generation is free)
+      const { data: existingTrailer } = await supabase
         .from('trailers')
-        .select('id', { count: 'exact', head: true })
+        .select('credit_consumed')
         .eq('book_id', bookId)
-        .gte('created_at', startOfMonth)
+        .maybeSingle()
 
-      if (countError) {
-        console.error('Trailer count error:', countError)
-        return Response.json({ error: 'Failed to check trailer usage' }, { status: 500 })
-      }
+      const alreadyConsumed = existingTrailer?.credit_consumed ?? false
 
-      if (!canGenerateTrailer(tier, trailersThisMonth ?? 0)) {
-        return Response.json(
-          { error: 'Monthly trailer limit reached' },
-          { status: 403 }
-        )
+      if (!alreadyConsumed) {
+        const creditState = await getCreditState(userId)
+        if (!creditState || creditState.credits < 1) {
+          return NextResponse.json({
+            error: 'You have no trailer credits left. Your next free credit arrives on your monthly reset date — or you can buy a redo credit now.',
+            outOfCredits: true,
+            resetAt: creditState?.resetAt ?? null,
+          }, { status: 402 })
+        }
       }
 
       // Get model config based on tier
@@ -154,6 +154,26 @@ export async function POST(request: Request) {
     if (trailerError) {
       console.error('Trailer update error:', trailerError)
       return Response.json({ error: 'Failed to update trailer status' }, { status: 500 })
+    }
+
+    // --- Consume a credit (once per book trailer; retries are free) ---
+    if (userId) {
+      const { data: t } = await supabase
+        .from('trailers')
+        .select('credit_consumed')
+        .eq('book_id', bookId)
+        .maybeSingle()
+
+      if (!t?.credit_consumed) {
+        const consumed = await consumeCredit(userId, bookId)
+        if (consumed) {
+          await supabase
+            .from('trailers')
+            .update({ credit_consumed: true })
+            .eq('book_id', bookId)
+          console.log(`[generate] Consumed 1 trailer credit for user ${userId}, book ${bookId}`)
+        }
+      }
     }
 
     // Determine the author's tier for pipeline configuration

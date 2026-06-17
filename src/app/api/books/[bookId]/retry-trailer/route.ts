@@ -30,11 +30,11 @@ export async function POST(
   // Verify the book belongs to this user
   const { data: book, error: bookError } = await supabase
     .from('books')
-    .select('id, user_id')
+    .select('id, author_id')
     .eq('id', bookId)
     .single()
 
-  if (bookError || !book || book.user_id !== user.id) {
+  if (bookError || !book || book.author_id !== user.id) {
     return Response.json({ error: 'Book not found' }, { status: 404 })
   }
 

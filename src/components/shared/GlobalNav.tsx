@@ -8,9 +8,10 @@ import { StatusBadge } from './StatusBadge'
 interface GlobalNavProps {
   userName?: string
   userTier?: 'free' | 'author' | 'pro'
+  credits?: number
 }
 
-export function GlobalNav({ userName, userTier = 'free' }: GlobalNavProps) {
+export function GlobalNav({ userName, userTier = 'free', credits }: GlobalNavProps) {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -51,6 +52,26 @@ export function GlobalNav({ userName, userTier = 'free' }: GlobalNavProps) {
 
       {/* Right side */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {typeof credits === 'number' && (
+          <div
+            title={`${credits} trailer credit${credits === 1 ? '' : 's'} available`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: credits > 0 ? 'rgba(200,64,47,0.08)' : '#F0EDE6',
+              border: `1px solid ${credits > 0 ? 'rgba(200,64,47,0.25)' : '#E8E2D5'}`,
+              borderRadius: '999px', padding: '5px 12px',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '13px', fontWeight: 600,
+              color: credits > 0 ? '#C8402F' : '#8A8278',
+            }}
+          >
+            <span style={{ fontSize: '14px', lineHeight: 1 }}>🎬</span>
+            <span>{credits}</span>
+            <span style={{ fontWeight: 500, color: '#8A8278' }}>
+              {credits === 1 ? 'credit' : 'credits'}
+            </span>
+          </div>
+        )}
         <StatusBadge status={userTier} />
         {userName && (
           <div style={{

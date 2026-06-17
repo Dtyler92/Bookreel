@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { DashboardClient } from '@/components/author/DashboardClient'
+import { getCreditState } from '@/lib/credits'
 import type { TrailerStatus } from '@/types/database'
 
 interface BookWithStatus {
@@ -73,6 +74,11 @@ export default async function DashboardPage() {
   const trailersGenerated = books.filter((b) => b.trailerStatus === 'complete').length
   const totalViews = books.reduce((sum, b) => sum + b.viewCount, 0)
 
+  // Trailer credits (auto-grants monthly allotment if due)
+  const creditState = await getCreditState(user.id)
+  const trailerCredits = creditState?.credits ?? 0
+  const creditsResetAt = creditState?.resetAt ?? null
+
   return (
     <DashboardClient
       firstName={firstName}
@@ -81,6 +87,8 @@ export default async function DashboardPage() {
       books={books}
       trailersGenerated={trailersGenerated}
       totalViews={totalViews}
+      trailerCredits={trailerCredits}
+      creditsResetAt={creditsResetAt}
     />
   )
 }
