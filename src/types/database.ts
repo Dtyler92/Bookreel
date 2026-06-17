@@ -53,6 +53,11 @@ export interface Scene {
   video_clip_url: string | null
   duration_seconds: number | null
   author_approved: boolean
+  moderation_status: 'ok' | 'rejected' | null
+  moderation_reason: string | null
+  suggested_edit: string | null
+  author_edited: boolean
+  last_moderation_at: string | null
   created_at: string
 }
 

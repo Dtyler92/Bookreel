@@ -143,12 +143,12 @@ async function generateSceneImage(sceneDescription, genre) {
   
   const storagePath = `scene-images/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`
   const { error: uploadErr } = await supabase.storage
-    .from('books')
+    .from('media')
     .upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: false })
   
   if (uploadErr) throw new Error(`Supabase image upload failed: ${uploadErr.message}`)
   
-  const { data: urlData } = supabase.storage.from('books').getPublicUrl(storagePath)
+  const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
   console.log(`[worker]   Image uploaded to Supabase: ${urlData.publicUrl.substring(0, 80)}`)
   return urlData.publicUrl
 }
@@ -204,7 +204,13 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5
     
     if (status.status === 'SUCCEEDED') return status.output[0]
     if (status.status === 'FAILED') {
-      throw new Error(`Runway generation failed: ${status.failure || JSON.stringify(status).substring(0, 200)}`)
+      const failureMsg = status.failure || JSON.stringify(status).substring(0, 200)
+      const err = new Error(`Runway generation failed: ${failureMsg}`)
+      // Flag content-moderation failures distinctly so the pipeline can surface them to the author
+      if (/content moderation|moderation|safety|policy|inappropriate|nsfw/i.test(failureMsg)) {
+        err.isModeration = true
+      }
+      throw err
     }
   }
   
@@ -254,12 +260,12 @@ async function stitchAndUpload(clipUrls, bookId) {
   const storagePath = `trailers/${bookId}/final-trailer.mp4`
 
   const { error: uploadErr } = await supabase.storage
-    .from('books')
+    .from('media')
     .upload(storagePath, videoBuffer, { contentType: 'video/mp4', upsert: true })
 
   if (uploadErr) throw new Error(`Video upload failed: ${uploadErr.message}`)
 
-  const { data: urlData } = supabase.storage.from('books').getPublicUrl(storagePath)
+  const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
   return urlData.publicUrl
 }
 
@@ -299,6 +305,43 @@ async function generateVoiceoverScript(bookTitle, scenes, tone) {
   return data.choices?.[0]?.message?.content || ''
 }
 
+// ── Suggested policy-safe rewrite (when Runway rejects a scene) ────────────────
+async function generateSafeRewrite(sceneDescription, rejectionReason) {
+  const systemPrompt = `You are a film editor helping adapt a book trailer scene that was rejected by an automated content-moderation filter. Rewrite the scene description so it conveys the same dramatic mood and story beat WITHOUT any content that could trigger moderation (no nudity, no explicit sexual content, no graphic gore/violence). Keep it cinematic, suggestive rather than explicit, and suitable for a general-audience book trailer. Return ONLY the rewritten scene description, 1-3 sentences, no preamble.`
+  const userContent = `Original scene description: "${sceneDescription}"\n\nRejection reason: "${rejectionReason}"\n\nRewrite it to pass moderation while preserving the dramatic intent.`
+
+  try {
+    if (!isPlaceholder(ANTHROPIC_API_KEY)) {
+      const { default: Anthropic } = await import('@anthropic-ai/sdk')
+      const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY })
+      const message = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }]
+      })
+      return message.content[0].type === 'text' ? message.content[0].text.trim() : ''
+    }
+
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'anthropic/claude-sonnet-4-5',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent }
+        ]
+      })
+    })
+    const data = await res.json()
+    return (data.choices?.[0]?.message?.content || '').trim()
+  } catch (e) {
+    console.log(`[worker]   Could not generate safe rewrite: ${e.message}`)
+    return ''
+  }
+}
+
 // ── Main pipeline ─────────────────────────────────────────────────────────────
 const activeJobs = new Set()
 
@@ -334,21 +377,73 @@ async function runPipeline(job) {
   console.log(`[worker]   Generating ${scenesToGenerate.length} clips (max ${maxScenes} for ${tier})...`)
 
   const clipUrls = []
+  const rejectedScenes = []
   for (const scene of scenesToGenerate) {
-    console.log(`[worker]   Scene ${scene.scene_number}: generating image...`)
+    try {
+      console.log(`[worker]   Scene ${scene.scene_number}: generating image...`)
 
-    // Generate image and upload to Supabase (so URL doesn't expire)
-    const imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
+      // Generate image and upload to Supabase (so URL doesn't expire)
+      const imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
 
-    // Generate video
-    console.log(`[worker]   Scene ${scene.scene_number}: generating video clip...`)
-    const clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
-    console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
+      // Generate video — retry once on Runway failure (transient errors are common)
+      console.log(`[worker]   Scene ${scene.scene_number}: generating video clip...`)
+      let clipUrl
+      try {
+        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
+      } catch (clipErr) {
+        // Don't retry moderation rejections — they'll fail again. Retry only transient errors.
+        if (clipErr.isModeration) throw clipErr
+        console.log(`[worker]   Scene ${scene.scene_number}: ⚠ first attempt failed (${clipErr.message}), retrying once...`)
+        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
+      }
+      console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
-    clipUrls.push(clipUrl)
+      clipUrls.push(clipUrl)
 
-    // Save clip URL to scene record
-    await supabase.from('scenes').update({ video_clip_url: clipUrl }).eq('id', scene.id)
+      // Save clip URL + clear any prior moderation flags
+      await supabase.from('scenes').update({
+        video_clip_url: clipUrl,
+        moderation_status: 'ok',
+        moderation_reason: null,
+        suggested_edit: null,
+      }).eq('id', scene.id)
+    } catch (sceneErr) {
+      // Skip this scene rather than failing the entire trailer
+      console.log(`[worker]   Scene ${scene.scene_number}: ❌ skipped (${sceneErr.message})`)
+
+      if (sceneErr.isModeration) {
+        // Build a friendly reason + an AI-suggested policy-safe rewrite for the author
+        const friendlyReason = 'This scene was blocked by the studio\'s content-safety filter. It may contain imagery (violence, nudity, or explicit content) that can\'t be turned into video. Edit the scene below to soften it, or use our suggested version.'
+        console.log(`[worker]   Scene ${scene.scene_number}: generating suggested safe rewrite...`)
+        const suggestion = await generateSafeRewrite(scene.description, sceneErr.message)
+        await supabase.from('scenes').update({
+          moderation_status: 'rejected',
+          moderation_reason: friendlyReason,
+          suggested_edit: suggestion || null,
+          last_moderation_at: new Date().toISOString(),
+        }).eq('id', scene.id)
+        rejectedScenes.push(scene.scene_number)
+      } else {
+        // Non-moderation failure (transient Runway/network error)
+        await supabase.from('scenes').update({
+          moderation_status: 'rejected',
+          moderation_reason: 'This scene couldn\'t be generated due to a temporary studio error. Try regenerating, or edit the scene below.',
+          last_moderation_at: new Date().toISOString(),
+        }).eq('id', scene.id)
+        rejectedScenes.push(scene.scene_number)
+      }
+    }
+  }
+
+  if (clipUrls.length === 0) {
+    const reason = rejectedScenes.length > 0
+      ? `All scenes were blocked or failed (scenes ${rejectedScenes.join(', ')}). Review the flagged scenes, edit them to fit content policy, and regenerate.`
+      : 'All scene clips failed to generate'
+    throw new Error(reason)
+  }
+  console.log(`[worker]   ${clipUrls.length}/${scenesToGenerate.length} clips generated successfully`)
+  if (rejectedScenes.length > 0) {
+    console.log(`[worker]   ⚠ ${rejectedScenes.length} scene(s) flagged for author review: ${rejectedScenes.join(', ')}`)
   }
 
   // Stitch and upload

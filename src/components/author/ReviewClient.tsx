@@ -537,14 +537,24 @@ function SceneCard({
   scene,
   approved,
   onApprove,
+  onSceneUpdate,
+  bookId,
   index,
 }: {
   scene: SceneWithApproval
   approved: boolean
   onApprove: (id: string, approved: boolean) => void
+  onSceneUpdate: (id: string, updates: Partial<SceneWithApproval>) => void
+  bookId: string
   index: number
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [draftDescription, setDraftDescription] = useState(scene.description)
+  const [draftScreenplay, setDraftScreenplay] = useState(scene.screenplay_text ?? '')
+
+  const isRejected = scene.moderation_status === 'rejected'
 
   const handleApproveChange = async (checked: boolean) => {
     onApprove(scene.id, checked)
@@ -555,12 +565,51 @@ function SceneCard({
     })
   }
 
+  const handleSaveEdit = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/books/${bookId}/scenes/${scene.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: draftDescription,
+          screenplay_text: draftScreenplay,
+        }),
+      })
+      if (res.ok) {
+        onSceneUpdate(scene.id, {
+          description: draftDescription,
+          screenplay_text: draftScreenplay,
+          author_edited: true,
+          moderation_status: null,
+          moderation_reason: null,
+          suggested_edit: null,
+        })
+        setEditing(false)
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleUseSuggestion = () => {
+    if (!scene.suggested_edit) return
+    setDraftDescription(scene.suggested_edit)
+    setEditing(true)
+  }
+
+  const handleCancelEdit = () => {
+    setDraftDescription(scene.description)
+    setDraftScreenplay(scene.screenplay_text ?? '')
+    setEditing(false)
+  }
+
   return (
     <div
       style={{
         backgroundColor: '#FFFFFF',
         border: '1px solid #E8E2D5',
-        borderLeft: `3px solid ${approved ? '#C8402F' : '#E8E2D5'}`,
+        borderLeft: `3px solid ${isRejected ? '#E8A23D' : approved ? '#C8402F' : '#E8E2D5'}`,
         borderRadius: '12px',
         padding: '24px',
         marginBottom: '16px',
@@ -597,74 +646,298 @@ function SceneCard({
               {scene.title}
             </h3>
           )}
-          <p
-            style={{
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '14px',
-              color: '#1A1A18',
-              margin: 0,
-              lineHeight: 1.6,
-            }}
-          >
-            {scene.description}
-          </p>
+          {editing ? (
+            <textarea
+              value={draftDescription}
+              onChange={(e) => setDraftDescription(e.target.value)}
+              rows={4}
+              style={{
+                width: '100%',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '14px',
+                color: '#1A1A18',
+                lineHeight: 1.6,
+                padding: '12px',
+                border: '1px solid #C8402F',
+                borderRadius: '8px',
+                resize: 'vertical',
+                outline: 'none',
+                background: '#FFFDF9',
+              }}
+            />
+          ) : (
+            <p
+              style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '14px',
+                color: '#1A1A18',
+                margin: 0,
+                lineHeight: 1.6,
+              }}
+            >
+              {scene.description}
+            </p>
+          )}
+          {scene.author_edited && !editing && (
+            <span
+              style={{
+                display: 'inline-block',
+                marginTop: '8px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: '#8A8578',
+              }}
+            >
+              ✎ Edited by you
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Read screenplay toggle */}
-      {scene.screenplay_text && (
-        <div style={{ marginBottom: '12px' }}>
-          <button
-            onClick={() => setExpanded((v) => !v)}
+      {/* ── Moderation rejection banner ──────────────────────────────────── */}
+      {isRejected && scene.moderation_reason && (
+        <div
+          style={{
+            background: '#FDF4E3',
+            border: '1px solid #E8A23D',
+            borderRadius: '10px',
+            padding: '16px',
+            marginBottom: '16px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+            <span style={{ fontSize: '18px', flexShrink: 0, lineHeight: 1.3 }}>⚠️</span>
+            <div style={{ flex: 1 }}>
+              <p
+                style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#8A5A12',
+                  margin: '0 0 4px',
+                }}
+              >
+                This scene couldn&rsquo;t be filmed
+              </p>
+              <p
+                style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '13px',
+                  color: '#6B4E1F',
+                  margin: 0,
+                  lineHeight: 1.5,
+                }}
+              >
+                {scene.moderation_reason}
+              </p>
+
+              {/* Suggested safe rewrite */}
+              {scene.suggested_edit && !editing && (
+                <div
+                  style={{
+                    marginTop: '12px',
+                    padding: '12px',
+                    background: '#FFFFFF',
+                    border: '1px dashed #E8A23D',
+                    borderRadius: '8px',
+                  }}
+                >
+                  <p
+                    style={{
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      color: '#8A5A12',
+                      margin: '0 0 6px',
+                    }}
+                  >
+                    Suggested rewrite
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      fontSize: '13px',
+                      color: '#1A1A18',
+                      margin: '0 0 10px',
+                      lineHeight: 1.5,
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    &ldquo;{scene.suggested_edit}&rdquo;
+                  </p>
+                  <button
+                    onClick={handleUseSuggestion}
+                    style={{
+                      background: '#C8402F',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '7px 14px',
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Use this version
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit / screenplay area */}
+      {editing ? (
+        <div style={{ marginBottom: '16px' }}>
+          <label
             style={{
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
+              display: 'block',
               fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '13px',
-              fontWeight: 500,
-              color: '#C8402F',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: '#8A8578',
+              margin: '0 0 6px',
             }}
           >
-            {expanded ? 'Hide screenplay' : 'Read screenplay'}
-            <span style={{ fontSize: '10px' }}>{expanded ? '▲' : '▼'}</span>
-          </button>
-          {expanded && (
-            <pre
+            Screenplay (optional)
+          </label>
+          <textarea
+            value={draftScreenplay}
+            onChange={(e) => setDraftScreenplay(e.target.value)}
+            rows={5}
+            placeholder="Add or edit the screenplay text for this scene…"
+            style={{
+              width: '100%',
+              fontFamily: 'monospace',
+              fontSize: '13px',
+              color: '#1A1A18',
+              lineHeight: 1.6,
+              padding: '12px',
+              border: '1px solid #E8E2D5',
+              borderRadius: '8px',
+              resize: 'vertical',
+              outline: 'none',
+              background: '#F4F1EB',
+            }}
+          />
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+            <button
+              onClick={handleSaveEdit}
+              disabled={saving}
               style={{
-                marginTop: '8px',
+                background: '#C8402F',
+                color: '#FFFFFF',
+                border: 'none',
                 borderRadius: '8px',
-                background: '#F4F1EB',
-                padding: '16px',
-                fontFamily: 'monospace',
+                padding: '9px 18px',
+                fontFamily: 'var(--font-inter), sans-serif',
                 fontSize: '13px',
-                color: '#1A1A18',
-                whiteSpace: 'pre-wrap',
-                overflowY: 'auto',
-                maxHeight: '200px',
-                margin: '8px 0 0',
+                fontWeight: 600,
+                cursor: saving ? 'wait' : 'pointer',
+                opacity: saving ? 0.7 : 1,
               }}
             >
-              {scene.screenplay_text}
-            </pre>
-          )}
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+            <button
+              onClick={handleCancelEdit}
+              disabled={saving}
+              style={{
+                background: 'transparent',
+                color: '#8A8578',
+                border: '1px solid #E8E2D5',
+                borderRadius: '8px',
+                padding: '9px 18px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
+      ) : (
+        scene.screenplay_text && (
+          <div style={{ marginBottom: '12px' }}>
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: '#C8402F',
+              }}
+            >
+              {expanded ? 'Hide screenplay' : 'Read screenplay'}
+              <span style={{ fontSize: '10px' }}>{expanded ? '▲' : '▼'}</span>
+            </button>
+            {expanded && (
+              <pre
+                style={{
+                  marginTop: '8px',
+                  borderRadius: '8px',
+                  background: '#F4F1EB',
+                  padding: '16px',
+                  fontFamily: 'monospace',
+                  fontSize: '13px',
+                  color: '#1A1A18',
+                  whiteSpace: 'pre-wrap',
+                  overflowY: 'auto',
+                  maxHeight: '200px',
+                  margin: '8px 0 0',
+                }}
+              >
+                {scene.screenplay_text}
+              </pre>
+            )}
+          </div>
+        )
       )}
 
       {/* Card footer */}
       <div
         style={{
           display: 'flex',
-          justifyContent: 'flex-end',
+          justifyContent: 'space-between',
           alignItems: 'center',
           paddingTop: '16px',
           borderTop: '1px solid #EDE9E0',
         }}
       >
+        {!editing ? (
+          <button
+            onClick={() => setEditing(true)}
+            style={{
+              background: 'transparent',
+              border: '1px solid #E8E2D5',
+              borderRadius: '8px',
+              padding: '7px 14px',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: '#1A1A18',
+              cursor: 'pointer',
+            }}
+          >
+            ✎ Edit scene
+          </button>
+        ) : (
+          <span />
+        )}
         <ApproveToggle
           approved={approved}
           onChange={handleApproveChange}
@@ -708,6 +981,10 @@ export default function ReviewClient({
 
   const handleSceneApprove = (id: string, approved: boolean) => {
     setScenes((prev) => prev.map((s) => (s.id === id ? { ...s, author_approved: approved } : s)))
+  }
+
+  const handleSceneUpdate = (id: string, updates: Partial<SceneWithApproval>) => {
+    setScenes((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)))
   }
 
   const handleGenerate = async () => {
@@ -877,6 +1154,8 @@ export default function ReviewClient({
                 scene={s}
                 approved={approvedScenes.has(s.id)}
                 onApprove={handleSceneApprove}
+                onSceneUpdate={handleSceneUpdate}
+                bookId={bookId}
                 index={i}
               />
             ))
