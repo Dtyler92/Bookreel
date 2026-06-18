@@ -133,8 +133,53 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
   }
 }
 
+// ── Per-render cost tracking ──────────────────────────────────────────────────
+// fal.ai prices (verified Jun 2026 from each model's page). All generation runs on
+// ONE fal balance, so when it's exhausted, everything stops at once. The ledger logs
+// exactly what each trailer costs so credit pricing ($9.99=1 credit) stays profitable.
+const PRICING = {
+  flux_image_ultra: 0.06,   // flux-pro/v1.1-ultra — per image
+  kling_per_sec: 0.098,     // kling 2.1 pro i2v — per second (5s=$0.49, 10s=$0.98)
+  tts_per_1k_char: 0.10,    // elevenlabs eleven-v3 — per 1000 chars
+  music_bed: 0.015,         // stable-audio — approx (open model, compute-second)
+  lipsync_per_sec: 0.05,    // sync-lipsync/v2 — $3/min of video
+}
+// Rough Claude Sonnet token prices (script/line-selection LLM, billed to Anthropic/
+// OpenRouter — a SEPARATE balance from fal, tracked here for full per-render visibility).
+const LLM_PRICING = { in_per_1m: 3.0, out_per_1m: 15.0 }
+
+function makeLedger() {
+  return {
+    items: [],
+    add(label, provider, amount) {
+      const amt = Math.max(0, +(+amount).toFixed(4))
+      this.items.push({ label, provider, amount: amt })
+      return amt
+    },
+  }
+}
+
+function summarizeLedger(ledger) {
+  const byProvider = {}
+  let total = 0
+  for (const it of ledger.items) {
+    byProvider[it.provider] = +(((byProvider[it.provider] || 0) + it.amount)).toFixed(4)
+    total += it.amount
+  }
+  return { total: +total.toFixed(2), byProvider, items: ledger.items }
+}
+
+// Estimate cost of a Claude call from token usage (falls back to a tiny flat estimate
+// when usage isn't available, e.g. OpenRouter responses without a usage field).
+function llmCost(usage) {
+  if (!usage) return 0.01
+  const inTok = usage.input_tokens ?? usage.prompt_tokens ?? 0
+  const outTok = usage.output_tokens ?? usage.completion_tokens ?? 0
+  return (inTok / 1e6) * LLM_PRICING.in_per_1m + (outTok / 1e6) * LLM_PRICING.out_per_1m
+}
+
 // ── Image generation (fal.ai) ────────────────────────────────────────────────
-async function generateSceneImage(sceneDescription, genre) {
+async function generateSceneImage(sceneDescription, genre, ledger = null) {
   const safeDescription = softenForModeration(sceneDescription)
   // Cinematic photorealism prompt — written for flux-pro/v1.1-ultra raw mode
   const prompt = `${safeDescription}, ${genre} mood, cinematic film still, shot on ARRI Alexa, anamorphic lens, shallow depth of field, dramatic atmospheric lighting, ultra-realistic, photorealistic, 8K, no text, no watermarks, no logos, tasteful, general audience`
@@ -180,6 +225,7 @@ async function generateSceneImage(sceneDescription, genre) {
 
   const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
   console.log(`[worker]   Image uploaded to Supabase: ${urlData.publicUrl.substring(0, 80)}`)
+  if (ledger) ledger.add('scene image (flux-pro ultra)', 'fal', PRICING.flux_image_ultra)
   return urlData.publicUrl
 }
 
@@ -188,7 +234,7 @@ async function generateSceneImage(sceneDescription, genre) {
 // rejected dark/Gothic/thriller content (INTERNAL.BAD_OUTPUT.CODE01). Kling 2.1
 // standard on fal.ai passes the same content cleanly, has no daily tier walls,
 // and costs ~$0.035/s (similar economics to Runway).
-async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5, screenplayText = null) {
+async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5, screenplayText = null, ledger = null) {
   const klingDuration = durationSeconds >= 8 ? '10' : '5'
   // Feed the screenplay action beats (motion, camera) to Kling alongside the
   // visual description so the generated clip follows the intended timing/movement
@@ -251,6 +297,7 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5
       const result = await resultRes.json()
       const videoUrl = result.video?.url || result.output?.[0] || null
       if (!videoUrl) throw new Error('Kling returned no video URL')
+      if (ledger) ledger.add(`video clip ${klingDuration}s (kling 2.1 pro)`, 'fal', PRICING.kling_per_sec * Number(klingDuration))
       return videoUrl
     }
 
@@ -535,7 +582,7 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
 }
 
 // ── Voiceover script (Anthropic or OpenRouter) ────────────────────────────────
-async function generateVoiceoverScript(bookTitle, scenes, tone) {
+async function generateVoiceoverScript(bookTitle, scenes, tone, ledger = null) {
   const userContent = `Write a voiceover script for a book trailer for "${bookTitle}". Tone: ${tone}. Key scenes: ${scenes.map(s => s.description).join('. ')}`
   const systemPrompt = 'You are a voiceover writer for cinematic book trailers. Write compelling, atmospheric narration. Maximum 120 words. No character names in the first line. Build tension. End with the book title.'
 
@@ -548,6 +595,7 @@ async function generateVoiceoverScript(bookTitle, scenes, tone) {
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }]
     })
+    if (ledger) ledger.add('voiceover script (claude sonnet)', 'llm', llmCost(message.usage))
     return message.content[0].type === 'text' ? message.content[0].text : ''
   }
 
@@ -567,11 +615,12 @@ async function generateVoiceoverScript(bookTitle, scenes, tone) {
     })
   })
   const data = await res.json()
+  if (ledger) ledger.add('voiceover script (claude sonnet via openrouter)', 'llm', llmCost(data.usage))
   return data.choices?.[0]?.message?.content || ''
 }
 
 // ── Voiceover audio (ElevenLabs v3 via fal.ai) ───────────────────────────────
-async function generateVoiceoverAudio(script, tmpDir) {
+async function generateVoiceoverAudio(script, tmpDir, ledger = null) {
   if (!script || script.trim().length === 0) return null
   console.log('[worker]   Generating voiceover audio...')
 
@@ -606,6 +655,7 @@ async function generateVoiceoverAudio(script, tmpDir) {
   const audioPath = join(tmpDir, 'voiceover.mp3')
   writeFileSync(audioPath, audioBuffer)
   console.log(`[worker]   Voiceover audio saved: ${audioBuffer.length} bytes`)
+  if (ledger) ledger.add(`narrator voiceover (${script.length} chars, elevenlabs v3)`, 'fal', (script.length / 1000) * PRICING.tts_per_1k_char)
   return audioPath
 }
 
@@ -637,7 +687,7 @@ function musicMoodForGenre(genre) {
 
 // Generate an instrumental music bed sized to the trailer length. Non-fatal:
 // if it fails we simply ship the trailer with voiceover-only audio.
-async function generateMusicBed(genre, durationSeconds, tmpDir) {
+async function generateMusicBed(genre, durationSeconds, tmpDir, ledger = null) {
   console.log(`[worker]   Generating music bed (${durationSeconds}s, genre=${genre || 'n/a'})...`)
   const prompt = musicMoodForGenre(genre)
   // Stable Audio caps at ~47s; clamp and we loop it to fill if the trailer is longer.
@@ -672,6 +722,7 @@ async function generateMusicBed(genre, durationSeconds, tmpDir) {
   const musicPath = join(tmpDir, 'music.mp3')
   writeFileSync(musicPath, musicBuffer)
   console.log(`[worker]   Music bed saved: ${musicBuffer.length} bytes`)
+  if (ledger) ledger.add('music bed (stable-audio)', 'fal', PRICING.music_bed)
   return musicPath
 }
 
@@ -698,7 +749,7 @@ function voiceIdFor(voiceKey) {
 // Ask the LLM to pick at most `maxLines` short, iconic character lines, each tied
 // to a scene where that character is visibly present (face on screen) so lip-sync
 // has a face to work with. Returns [] on any problem — lines are a bonus, never required.
-async function selectCharacterLines(bookTitle, genre, characters, scenes, maxLines) {
+async function selectCharacterLines(bookTitle, genre, characters, scenes, maxLines, ledger = null) {
   if (!characters || characters.length === 0 || maxLines < 1) return []
 
   const charBlock = characters.map(c =>
@@ -732,6 +783,7 @@ Return ONLY a JSON array, no markdown:
         messages: [{ role: 'user', content: userContent }]
       })
       raw = message.content[0].type === 'text' ? message.content[0].text : ''
+      if (ledger) ledger.add('character-line selection (claude sonnet)', 'llm', llmCost(message.usage))
     } else {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -743,6 +795,7 @@ Return ONLY a JSON array, no markdown:
       })
       const data = await res.json()
       raw = data.choices?.[0]?.message?.content || ''
+      if (ledger) ledger.add('character-line selection (claude sonnet via openrouter)', 'llm', llmCost(data.usage))
     }
   } catch (e) {
     console.log('[worker]   Character-line selection LLM call failed (non-fatal):', e.message)
@@ -770,7 +823,7 @@ Return ONLY a JSON array, no markdown:
 
 // TTS a single character line. Returns { url, path } — url is the fal-hosted public
 // MP3 (fed straight to the lip-sync model), path is the local copy for the final mix.
-async function generateCharacterLineAudio(line, voiceKey, tmpDir, sceneNumber) {
+async function generateCharacterLineAudio(line, voiceKey, tmpDir, sceneNumber, ledger = null) {
   const res = await fetch('https://fal.run/fal-ai/elevenlabs/tts/eleven-v3', {
     method: 'POST',
     headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
@@ -790,13 +843,14 @@ async function generateCharacterLineAudio(line, voiceKey, tmpDir, sceneNumber) {
   const buf = Buffer.from(await audioRes.arrayBuffer())
   const path = join(tmpDir, `line-scene-${sceneNumber}.mp3`)
   writeFileSync(path, buf)
+  if (ledger) ledger.add(`character line TTS (${line.length} chars, elevenlabs v3)`, 'fal', (line.length / 1000) * PRICING.tts_per_1k_char)
   return { url: audioUrl, path }
 }
 
 // Lip-sync a clip to a line of audio via fal-ai/sync-lipsync/v2. Returns a new
 // public video URL (stitch downloads it like any other clip). Throws on failure
 // so the caller can fall back to the original clip.
-async function lipSyncClip(videoUrl, audioUrl, sceneNumber) {
+async function lipSyncClip(videoUrl, audioUrl, sceneNumber, clipSeconds = 10, ledger = null) {
   console.log(`[worker]   Scene ${sceneNumber}: lip-syncing character line...`)
   const res = await fetch('https://fal.run/fal-ai/sync-lipsync/v2', {
     method: 'POST',
@@ -809,6 +863,8 @@ async function lipSyncClip(videoUrl, audioUrl, sceneNumber) {
   const data = await res.json()
   const url = data.video?.url || data.url || null
   if (!url) throw new Error('Lip-sync returned no video URL')
+  // Billed at $3/min of video processed (the whole clip, not just the spoken portion).
+  if (ledger) ledger.add(`lip-sync ${clipSeconds}s clip (sync-lipsync v2)`, 'fal', clipSeconds * PRICING.lipsync_per_sec)
   return url
 }
 
@@ -858,6 +914,10 @@ async function runPipeline(job) {
 
   await updateTrailerStatus(bookId, 'processing')
 
+  // Per-render cost ledger — every billable generation appends to this so we can
+  // print a full cost breakdown when the trailer completes.
+  const ledger = makeLedger()
+
   // Fetch book and scenes
   const { data: book } = await supabase.from('books').select('*').eq('id', bookId).single()
   const { data: scenes } = await supabase.from('scenes').select('*').eq('book_id', bookId).eq('author_approved', true).order('scene_number')
@@ -880,11 +940,11 @@ async function runPipeline(job) {
   // Voiceover — generate script then render to audio
   let voiceoverAudioPath = null
   try {
-    const voiceover = await generateVoiceoverScript(book.title, scenes, book.genre || 'dramatic')
+    const voiceover = await generateVoiceoverScript(book.title, scenes, book.genre || 'dramatic', ledger)
     console.log(`[worker]   Voiceover script (${voiceover.length} chars)`)
     const tmpDir = `/tmp/bookreel-${bookId}`
     if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
-    voiceoverAudioPath = await generateVoiceoverAudio(voiceover, tmpDir)
+    voiceoverAudioPath = await generateVoiceoverAudio(voiceover, tmpDir, ledger)
     if (voiceoverAudioPath) console.log('[worker]   Voiceover audio ready')
   } catch (e) {
     console.error('[worker]   Voiceover failed (non-fatal, shipping without audio):', e.message)
@@ -899,7 +959,7 @@ async function runPipeline(job) {
     const estClips = tier === 'pro' ? 8 : 6
     const estClipLen = tier === 'pro' ? 10 : 5
     const estDuration = estClips * estClipLen + 4
-    musicAudioPath = await generateMusicBed(book.genre || 'dramatic', estDuration, tmpDir)
+    musicAudioPath = await generateMusicBed(book.genre || 'dramatic', estDuration, tmpDir, ledger)
     if (musicAudioPath) console.log('[worker]   Music bed ready')
   } catch (e) {
     console.error('[worker]   Music bed failed (non-fatal, shipping without music):', e.message)
@@ -924,7 +984,7 @@ async function runPipeline(job) {
   try {
     const { data: characters } = await supabase.from('characters').select('*').eq('book_id', bookId)
     const eligibleSceneNumbers = new Set(scenesToGenerate.map(s => s.scene_number))
-    const selected = await selectCharacterLines(book.title, book.genre, characters || [], scenesToGenerate, maxLines)
+    const selected = await selectCharacterLines(book.title, book.genre, characters || [], scenesToGenerate, maxLines, ledger)
     for (const ln of selected) {
       if (!eligibleSceneNumbers.has(ln.scene_number)) continue
       if (lineBySceneNumber.has(ln.scene_number)) continue // one line per scene
@@ -952,7 +1012,7 @@ async function runPipeline(job) {
       console.log(`[worker]   Scene ${scene.scene_number}: generating image...`)
 
       // Generate image and upload to Supabase (so URL doesn't expire)
-      let imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
+      let imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic', ledger)
 
       // Save first scene image as book cover if no cover is set
       if (scene.scene_number === scenesToGenerate[0].scene_number && !book.cover_image_url) {
@@ -966,14 +1026,14 @@ async function runPipeline(job) {
       console.log(`[worker]   Scene ${scene.scene_number}: generating video clip...`)
       let clipUrl
       try {
-        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text)
+        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text, ledger)
       } catch (clipErr) {
         // Non-retryable: moderation, internal bad-output, or daily-cap. Don't waste generations.
         if (clipErr.isModeration || clipErr.isBadOutput || clipErr.isRateLimit) throw clipErr
         console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying once in 15s...`)
         await new Promise(r => setTimeout(r, 15000))
-        imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
-        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text)
+        imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic', ledger)
+        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text, ledger)
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
@@ -984,8 +1044,8 @@ async function runPipeline(job) {
       if (chosenLine) {
         try {
           const { url: lineAudioUrl, path: lineAudioPath } =
-            await generateCharacterLineAudio(chosenLine.line, chosenLine.voice, tmpDirLines, scene.scene_number)
-          const syncedUrl = await lipSyncClip(clipUrl, lineAudioUrl, scene.scene_number)
+            await generateCharacterLineAudio(chosenLine.line, chosenLine.voice, tmpDirLines, scene.scene_number, ledger)
+          const syncedUrl = await lipSyncClip(clipUrl, lineAudioUrl, scene.scene_number, sceneLength, ledger)
           clipUrl = syncedUrl
           // clipUrls.length is this clip's index (we push next).
           characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
@@ -1073,6 +1133,38 @@ async function runPipeline(job) {
   }
 
   await updateTrailerStatus(bookId, 'complete', { videoUrl: finalVideoUrl })
+
+  // ── Per-render cost breakdown ──────────────────────────────────────────────
+  const cost = summarizeLedger(ledger)
+  const falTotal = cost.byProvider.fal || 0
+  const llmTotal = cost.byProvider.llm || 0
+  console.log('[worker] ┌─ 💰 RENDER COST BREAKDOWN ─────────────────────────────')
+  console.log(`[worker] │ Book: "${book.title}" (${tier}) — ${clipUrls.length}/${scenesToGenerate.length} clips`)
+  for (const it of cost.items) {
+    console.log(`[worker] │   ${it.label.padEnd(46)} $${it.amount.toFixed(4)}  [${it.provider}]`)
+  }
+  console.log('[worker] │ ' + '─'.repeat(54))
+  console.log(`[worker] │   fal.ai (image/video/audio/lipsync):   $${falTotal.toFixed(2)}`)
+  console.log(`[worker] │   LLM (script/line selection):          $${llmTotal.toFixed(2)}`)
+  console.log(`[worker] │   TOTAL THIS RENDER:                    $${cost.total.toFixed(2)}`)
+  console.log('[worker] └────────────────────────────────────────────────────────')
+
+  // Append to a persistent JSONL ledger so costs can be reviewed/aggregated later.
+  try {
+    const { appendFileSync } = await import('fs')
+    const record = {
+      ts: new Date().toISOString(),
+      bookId, title: book.title, tier,
+      clips: clipUrls.length, scenesPlanned: scenesToGenerate.length,
+      characterLines: characterLineTracks.length,
+      falCost: +falTotal.toFixed(4), llmCost: +llmTotal.toFixed(4), total: cost.total,
+      items: cost.items,
+    }
+    appendFileSync('/root/bookreel/render-costs.jsonl', JSON.stringify(record) + '\n')
+  } catch (e) {
+    console.log('[worker]   Cost-ledger write failed (non-fatal):', e.message)
+  }
+
   console.log(`[worker] ✅ Pipeline complete: bookId=${bookId}`)
 }
 
