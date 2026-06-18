@@ -845,7 +845,7 @@ export default function UploadPage() {
               <button
                 onClick={() => {
                   if (bookId) {
-                    router.push(`/dashboard/review/${bookId}`)
+                    router.push(`/review/${bookId}`)
                   } else {
                     router.push('/dashboard')
                   }
@@ -1118,7 +1118,7 @@ export default function UploadPage() {
                         }
                         // Navigate to review page
                         if (bookId) {
-                          router.push(`/dashboard/review/${bookId}`)
+                          router.push(`/review/${bookId}`)
                         } else {
                           router.push('/dashboard')
                         }
@@ -1168,7 +1168,7 @@ export default function UploadPage() {
                   type="button"
                   onClick={() => {
                     if (bookId) {
-                      router.push(`/dashboard/review/${bookId}`)
+                      router.push(`/review/${bookId}`)
                     } else {
                       router.push('/dashboard')
                     }
