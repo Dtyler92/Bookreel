@@ -615,9 +615,13 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
 }
 
 // ── Voiceover script (Anthropic or OpenRouter) ────────────────────────────────
-async function generateVoiceoverScript(bookTitle, scenes, tone, ledger = null) {
+async function generateVoiceoverScript(bookTitle, scenes, tone, ledger = null, maxWords = 120) {
   const userContent = `Write a voiceover script for a book trailer for "${bookTitle}". Tone: ${tone}. Key scenes: ${scenes.map(s => s.description).join('. ')}`
-  const systemPrompt = 'You are a voiceover writer for cinematic book trailers. Write compelling, atmospheric narration. Maximum 120 words. No character names in the first line. Build tension. End with the book title.'
+  // Word budget is derived from the actual trailer length (~1.9 words/sec of speech)
+  // so the narration fits the visuals instead of overrunning them. Short test renders
+  // (TEST_MAX_CLIPS) get proportionally shorter scripts. The cap is HARD — overrunning
+  // narration was the "rushed / talked-over / abrupt" bug.
+  const systemPrompt = `You are a voiceover writer for cinematic book trailers. Write compelling, atmospheric narration. HARD LIMIT: maximum ${maxWords} words — this is non-negotiable; the narration must fit a short trailer and going over makes it sound rushed. Fewer words is better than more. No character names in the first line. Build tension. End with the book title.`
 
   if (!isPlaceholder(ANTHROPIC_API_KEY)) {
     const { default: Anthropic } = await import('@anthropic-ai/sdk')
@@ -979,7 +983,16 @@ async function runPipeline(job) {
   // Voiceover — generate script then render to audio
   let voiceoverAudioPath = null
   try {
-    const voiceover = await generateVoiceoverScript(book.title, scenes, book.genre || 'dramatic', ledger)
+    // Word budget tied to the ACTUAL trailer length so narration fits the visuals.
+    // Mirror the clip-count/length math from scene generation below (incl. TEST_MAX_CLIPS),
+    // measure narration capacity at ~1.9 words/sec over ~92% of the clips section.
+    const voBaseClips = tier === 'pro' ? 8 : 6
+    const voClips = TEST_MAX_CLIPS > 0 ? Math.min(voBaseClips, TEST_MAX_CLIPS) : voBaseClips
+    const voClipLen = tier === 'pro' ? 10 : 5
+    const voSpeakSecs = voClips * voClipLen * 0.92
+    const voWordBudget = Math.max(12, Math.round(voSpeakSecs * 1.9))
+    console.log(`[worker]   Narration budget: ${voWordBudget} words (~${voSpeakSecs.toFixed(0)}s of speech over ${voClips} clips)`)
+    const voiceover = await generateVoiceoverScript(book.title, scenes, book.genre || 'dramatic', ledger, voWordBudget)
     console.log(`[worker]   Voiceover script (${voiceover.length} chars)`)
     const tmpDir = `/tmp/bookreel-${bookId}`
     if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
