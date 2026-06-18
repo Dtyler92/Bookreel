@@ -427,141 +427,161 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
   const concatInputs = allInputs.map((_, i) => `[v${i}]`).join('')
   const filterComplex = `${filterParts};${concatInputs}concat=n=${allInputs.length}:v=1:a=0[out]`
 
+  // ── Measure the full video timeline ─────────────────────────────────────────
+  // Total video duration = sum of all clip durations + end card. The audio MUST
+  // fill this whole length (a previous bug clamped audio to the narrator's length,
+  // leaving the last ~18s including the end card silent).
+  const clipDurations = clipPaths.map(p => {
+    try {
+      return parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${p}`).toString().trim()) || 0
+    } catch { return 0 }
+  })
+  let endCardDur = 0
+  if (endCardPath) {
+    try { endCardDur = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${endCardPath}`).toString().trim()) || 0 } catch {}
+  }
+  const clipsTotal = clipDurations.reduce((a, b) => a + b, 0)
+  const videoTotal = clipsTotal + endCardDur
+  console.log(`[worker]   Video timeline: ${clipsTotal.toFixed(1)}s clips + ${endCardDur.toFixed(1)}s end card = ${videoTotal.toFixed(1)}s total`)
+
+  // ── Pace the narration to fit the video ─────────────────────────────────────
+  // The narrator was rushed because the raw VO (~natural speed) ran much shorter
+  // than the video, so it front-loaded then went silent. We stretch it with atempo
+  // to fill the CLIPS portion (leaving the end card for a musical button), with a
+  // floor of 0.82x so it slows naturally without sounding drunk. atempo<1 = slower.
+  let pacedVoPath = voiceoverAudioPath
+  let pacedVoDur = 0
+  if (voiceoverAudioPath) {
+    try {
+      const voDur = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${voiceoverAudioPath}`).toString().trim()) || 0
+      pacedVoDur = voDur
+      // Target: narration spans ~92% of the clips section (a little air at the end).
+      const target = clipsTotal * 0.92
+      if (voDur > 0 && target > 0) {
+        let tempo = voDur / target          // <1 slows down (stretches), >1 speeds up
+        tempo = Math.max(0.82, Math.min(1.05, tempo)) // clamp to a natural-sounding range
+        if (Math.abs(tempo - 1) > 0.02) {
+          pacedVoPath = join(tmpDir, 'voiceover-paced.mp3')
+          execSync(`ffmpeg -i ${voiceoverAudioPath} -filter:a atempo=${tempo.toFixed(3)} -y ${pacedVoPath} 2>&1`)
+          pacedVoDur = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${pacedVoPath}`).toString().trim()) || voDur
+          console.log(`[worker]   Narration paced: ${voDur.toFixed(1)}s → ${pacedVoDur.toFixed(1)}s (atempo=${tempo.toFixed(3)}, target ${target.toFixed(1)}s)`)
+        }
+      }
+    } catch (e) {
+      console.log('[worker]   Narration pacing failed (non-fatal, using raw VO):', e.message)
+      pacedVoPath = voiceoverAudioPath
+    }
+  }
+
   // ── Compute character-line timestamps ──────────────────────────────────────
-  // Each line is tied to a clip index. Its start time = cumulative duration of all
-  // prior clips. We probe real clip durations (clips are 5s or 10s, plus lip-sync
-  // can nudge length) so the spoken line lands exactly when that character is on screen.
+  // Each line is tied to a clip index; start time = cumulative duration of prior clips.
   const usableLines = []
   if (Array.isArray(characterLines) && characterLines.length > 0) {
-    const clipDurations = clipPaths.map(p => {
-      try {
-        return parseFloat(execSync(
-          `ffprobe -v error -show_entries format=duration -of csv=p=0 ${p}`
-        ).toString().trim()) || 0
-      } catch { return 0 }
-    })
     const clipStart = []
     let acc = 0
     for (let i = 0; i < clipDurations.length; i++) { clipStart[i] = acc; acc += clipDurations[i] }
-
     for (const ln of characterLines) {
       if (ln.clipIndex == null || ln.clipIndex < 0 || ln.clipIndex >= clipPaths.length) continue
       if (!ln.path || !existsSync(ln.path)) continue
       let lineDur = 2.5
       try {
-        lineDur = parseFloat(execSync(
-          `ffprobe -v error -show_entries format=duration -of csv=p=0 ${ln.path}`
-        ).toString().trim()) || 2.5
+        lineDur = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${ln.path}`).toString().trim()) || 2.5
       } catch {}
-      // Small lead-in so the line lands after the shot settles (clamped to clip).
-      const lead = Math.min(0.4, Math.max(0, (clipDurations[ln.clipIndex] - lineDur) / 2))
+      // Center the line within its clip so it has air before AND after — fixes the
+      // "abrupt" feel. Lead-in scales with spare room in the clip (up to 1.2s).
+      const spare = Math.max(0, clipDurations[ln.clipIndex] - lineDur)
+      const lead = Math.min(1.2, spare / 2)
       const start = clipStart[ln.clipIndex] + lead
       usableLines.push({ path: ln.path, start, end: start + lineDur })
     }
   }
 
-  // ── Advanced mix: narrator + music bed that DUCKS under each character line ──
-  // Only when we actually have lines AND a bed to duck. Everything else falls
-  // through to the original, proven 4-branch logic below (no behavior change).
-  if (usableLines.length > 0 && (voiceoverAudioPath || musicAudioPath)) {
-    const bedInputs = []
-    if (voiceoverAudioPath) bedInputs.push({ path: voiceoverAudioPath, kind: 'vo' })
-    if (musicAudioPath) bedInputs.push({ path: musicAudioPath, kind: 'music' })
-
-    // ffmpeg input indices: clips/endcard first, then bed inputs, then line inputs.
-    const lineInputArgs = usableLines.map(l => `-i ${l.path}`).join(' ')
-    const bedInputArgs = bedInputs.map(b =>
-      b.kind === 'music' ? `-stream_loop -1 -i ${b.path}` : `-i ${b.path}`
-    ).join(' ')
-
-    let idx = allInputs.length
-    const bedIdx = {}
-    for (const b of bedInputs) { bedIdx[b.kind] = idx++ }
-    const lineStartIdx = idx
-
-    // Duck window expression: OR of every line's [start,end] interval.
-    const duckExpr = usableLines
-      .map(l => `between(t,${l.start.toFixed(2)},${l.end.toFixed(2)})`)
-      .join('+')
-
+  // ── Unified audio mix ───────────────────────────────────────────────────────
+  // One code path that correctly handles narrator + music + character lines, mixed
+  // across the FULL video length. Fixes: (1) music silent after 2s (bad fade at t=0);
+  // (2) audio dying before video ends (clamped to narrator length); (3) abrupt lines.
+  if (pacedVoPath || musicAudioPath || usableLines.length > 0) {
     const parts = []
-    if (bedIdx.vo != null) parts.push(`[${bedIdx.vo}:a]volume=1.0[vo]`)
-    if (bedIdx.music != null) parts.push(`[${bedIdx.music}:a]volume=0.22,afade=t=out:st=0:d=2[mus]`)
+    const extraInputs = []   // ffmpeg -i args appended after clips/endcard
+    let idx = allInputs.length
+    const mixLabels = []
 
-    // Combine bed sources into one stream (normalize=0 so volumes aren't auto-scaled down).
-    let bedLabel
-    if (bedIdx.vo != null && bedIdx.music != null) {
-      parts.push(`[vo][mus]amix=inputs=2:duration=first:normalize=0:dropout_transition=0[bedmix]`)
-      bedLabel = 'bedmix'
-    } else {
-      bedLabel = bedIdx.vo != null ? 'vo' : 'mus'
+    // Narrator: full volume, no padding needed (it's mixed with duration=longest below).
+    if (pacedVoPath) {
+      const voIdx = idx++; extraInputs.push(`-i ${pacedVoPath}`)
+      parts.push(`[${voIdx}:a]volume=1.0[vo]`)
+      mixLabels.push('[vo]')
     }
 
-    // Duck the bed to 35% during any line window, full elsewhere.
-    parts.push(`[${bedLabel}]volume=0.35:enable='${duckExpr}'[bedducked]`)
+    // Music: loop to cover the WHOLE video, sit at a musical bed level, and fade out
+    // only over the final 3s (the button). apad+atrim guarantees it spans videoTotal.
+    if (musicAudioPath) {
+      const mIdx = idx++; extraInputs.push(`-stream_loop -1 -i ${musicAudioPath}`)
+      const fadeStart = Math.max(0, videoTotal - 3)
+      if (pacedVoPath && pacedVoDur > 0 && pacedVoDur < videoTotal - 2) {
+        // Narrator present: music sits low (0.28) UNDER the VO, then SWELLS up to
+        // 0.6 once narration ends so the final clips + end card land on a musical
+        // high instead of going quiet. swellStart = when the narrator stops talking.
+        const swellStart = pacedVoDur
+        parts.push(
+          `[${mIdx}:a]atrim=0:${videoTotal.toFixed(2)},` +
+          `volume='if(lt(t,${swellStart.toFixed(2)}),0.28,0.6)':eval=frame,` +
+          `afade=t=out:st=${fadeStart.toFixed(2)}:d=3[mus]`
+        )
+      } else {
+        // Music-only trailer (VO failed) — play the bed louder throughout.
+        const bedVol = pacedVoPath ? 0.28 : 0.6
+        parts.push(
+          `[${mIdx}:a]atrim=0:${videoTotal.toFixed(2)},volume=${bedVol},afade=t=out:st=${fadeStart.toFixed(2)}:d=3[mus]`
+        )
+      }
+      mixLabels.push('[mus]')
+    }
 
-    // Delay each line to its timestamp; punch slightly hot so it cuts through.
-    const lineLabels = []
+    // Character lines: delay to their timestamp, gentle 150ms in/out fade so they
+    // don't pop, slightly hot so they cut through the bed.
     usableLines.forEach((l, i) => {
+      const lIdx = idx++; extraInputs.push(`-i ${l.path}`)
       const d = Math.round(l.start * 1000)
-      parts.push(`[${lineStartIdx + i}:a]adelay=${d}|${d},volume=1.4[ln${i}]`)
-      lineLabels.push(`[ln${i}]`)
+      const lineDur = (l.end - l.start)
+      parts.push(
+        `[${lIdx}:a]adelay=${d}|${d},afade=t=in:st=${l.start.toFixed(2)}:d=0.15,` +
+        `afade=t=out:st=${(l.end - 0.15).toFixed(2)}:d=0.15,volume=1.5[ln${i}]`
+      )
+      mixLabels.push(`[ln${i}]`)
     })
 
-    // Final: bed + all lines. normalize=0 keeps everyone at intended loudness.
-    const finalInputs = `[bedducked]${lineLabels.join('')}`
-    parts.push(`${finalInputs}amix=inputs=${1 + usableLines.length}:duration=first:normalize=0:dropout_transition=0[aout]`)
+    // Duck the narrator+music under each character line so the line is clearly heard.
+    // We apply ducking by lowering the bed during line windows via a sidechain-free
+    // volume enable expression on the pre-mix bed group.
+    let finalAudioLabel
+    if (mixLabels.length === 1) {
+      finalAudioLabel = mixLabels[0]
+    } else {
+      // If there are character lines, duck everything that isn't a line during the
+      // line windows. Build a duck expr; apply to vo and music before final amix.
+      if (usableLines.length > 0) {
+        const duckExpr = usableLines.map(l => `between(t,${l.start.toFixed(2)},${l.end.toFixed(2)})`).join('+')
+        // Re-tag vo/mus with ducking.
+        for (let i = 0; i < parts.length; i++) {
+          if (parts[i].endsWith('[vo]')) parts[i] = parts[i].replace('[vo]', `[vo0];[vo0]volume=0.4:enable='${duckExpr}'[vo]`)
+          if (parts[i].endsWith('[mus]')) parts[i] = parts[i].replace('[mus]', `[mus0];[mus0]volume=0.5:enable='${duckExpr}'[mus]`)
+        }
+      }
+      // Mix everything across the FULL video length (duration=longest, normalize=0).
+      parts.push(`${mixLabels.join('')}amix=inputs=${mixLabels.length}:duration=longest:normalize=0:dropout_transition=0[aout]`)
+      finalAudioLabel = '[aout]'
+    }
 
     const audioFilter = parts.join(';')
     execSync(
-      `ffmpeg ${inputArgs} ${bedInputArgs} ${lineInputArgs} ` +
+      `ffmpeg ${inputArgs} ${extraInputs.join(' ')} ` +
       `-filter_complex "${filterComplex};${audioFilter}" ` +
-      `-map "[out]" -map "[aout]" ` +
+      `-map "[out]" -map "${finalAudioLabel}" ` +
       `-c:v libx264 -c:a aac -b:a 192k -pix_fmt yuv420p ` +
-      `-shortest -movflags +faststart ${outputPath} -y 2>&1`
+      `-movflags +faststart ${outputPath} -y 2>&1`
     )
-    console.log(`[worker]   FFmpeg stitch + ${usableLines.length} character line(s) + ducked bed complete:`, outputPath)
-  } else if (voiceoverAudioPath && musicAudioPath) {
-    // Mix BOTH: voiceover on top, music ducked underneath and looped/trimmed to
-    // the video length. voIdx = first audio input, musicIdx = second.
-    const voIdx = allInputs.length
-    const musicIdx = allInputs.length + 1
-    // Music: loop to cover full length, lower to ~22% volume, fade out at the end.
-    // Voiceover: full volume. amix combines them; -shortest clamps to video.
-    const audioFilter =
-      `[${voIdx}:a]volume=1.0[vo];` +
-      `[${musicIdx}:a]volume=0.22,afade=t=out:st=${Math.max(0, 0)}:d=2[mus];` +
-      `[vo][mus]amix=inputs=2:duration=first:dropout_transition=0[aout]`
-    execSync(
-      `ffmpeg ${inputArgs} -i ${voiceoverAudioPath} -stream_loop -1 -i ${musicAudioPath} ` +
-      `-filter_complex "${filterComplex};${audioFilter}" ` +
-      `-map "[out]" -map "[aout]" ` +
-      `-c:v libx264 -c:a aac -b:a 192k -pix_fmt yuv420p ` +
-      `-shortest -movflags +faststart ${outputPath} -y 2>&1`
-    )
-    console.log('[worker]   FFmpeg stitch + voiceover + music mix complete:', outputPath)
-  } else if (voiceoverAudioPath) {
-    // Mix voiceover under the video — audio index = allInputs.length (last input)
-    const audioIdx = allInputs.length
-    execSync(
-      `ffmpeg ${inputArgs} -i ${voiceoverAudioPath} ` +
-      `-filter_complex "${filterComplex}" ` +
-      `-map "[out]" -map ${audioIdx}:a ` +
-      `-c:v libx264 -c:a aac -b:a 128k -pix_fmt yuv420p ` +
-      `-shortest -movflags +faststart ${outputPath} -y 2>&1`
-    )
-    console.log('[worker]   FFmpeg stitch + audio mix complete:', outputPath)
-  } else if (musicAudioPath) {
-    // Music only (voiceover failed): loop music to length at full-ish volume.
-    const musicIdx = allInputs.length
-    execSync(
-      `ffmpeg ${inputArgs} -stream_loop -1 -i ${musicAudioPath} ` +
-      `-filter_complex "${filterComplex};[${musicIdx}:a]volume=0.7[aout]" ` +
-      `-map "[out]" -map "[aout]" ` +
-      `-c:v libx264 -c:a aac -b:a 192k -pix_fmt yuv420p ` +
-      `-shortest -movflags +faststart ${outputPath} -y 2>&1`
-    )
-    console.log('[worker]   FFmpeg stitch + music-only mix complete:', outputPath)
+    console.log(`[worker]   FFmpeg mix complete — VO:${!!pacedVoPath} music:${!!musicAudioPath} lines:${usableLines.length} over ${videoTotal.toFixed(1)}s`)
   } else {
     execSync(
       `ffmpeg ${inputArgs} -filter_complex "${filterComplex}" ` +
@@ -640,7 +660,8 @@ async function generateVoiceoverAudio(script, tmpDir, ledger = null) {
     },
     body: JSON.stringify({
       text: script,
-      voice_id: 'onwK4e9ZLuTAKqWW03F9', // "Daniel" — deep, cinematic, authoritative
+      voice: NARRATOR_VOICE, // 'Daniel' — deep, cinematic. NOTE: must be `voice` (name); voice_id is ignored.
+      stability: 0.5,
       output_format: 'mp3_44100_128'
     })
   })
@@ -738,18 +759,22 @@ async function generateMusicBed(genre, durationSeconds, tmpDir, ledger = null) {
 // moments make people stop scrolling. We pick them at pipeline time (no schema
 // change), voice each character distinctly, then lip-sync the line onto its clip.
 
-// ElevenLabs voice pool (via fal.ai). Narrator uses Daniel; characters get a
-// contrasting voice so the spoken line clearly reads as a *character*, not the VO.
+// ElevenLabs voices via fal.ai. CRITICAL: the eleven-v3 endpoint uses the `voice`
+// NAME param — `voice_id` is silently ignored and falls back to the default (Rachel),
+// which made every character sound like the narrator. These are verified-supported
+// voice names. Narrator = "Daniel" (deep, authoritative); characters get DISTINCT
+// voices so a spoken line clearly reads as the character, never the narrator.
+const NARRATOR_VOICE = 'Daniel'
 const CHARACTER_VOICES = {
-  deep_male:    'pNInz6obpgDQGcFmaJgB', // Adam — strong, grounded (distinct from narrator Daniel)
-  male:         'TxGEqnHWrfWFTfGW9XjX', // Josh — younger male
-  old_male:     'VR6AewLTigWG4xSOukaG', // Arnold — gravelly, older
-  female:       '21m00Tcm4TlvDq8ikWAM', // Rachel — clear female
-  young_female: 'EXAVITQu4vr4xnSDxMaL', // Bella — younger female
-  default:      'pNInz6obpgDQGcFmaJgB',
+  deep_male:    'George',    // mature, resonant male — distinct from Daniel
+  male:         'Liam',      // younger male
+  old_male:     'Bill',      // older male
+  female:       'Charlotte', // clear female (distinct from default Rachel)
+  young_female: 'Alice',     // younger female
+  default:      'Charlie',
 }
 
-function voiceIdFor(voiceKey) {
+function voiceNameFor(voiceKey) {
   return CHARACTER_VOICES[(voiceKey || '').toLowerCase().trim()] || CHARACTER_VOICES.default
 }
 
@@ -836,7 +861,8 @@ async function generateCharacterLineAudio(line, voiceKey, tmpDir, sceneNumber, l
     headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       text: line,
-      voice_id: voiceIdFor(voiceKey),
+      voice: voiceNameFor(voiceKey), // must be `voice` (name); voice_id is silently ignored by the API
+      stability: 0.45,
       output_format: 'mp3_44100_128'
     })
   })
