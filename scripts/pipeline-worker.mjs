@@ -101,7 +101,7 @@ function softenForModeration(text) {
 
 console.log('[worker] App URL:', APP_URL)
 console.log('[worker] Anthropic key available:', !isPlaceholder(ANTHROPIC_API_KEY))
-console.log('[worker] Runway key prefix:', RUNWAY_API_KEY?.substring(0, 12))
+console.log('[worker] Video engine: Kling 2.1 via fal.ai')
 
 // ── Supabase client ──────────────────────────────────────────────────────────
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
