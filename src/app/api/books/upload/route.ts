@@ -23,7 +23,7 @@ const SYSTEM_PROMPT = `You are a book trailer screenplay writer. Analyze the boo
       "temperament": "string — personality traits, emotional tendencies, how they behave under pressure, speech patterns, mannerisms"
     }
   ],
-  "scenes": [{"scene_number": 1, "title": "string", "description": "string", "screenplay_text": "string", "duration_seconds": 10, "characters_present": ["exact character name(s) visible on screen in this shot, or [] if none"]}],
+  "scenes": [{"scene_number": 1, "title": "string", "description": "string", "screenplay_text": "string", "duration_seconds": 5, "characters_present": ["exact character name(s) visible on screen in this shot, or [] if none"]}],
   "items": [{"name": "string", "description": "string"}],
   "voiceover": "string",
   "tone": "string",
@@ -31,7 +31,7 @@ const SYSTEM_PROMPT = `You are a book trailer screenplay writer. Analyze the boo
 }
 Rules:
 - 3-5 characters max
-- 8-10 scenes (these become trailer clips — more scenes allow longer trailers)
+- 14-16 scenes (these become trailer clips — the Pro trailer uses up to 14, so always produce at least 14 distinct, visually-varied scenes; a few extra gives slack if any are filtered)
 - 2-4 key items/objects max
 - Keep descriptions book-accurate
 - No explicit sexual content

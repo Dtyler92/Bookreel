@@ -1041,7 +1041,7 @@ async function runPipeline(job) {
     // Estimate trailer length: clips × per-clip length (+ ~4s end card).
     // Respect TEST_MAX_CLIPS so short test renders get a correctly-sized music bed.
     // Kling 2.1 only generates 5s or 10s clips — we use 5s for punchy trailer cuts.
-    const baseClips = tier === 'pro' ? 12 : 6
+    const baseClips = tier === 'pro' ? 14 : 6
     const estClips = TEST_MAX_CLIPS > 0 ? Math.min(baseClips, TEST_MAX_CLIPS) : baseClips
     const estClipLen = 5
     const estDuration = estClips * estClipLen + 4
@@ -1054,10 +1054,10 @@ async function runPipeline(job) {
   // Determine max scenes based on tier. Kling 2.1 only generates 5s or 10s clips;
   // we use 5s for punchy, faster-cutting trailers (Tyler: the 10s clips felt long).
   //   Author: 6 clips  × 5s = 30s
-  //   Pro:    12 clips × 5s = 60s   (60–80s pricing band; faster cuts than 8×10s)
+  //   Pro:    14 clips × 5s = 70s   (60–80s pricing band; faster cuts than 8×10s)
   // TEST_MAX_CLIPS (env) caps this for short troubleshooting renders (e.g. 4 = ~20s).
   const sceneLength = 5
-  let maxScenes = tier === 'pro' ? 12 : 6
+  let maxScenes = tier === 'pro' ? 14 : 6
   if (TEST_MAX_CLIPS > 0) {
     maxScenes = Math.min(maxScenes, TEST_MAX_CLIPS)
     console.log(`[worker]   ⚠ TEST MODE: capping to ${maxScenes} clips (~${maxScenes * sceneLength}s) to save credits`)
