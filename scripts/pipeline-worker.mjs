@@ -247,7 +247,7 @@ async function generateSceneImage(sceneDescription, genre, ledger = null) {
 // rejected dark/Gothic/thriller content (INTERNAL.BAD_OUTPUT.CODE01). Kling 2.1
 // standard on fal.ai passes the same content cleanly, has no daily tier walls,
 // and costs ~$0.035/s (similar economics to Runway).
-async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5, screenplayText = null, ledger = null) {
+async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5, screenplayText = null, ledger = null, suppressTalking = false) {
   const klingDuration = durationSeconds >= 8 ? '10' : '5'
   // Feed the screenplay action beats (motion, camera) to Kling alongside the
   // visual description so the generated clip follows the intended timing/movement
@@ -257,6 +257,13 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5
     ? `${sceneDescription}. Action and camera: ${screenplayText}`
     : sceneDescription
   const safePromptText = softenForModeration(motionText)
+
+  // When this scene WON'T be lip-synced (no character line), suppress generated
+  // talking — mouths flapping with no synced audio looks broken. We push "talking"
+  // into the negative prompt so Kling keeps faces still / non-speaking.
+  const negativePrompt = suppressTalking
+    ? 'talking, speaking, mouth moving, lips moving, open mouth, conversation, dialogue, text, words, letters, watermark, nudity, explicit, low quality, blur, distortion'
+    : 'text, words, letters, watermark, nudity, explicit, low quality, blur, distortion'
 
   // Submit to Kling queue (tier + endpoint chosen at startup via KLING_TIER env)
   const submitRes = await fetch(KLING_ENDPOINT, {
@@ -270,7 +277,7 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5
       image_url: imageUrl,
       duration: klingDuration,
       aspect_ratio: '16:9',
-      negative_prompt: 'text, words, letters, watermark, nudity, explicit, low quality, blur, distortion',
+      negative_prompt: negativePrompt,
       cfg_scale: 0.5
     })
   })
@@ -1033,9 +1040,10 @@ async function runPipeline(job) {
   try {
     // Estimate trailer length: clips × per-clip length (+ ~4s end card).
     // Respect TEST_MAX_CLIPS so short test renders get a correctly-sized music bed.
-    const baseClips = tier === 'pro' ? 8 : 6
+    // Kling 2.1 only generates 5s or 10s clips — we use 5s for punchy trailer cuts.
+    const baseClips = tier === 'pro' ? 12 : 6
     const estClips = TEST_MAX_CLIPS > 0 ? Math.min(baseClips, TEST_MAX_CLIPS) : baseClips
-    const estClipLen = tier === 'pro' ? 10 : 5
+    const estClipLen = 5
     const estDuration = estClips * estClipLen + 4
     musicAudioPath = await generateMusicBed(book.genre || 'dramatic', estDuration, tmpDir, ledger)
     if (musicAudioPath) console.log('[worker]   Music bed ready')
@@ -1043,12 +1051,13 @@ async function runPipeline(job) {
     console.error('[worker]   Music bed failed (non-fatal, shipping without music):', e.message)
   }
 
-  // Determine max scenes based on tier — targets: Author ≈30s, Pro ≈80s
-  //   Author: 6 clips × 5s  = 30s
-  //   Pro:    8 clips × 10s = 80s
-  // TEST_MAX_CLIPS (env) caps this for short troubleshooting renders (e.g. 2 = ~20s).
-  const sceneLength = tier === 'pro' ? 10 : 5
-  let maxScenes = tier === 'pro' ? 8 : 6
+  // Determine max scenes based on tier. Kling 2.1 only generates 5s or 10s clips;
+  // we use 5s for punchy, faster-cutting trailers (Tyler: the 10s clips felt long).
+  //   Author: 6 clips  × 5s = 30s
+  //   Pro:    12 clips × 5s = 60s   (60–80s pricing band; faster cuts than 8×10s)
+  // TEST_MAX_CLIPS (env) caps this for short troubleshooting renders (e.g. 4 = ~20s).
+  const sceneLength = 5
+  let maxScenes = tier === 'pro' ? 12 : 6
   if (TEST_MAX_CLIPS > 0) {
     maxScenes = Math.min(maxScenes, TEST_MAX_CLIPS)
     console.log(`[worker]   ⚠ TEST MODE: capping to ${maxScenes} clips (~${maxScenes * sceneLength}s) to save credits`)
@@ -1138,16 +1147,19 @@ async function runPipeline(job) {
       //    fresh image fails identically and just burns the daily task cap. Bail at once.
       //  - TRANSIENT (network blip, timeout): worth one fresh-image retry.
       console.log(`[worker]   Scene ${scene.scene_number}: generating video clip...`)
+      // If this scene has NO character line, it won't be lip-synced — so suppress
+      // generated talking/mouth movement (flapping lips with no audio looks broken).
+      const willLipSync = lineBySceneNumber.has(scene.scene_number)
       let clipUrl
       try {
-        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text, ledger)
+        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text, ledger, !willLipSync)
       } catch (clipErr) {
         // Non-retryable: moderation, internal bad-output, or daily-cap. Don't waste generations.
         if (clipErr.isModeration || clipErr.isBadOutput || clipErr.isRateLimit) throw clipErr
         console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying once in 15s...`)
         await new Promise(r => setTimeout(r, 15000))
         imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic', ledger)
-        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text, ledger)
+        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text, ledger, !willLipSync)
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
