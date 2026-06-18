@@ -28,7 +28,7 @@ SCENE SELECTION FOR VIDEO (critical — these become AI-generated video clips th
 `
 
 
-export const IMAGE_NEGATIVE_PROMPT = 'nudity, nude, naked, sexual, explicit, pornographic, nsfw, genitalia, exposed breasts, sex act'
+export const IMAGE_NEGATIVE_PROMPT = 'text, words, letters, captions, subtitles, title, watermark, logo, signature, writing, typography, numbers, labels, nudity, nude, naked, sexual, explicit, pornographic, nsfw, genitalia, exposed breasts, sex act'
 
 export const FAL_CONTENT_POLICY = {
   negative_prompt: IMAGE_NEGATIVE_PROMPT,

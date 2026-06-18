@@ -10,6 +10,7 @@ interface BookWithStatus {
   genre: string | null
   created_at: string
   trailerStatus: TrailerStatus | null
+  trailerVideoUrl: string | null
   viewCount: number
 }
 
@@ -48,12 +49,12 @@ export default async function DashboardPage() {
     title: string
     genre: string | null
     created_at: string
-    trailers: Array<{ status: TrailerStatus; view_count: number }> | null
+    trailers: Array<{ status: TrailerStatus; view_count: number; final_video_url: string | null }> | null
   }
 
   const { data: booksRaw } = await supabase
     .from('books')
-    .select('id, title, genre, created_at, trailers(status, view_count)')
+    .select('id, title, genre, created_at, trailers(status, view_count, final_video_url)')
     .eq('author_id', user.id)
     .order('created_at', { ascending: false })
 
@@ -66,6 +67,7 @@ export default async function DashboardPage() {
       genre: b.genre,
       created_at: b.created_at,
       trailerStatus: latest?.status ?? null,
+      trailerVideoUrl: latest?.final_video_url ?? null,
       viewCount: latest?.view_count ?? 0,
     }
   })

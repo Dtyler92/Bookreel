@@ -79,7 +79,7 @@ console.log('[worker] BookReel Pipeline Worker starting...')
 // ── Content-safety helpers ────────────────────────────────────────────────────
 // Soften potentially policy-violating wording so fal.ai images and Runway video
 // clear automated content moderation. Keeps the dramatic intent, removes triggers.
-const IMAGE_NEGATIVE_PROMPT = 'nudity, nude, naked, sexual, explicit, pornographic, nsfw, genitalia, exposed breasts, sex act, gore, blood, graphic violence, dismemberment, wound, corpse, mutilation, self-harm, drug use, disturbing, horror gore'
+const IMAGE_NEGATIVE_PROMPT = 'text, words, letters, captions, subtitles, title, watermark, logo, signature, writing, typography, numbers, labels, nudity, nude, naked, sexual, explicit, pornographic, nsfw, genitalia, exposed breasts, sex act, gore, blood, graphic violence, dismemberment, wound, corpse, mutilation, self-harm, drug use, disturbing, horror gore'
 
 const SOFTEN_MAP = [
   [/\b(blood|bloody|bleeding|gore|gory)\b/gi, 'dark crimson shadows'],
@@ -143,7 +143,7 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
 // ── Image generation (fal.ai) ────────────────────────────────────────────────
 async function generateSceneImage(sceneDescription, genre) {
   const safeDescription = softenForModeration(sceneDescription)
-  const prompt = `${safeDescription}, ${genre} mood, cinematic composition, dramatic atmospheric lighting, film still, photorealistic, highly detailed, tasteful, suitable for a general audience movie trailer`
+  const prompt = `${safeDescription}, ${genre} mood, cinematic composition, dramatic atmospheric lighting, film still, photorealistic, highly detailed, tasteful, suitable for a general audience movie trailer, clean image with no text or lettering or watermarks`
   
   const res = await fetch('https://fal.run/fal-ai/flux/dev', {
     method: 'POST',
@@ -507,19 +507,31 @@ async function runPipeline(job) {
       console.log(`[worker]   Scene ${scene.scene_number}: generating image...`)
 
       // Generate image and upload to Supabase (so URL doesn't expire)
-      const imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
+      let imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
 
-      // Generate video — retry once on Runway failure (transient errors are common)
+      // Generate video — Runway INTERNAL.BAD_OUTPUT errors are intermittent and
+      // often caused by stray text/watermarks in the input image. On retry we
+      // regenerate a FRESH image (a new image usually clears the bad-output flag),
+      // and back off to let transient Runway issues settle.
       console.log(`[worker]   Scene ${scene.scene_number}: generating video clip...`)
       let clipUrl
       try {
         clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
       } catch (clipErr) {
-        // Don't retry moderation rejections — they'll fail again. Retry only transient errors.
+        // Don't retry true content-moderation rejections — they'll fail again.
         if (clipErr.isModeration) throw clipErr
-        console.log(`[worker]   Scene ${scene.scene_number}: ⚠ first attempt failed (${clipErr.message}), waiting 15s then retrying...`)
+        console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying in 15s...`)
         await new Promise(r => setTimeout(r, 15000))
-        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
+        try {
+          imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
+          clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
+        } catch (clipErr2) {
+          if (clipErr2.isModeration) throw clipErr2
+          console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 2 failed (${clipErr2.message}), final retry with fresh image in 20s...`)
+          await new Promise(r => setTimeout(r, 20000))
+          imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
+          clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
+        }
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 

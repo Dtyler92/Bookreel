@@ -14,6 +14,7 @@ interface BookWithStatus {
   genre: string | null
   created_at: string
   trailerStatus: TrailerStatus | null
+  trailerVideoUrl?: string | null
   viewCount: number
   coverImageUrl?: string | null
 }
@@ -302,10 +303,12 @@ function BookCard({
   book,
   onChangeCover,
   onDelete,
+  onPlayVideo,
 }: {
   book: BookWithStatus
   onChangeCover: (book: BookWithStatus) => void
   onDelete: (book: BookWithStatus) => void
+  onPlayVideo: (book: BookWithStatus) => void
 }) {
   const [trailerStatus, setTrailerStatus] = useState<TrailerStatus | null>(book.trailerStatus)
   const [coverUrl, setCoverUrl] = useState<string | null | undefined>(book.coverImageUrl)
@@ -477,7 +480,15 @@ function BookCard({
             </div>
           )}
           {/* Dark scrim + play button on hover */}
-          <div style={{
+          <div
+            onClick={(e) => {
+              if (book.trailerVideoUrl) {
+                e.preventDefault()
+                e.stopPropagation()
+                onPlayVideo(book)
+              }
+            }}
+            style={{
             position: 'absolute',
             inset: 0,
             background: playHover ? 'rgba(13,13,11,0.35)' : 'rgba(13,13,11,0)',
@@ -485,6 +496,7 @@ function BookCard({
             alignItems: 'center',
             justifyContent: 'center',
             transition: 'background 200ms ease',
+            cursor: book.trailerVideoUrl ? 'pointer' : 'default',
           }}>
             <div style={{
               width: 48,
@@ -922,6 +934,7 @@ export function DashboardClient({
   const [credits, setCredits] = useState<number>(trailerCredits)
   const [deleteBook, setDeleteBook] = useState<BookWithStatus | null>(null)
   const [coverModalBook, setCoverModalBook] = useState<BookWithStatus | null>(null)
+  const [videoBook, setVideoBook] = useState<BookWithStatus | null>(null)
   const [showBuyCredits, setShowBuyCredits] = useState(false)
 
   const stats = [
@@ -1112,6 +1125,7 @@ export function DashboardClient({
                   book={book}
                   onChangeCover={(b) => setCoverModalBook(b)}
                   onDelete={(b) => setDeleteBook(b)}
+                  onPlayVideo={(b) => setVideoBook(b)}
                 />
               ))}
             </div>
@@ -1171,6 +1185,61 @@ export function DashboardClient({
       {/* Buy Credits Modal */}
       {showBuyCredits && (
         <BuyCreditsModal onClose={() => setShowBuyCredits(false)} />
+      )}
+
+      {/* Trailer Video Modal */}
+      {videoBook && videoBook.trailerVideoUrl && (
+        <div
+          onClick={() => setVideoBook(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(13,13,11,0.85)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', width: '100%' }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              marginBottom: '12px',
+            }}>
+              <h3 style={{
+                fontFamily: 'var(--font-playfair), serif', fontWeight: 700,
+                fontSize: '20px', color: '#FFFFFF', margin: 0,
+              }}>
+                {videoBook.title}
+              </h3>
+              <button
+                onClick={() => setVideoBook(null)}
+                style={{
+                  background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: '999px',
+                  width: 36, height: 36, color: '#FFFFFF', fontSize: '18px', cursor: 'pointer',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video
+              src={videoBook.trailerVideoUrl}
+              controls
+              autoPlay
+              style={{ width: '100%', borderRadius: '10px', background: '#000', maxHeight: '70vh' }}
+            />
+            <div style={{ marginTop: '12px', textAlign: 'center' }}>
+              <a
+                href={videoBook.trailerVideoUrl}
+                download
+                style={{
+                  fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px',
+                  color: 'rgba(255,255,255,0.7)', textDecoration: 'underline',
+                }}
+              >
+                Download trailer
+              </a>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
