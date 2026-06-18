@@ -11,8 +11,8 @@ interface CreditPack {
 }
 
 const PACKS: CreditPack[] = [
-  { pack: '1', credits: 1, price: '$9.99', perCredit: '$9.99 each' },
-  { pack: '3', credits: 3, price: '$24.99', perCredit: '$8.33 each', badge: 'Best value · save $5' },
+  { pack: '1', credits: 1, price: '$11.99', perCredit: '$11.99 each' },
+  { pack: '3', credits: 3, price: '$24.99', perCredit: '$8.33 each', badge: 'Best value · save $11' },
 ]
 
 export function BuyCreditsModal({ onClose }: { onClose: () => void }) {

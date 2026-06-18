@@ -50,6 +50,13 @@ process.env.OPENROUTER_API_KEY = OPENROUTER_API_KEY
 
 const POLL_INTERVAL_MS = 30_000
 
+// Kling quality tier — switch between 'pro' ($0.098/s, higher fidelity) and
+// 'standard' ($0.056/s, ~43% cheaper) via the KLING_TIER env var with no code edit.
+// Defaults to 'pro'. Used for both the API endpoint and cost logging.
+const KLING_TIER = (process.env.KLING_TIER || 'pro').toLowerCase() === 'standard' ? 'standard' : 'pro'
+const KLING_ENDPOINT = `https://queue.fal.run/fal-ai/kling-video/v2.1/${KLING_TIER}/image-to-video`
+const KLING_PER_SEC = KLING_TIER === 'standard' ? 0.056 : 0.098
+
 function isPlaceholder(v) {
   return !v || ['***', 'xxx', 'placeholder'].includes(v) || v.length < 10
 }
@@ -101,7 +108,7 @@ function softenForModeration(text) {
 
 console.log('[worker] App URL:', APP_URL)
 console.log('[worker] Anthropic key available:', !isPlaceholder(ANTHROPIC_API_KEY))
-console.log('[worker] Video engine: Kling 2.1 Pro via fal.ai')
+console.log(`[worker] Video engine: Kling 2.1 ${KLING_TIER.toUpperCase()} via fal.ai ($${KLING_PER_SEC}/s)`)
 
 // ── Supabase client ──────────────────────────────────────────────────────────
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
@@ -139,7 +146,7 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
 // exactly what each trailer costs so credit pricing ($9.99=1 credit) stays profitable.
 const PRICING = {
   flux_image_ultra: 0.06,   // flux-pro/v1.1-ultra — per image
-  kling_per_sec: 0.098,     // kling 2.1 pro i2v — per second (5s=$0.49, 10s=$0.98)
+  // Kling per-second price is tier-dependent — see KLING_PER_SEC (pro $0.098 / standard $0.056)
   tts_per_1k_char: 0.10,    // elevenlabs eleven-v3 — per 1000 chars
   music_bed: 0.015,         // stable-audio — approx (open model, compute-second)
   lipsync_per_sec: 0.05,    // sync-lipsync/v2 — $3/min of video
@@ -245,8 +252,8 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5
     : sceneDescription
   const safePromptText = softenForModeration(motionText)
 
-  // Submit to Kling queue
-  const submitRes = await fetch('https://queue.fal.run/fal-ai/kling-video/v2.1/pro/image-to-video', {
+  // Submit to Kling queue (tier + endpoint chosen at startup via KLING_TIER env)
+  const submitRes = await fetch(KLING_ENDPOINT, {
     method: 'POST',
     headers: {
       'Authorization': `Key ${FAL_API_KEY}`,
@@ -297,7 +304,7 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5
       const result = await resultRes.json()
       const videoUrl = result.video?.url || result.output?.[0] || null
       if (!videoUrl) throw new Error('Kling returned no video URL')
-      if (ledger) ledger.add(`video clip ${klingDuration}s (kling 2.1 pro)`, 'fal', PRICING.kling_per_sec * Number(klingDuration))
+      if (ledger) ledger.add(`video clip ${klingDuration}s (kling 2.1 ${KLING_TIER})`, 'fal', KLING_PER_SEC * Number(klingDuration))
       return videoUrl
     }
 

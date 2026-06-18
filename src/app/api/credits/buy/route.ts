@@ -6,12 +6,12 @@ import { cookies } from 'next/headers'
 // POST /api/credits/buy
 // Creates a one-time Stripe Checkout session for trailer credits.
 // Uniform pricing across all tiers (credits are transferable):
-//   pack '1'  →  1 credit  for $9.99
-//   pack '3'  →  3 credits for $24.99 (saves ~$5)
+//   pack '1'  →  1 credit  for $11.99
+//   pack '3'  →  3 credits for $24.99 (saves ~$11)
 
 // Credit packs — single source of truth. Prices in cents.
 const CREDIT_PACKS: Record<string, { credits: number; amount: number; label: string }> = {
-  '1': { credits: 1, amount: 999, label: '1 Trailer Credit' },
+  '1': { credits: 1, amount: 1199, label: '1 Trailer Credit' },
   '3': { credits: 3, amount: 2499, label: '3 Trailer Credits' },
 }
 

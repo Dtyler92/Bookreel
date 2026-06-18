@@ -23,7 +23,7 @@ const SYSTEM_PROMPT = `You are a book trailer screenplay writer. Analyze the boo
       "temperament": "string — personality traits, emotional tendencies, how they behave under pressure, speech patterns, mannerisms"
     }
   ],
-  "scenes": [{"scene_number": 1, "title": "string", "description": "string", "screenplay_text": "string", "duration_seconds": 10}],
+  "scenes": [{"scene_number": 1, "title": "string", "description": "string", "screenplay_text": "string", "duration_seconds": 10, "characters_present": ["exact character name(s) visible on screen in this shot, or [] if none"]}],
   "items": [{"name": "string", "description": "string"}],
   "voiceover": "string",
   "tone": "string",
@@ -35,10 +35,13 @@ Rules:
 - 2-4 key items/objects max
 - Keep descriptions book-accurate
 - No explicit sexual content
+- CRITICAL — ONLY include a character or item if it actually APPEARS ON SCREEN in at least one scene. We generate a portrait image for every character and item, so listing one that never shows up in a scene wastes generation and confuses the author. Before finalizing: for each character, confirm their exact name appears in at least one scene's "characters_present". For each item, confirm it is visibly featured in at least one scene's "description". Drop any character or item that isn't actually depicted in a scene — even if they're important to the plot.
+- Every name in a scene's "characters_present" MUST exactly match a name in the "characters" array (and vice-versa: every character must appear in at least one scene).
 - Return ONLY the JSON object, nothing else
 
 Scene field guidance (IMPORTANT for video quality):
 - "description": what the shot LOOKS like — setting, characters present, lighting, mood, composition. A single vivid cinematic frame. This drives the still image.
+- "characters_present": the EXACT names of characters visibly on screen in this shot (must match the characters array). Use [] for scenes with no people (landscapes, objects, atmosphere). This is how we know which characters are actually in the trailer.
 - "screenplay_text": what HAPPENS in the shot. This drives the video animation. CRITICAL — each clip is a FIXED, SHORT length and the motion MUST realistically complete inside that window, or the trailer feels rushed and ignores the script:
     • Specify exactly ONE camera movement (e.g. "slow push-in", "tracking shot", "tilt up", "dolly back", "handheld orbit") AND exactly ONE subject action (e.g. "she turns sharply toward the door", "fog rolls across the floor", "his hand tightens on the blade").
     • Pace the action to the clip length. For a ~5-second clip: one quick, simple gesture or a slow drift — nothing that needs steps in sequence. For a ~10-second clip: one slow, continuous, deliberate beat — a gradual push-in as a single expression changes, fog slowly filling a room. NEVER chain multiple actions ("he stands, walks to the window, then turns") — that cannot fit and the model will speed it up unnaturally. ONE beat per clip.
@@ -440,6 +443,50 @@ export async function POST(request: Request) {
         { error: 'Database error saving book', detail: String(dbErr) },
         { status: 500 }
       )
+    }
+
+    // ── Step 5b: Filter to ON-SCREEN entities only ────────────────────────────
+    // We generate (and pay for) a portrait for every character and item, so we must
+    // only keep ones that actually appear in a trailer scene. The LLM is instructed
+    // to tag each scene with characters_present, but we enforce it deterministically
+    // here as a safety net using both the explicit tags and a name-in-description scan.
+    {
+      const scenesArr = Array.isArray(trailerData.scenes) ? trailerData.scenes : []
+      // Build a lowercase haystack of everything visible across all scenes.
+      const sceneHaystack = scenesArr
+        .map((s: any) => `${s.description || ''} ${(Array.isArray(s.characters_present) ? s.characters_present.join(' ') : '')}`)
+        .join(' \n ')
+        .toLowerCase()
+
+      const appearsOnScreen = (name: string): boolean => {
+        if (!name) return false
+        const n = name.trim().toLowerCase()
+        if (!n) return false
+        // Explicit tag match (exact name in any characters_present array).
+        const tagged = scenesArr.some((s: any) =>
+          Array.isArray(s.characters_present) &&
+          s.characters_present.some((cp: string) => (cp || '').trim().toLowerCase() === n)
+        )
+        if (tagged) return true
+        // Fallback: whole-word name match anywhere in the scene text (handles items and
+        // characters the model mentioned in the description but didn't tag). Use the
+        // longest name token too, so "Count Dracula" still matches "Dracula".
+        const tokens = [n, ...n.split(/\s+/).filter(t => t.length >= 4)]
+        return tokens.some(t => new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(sceneHaystack))
+      }
+
+      if (Array.isArray(trailerData.characters)) {
+        const before = trailerData.characters.length
+        trailerData.characters = trailerData.characters.filter((c: any) => appearsOnScreen(c.name))
+        const dropped = before - trailerData.characters.length
+        if (dropped > 0) console.log(`[upload] Filtered out ${dropped} character(s) not present in any scene`)
+      }
+      if (Array.isArray(trailerData.items)) {
+        const before = trailerData.items.length
+        trailerData.items = trailerData.items.filter((it: any) => appearsOnScreen(it.name))
+        const dropped = before - trailerData.items.length
+        if (dropped > 0) console.log(`[upload] Filtered out ${dropped} item(s) not present in any scene`)
+      }
     }
 
     // ── Step 6: Save characters ───────────────────────────────────────────────
