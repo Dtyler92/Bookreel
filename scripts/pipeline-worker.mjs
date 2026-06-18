@@ -322,7 +322,7 @@ function buildTitleCard(tmpDir, width, height, fps, title, authorName) {
   return cardPath
 }
 
-async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAudioPath = null, musicAudioPath = null) {
+async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAudioPath = null, musicAudioPath = null, characterLines = []) {
   const tmpDir = `/tmp/bookreel-${bookId}`
   if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
 
@@ -373,7 +373,101 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
   const concatInputs = allInputs.map((_, i) => `[v${i}]`).join('')
   const filterComplex = `${filterParts};${concatInputs}concat=n=${allInputs.length}:v=1:a=0[out]`
 
-  if (voiceoverAudioPath && musicAudioPath) {
+  // ── Compute character-line timestamps ──────────────────────────────────────
+  // Each line is tied to a clip index. Its start time = cumulative duration of all
+  // prior clips. We probe real clip durations (clips are 5s or 10s, plus lip-sync
+  // can nudge length) so the spoken line lands exactly when that character is on screen.
+  const usableLines = []
+  if (Array.isArray(characterLines) && characterLines.length > 0) {
+    const clipDurations = clipPaths.map(p => {
+      try {
+        return parseFloat(execSync(
+          `ffprobe -v error -show_entries format=duration -of csv=p=0 ${p}`
+        ).toString().trim()) || 0
+      } catch { return 0 }
+    })
+    const clipStart = []
+    let acc = 0
+    for (let i = 0; i < clipDurations.length; i++) { clipStart[i] = acc; acc += clipDurations[i] }
+
+    for (const ln of characterLines) {
+      if (ln.clipIndex == null || ln.clipIndex < 0 || ln.clipIndex >= clipPaths.length) continue
+      if (!ln.path || !existsSync(ln.path)) continue
+      let lineDur = 2.5
+      try {
+        lineDur = parseFloat(execSync(
+          `ffprobe -v error -show_entries format=duration -of csv=p=0 ${ln.path}`
+        ).toString().trim()) || 2.5
+      } catch {}
+      // Small lead-in so the line lands after the shot settles (clamped to clip).
+      const lead = Math.min(0.4, Math.max(0, (clipDurations[ln.clipIndex] - lineDur) / 2))
+      const start = clipStart[ln.clipIndex] + lead
+      usableLines.push({ path: ln.path, start, end: start + lineDur })
+    }
+  }
+
+  // ── Advanced mix: narrator + music bed that DUCKS under each character line ──
+  // Only when we actually have lines AND a bed to duck. Everything else falls
+  // through to the original, proven 4-branch logic below (no behavior change).
+  if (usableLines.length > 0 && (voiceoverAudioPath || musicAudioPath)) {
+    const bedInputs = []
+    if (voiceoverAudioPath) bedInputs.push({ path: voiceoverAudioPath, kind: 'vo' })
+    if (musicAudioPath) bedInputs.push({ path: musicAudioPath, kind: 'music' })
+
+    // ffmpeg input indices: clips/endcard first, then bed inputs, then line inputs.
+    const lineInputArgs = usableLines.map(l => `-i ${l.path}`).join(' ')
+    const bedInputArgs = bedInputs.map(b =>
+      b.kind === 'music' ? `-stream_loop -1 -i ${b.path}` : `-i ${b.path}`
+    ).join(' ')
+
+    let idx = allInputs.length
+    const bedIdx = {}
+    for (const b of bedInputs) { bedIdx[b.kind] = idx++ }
+    const lineStartIdx = idx
+
+    // Duck window expression: OR of every line's [start,end] interval.
+    const duckExpr = usableLines
+      .map(l => `between(t,${l.start.toFixed(2)},${l.end.toFixed(2)})`)
+      .join('+')
+
+    const parts = []
+    if (bedIdx.vo != null) parts.push(`[${bedIdx.vo}:a]volume=1.0[vo]`)
+    if (bedIdx.music != null) parts.push(`[${bedIdx.music}:a]volume=0.22,afade=t=out:st=0:d=2[mus]`)
+
+    // Combine bed sources into one stream (normalize=0 so volumes aren't auto-scaled down).
+    let bedLabel
+    if (bedIdx.vo != null && bedIdx.music != null) {
+      parts.push(`[vo][mus]amix=inputs=2:duration=first:normalize=0:dropout_transition=0[bedmix]`)
+      bedLabel = 'bedmix'
+    } else {
+      bedLabel = bedIdx.vo != null ? 'vo' : 'mus'
+    }
+
+    // Duck the bed to 35% during any line window, full elsewhere.
+    parts.push(`[${bedLabel}]volume=0.35:enable='${duckExpr}'[bedducked]`)
+
+    // Delay each line to its timestamp; punch slightly hot so it cuts through.
+    const lineLabels = []
+    usableLines.forEach((l, i) => {
+      const d = Math.round(l.start * 1000)
+      parts.push(`[${lineStartIdx + i}:a]adelay=${d}|${d},volume=1.4[ln${i}]`)
+      lineLabels.push(`[ln${i}]`)
+    })
+
+    // Final: bed + all lines. normalize=0 keeps everyone at intended loudness.
+    const finalInputs = `[bedducked]${lineLabels.join('')}`
+    parts.push(`${finalInputs}amix=inputs=${1 + usableLines.length}:duration=first:normalize=0:dropout_transition=0[aout]`)
+
+    const audioFilter = parts.join(';')
+    execSync(
+      `ffmpeg ${inputArgs} ${bedInputArgs} ${lineInputArgs} ` +
+      `-filter_complex "${filterComplex};${audioFilter}" ` +
+      `-map "[out]" -map "[aout]" ` +
+      `-c:v libx264 -c:a aac -b:a 192k -pix_fmt yuv420p ` +
+      `-shortest -movflags +faststart ${outputPath} -y 2>&1`
+    )
+    console.log(`[worker]   FFmpeg stitch + ${usableLines.length} character line(s) + ducked bed complete:`, outputPath)
+  } else if (voiceoverAudioPath && musicAudioPath) {
     // Mix BOTH: voiceover on top, music ducked underneath and looped/trimmed to
     // the video length. voIdx = first audio input, musicIdx = second.
     const voIdx = allInputs.length
@@ -581,6 +675,143 @@ async function generateMusicBed(genre, durationSeconds, tmpDir) {
   return musicPath
 }
 
+// ── Character spoken lines (punchy dialogue + lip-sync) ───────────────────────
+// A trailer is narrator-driven, but ONE or TWO punchy character lines at key
+// moments make people stop scrolling. We pick them at pipeline time (no schema
+// change), voice each character distinctly, then lip-sync the line onto its clip.
+
+// ElevenLabs voice pool (via fal.ai). Narrator uses Daniel; characters get a
+// contrasting voice so the spoken line clearly reads as a *character*, not the VO.
+const CHARACTER_VOICES = {
+  deep_male:    'pNInz6obpgDQGcFmaJgB', // Adam — strong, grounded (distinct from narrator Daniel)
+  male:         'TxGEqnHWrfWFTfGW9XjX', // Josh — younger male
+  old_male:     'VR6AewLTigWG4xSOukaG', // Arnold — gravelly, older
+  female:       '21m00Tcm4TlvDq8ikWAM', // Rachel — clear female
+  young_female: 'EXAVITQu4vr4xnSDxMaL', // Bella — younger female
+  default:      'pNInz6obpgDQGcFmaJgB',
+}
+
+function voiceIdFor(voiceKey) {
+  return CHARACTER_VOICES[(voiceKey || '').toLowerCase().trim()] || CHARACTER_VOICES.default
+}
+
+// Ask the LLM to pick at most `maxLines` short, iconic character lines, each tied
+// to a scene where that character is visibly present (face on screen) so lip-sync
+// has a face to work with. Returns [] on any problem — lines are a bonus, never required.
+async function selectCharacterLines(bookTitle, genre, characters, scenes, maxLines) {
+  if (!characters || characters.length === 0 || maxLines < 1) return []
+
+  const charBlock = characters.map(c =>
+    `- ${c.name} (${c.role || 'character'}): ${(c.description || '').slice(0, 200)} | appearance: ${(c.appearance_notes || '').slice(0, 160)}`
+  ).join('\n')
+  const sceneBlock = scenes.map(s =>
+    `Scene ${s.scene_number} — "${s.title || ''}": ${(s.description || '').slice(0, 220)}`
+  ).join('\n')
+
+  const systemPrompt = `You are a trailer editor choosing the ONE or TWO most iconic spoken lines for a cinematic book trailer for "${bookTitle}" (genre: ${genre || 'drama'}). The trailer is mostly narrator + music; a character speaking is a rare punch. Rules:
+- Return AT MOST ${maxLines} line(s). Fewer is better than forcing a weak one. It is OK to return an empty array.
+- Each line must be SHORT (3-9 words), punchy, quotable, in-character, and faithful to the book's voice.
+- Tie each line to a scene where that character is clearly PRESENT and likely facing camera (needs a visible face for lip-sync). Prefer close/medium shots over wide establishing shots.
+- Spread lines across different scenes; never two lines in the same scene.
+- No explicit content. No narration-style lines (those belong to the narrator).
+- For "voice", classify the character's likely voice as one of: deep_male, male, old_male, female, young_female.
+Return ONLY a JSON array, no markdown:
+[{"scene_number": <int>, "character_name": "<string>", "line": "<string>", "voice": "<one of the categories>"}]`
+
+  const userContent = `CHARACTERS:\n${charBlock}\n\nSCENES (these become the trailer clips):\n${sceneBlock}\n\nPick the best ${maxLines} character line(s).`
+
+  let raw = ''
+  try {
+    if (!isPlaceholder(ANTHROPIC_API_KEY)) {
+      const { default: Anthropic } = await import('@anthropic-ai/sdk')
+      const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY })
+      const message = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 512,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }]
+      })
+      raw = message.content[0].type === 'text' ? message.content[0].text : ''
+    } else {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'anthropic/claude-sonnet-4-5',
+          messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }]
+        })
+      })
+      const data = await res.json()
+      raw = data.choices?.[0]?.message?.content || ''
+    }
+  } catch (e) {
+    console.log('[worker]   Character-line selection LLM call failed (non-fatal):', e.message)
+    return []
+  }
+
+  // Strip any code fences and parse the JSON array.
+  try {
+    const cleaned = raw.replace(/```json?/gi, '').replace(/```/g, '').trim()
+    const start = cleaned.indexOf('[')
+    const end = cleaned.lastIndexOf(']')
+    if (start === -1 || end === -1) return []
+    const arr = JSON.parse(cleaned.slice(start, end + 1))
+    if (!Array.isArray(arr)) return []
+    // Validate + clamp.
+    const valid = arr
+      .filter(l => l && typeof l.scene_number === 'number' && typeof l.line === 'string' && l.line.trim().length > 0)
+      .slice(0, maxLines)
+    return valid
+  } catch (e) {
+    console.log('[worker]   Character-line JSON parse failed (non-fatal):', e.message)
+    return []
+  }
+}
+
+// TTS a single character line. Returns { url, path } — url is the fal-hosted public
+// MP3 (fed straight to the lip-sync model), path is the local copy for the final mix.
+async function generateCharacterLineAudio(line, voiceKey, tmpDir, sceneNumber) {
+  const res = await fetch('https://fal.run/fal-ai/elevenlabs/tts/eleven-v3', {
+    method: 'POST',
+    headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text: line,
+      voice_id: voiceIdFor(voiceKey),
+      output_format: 'mp3_44100_128'
+    })
+  })
+  if (!res.ok) throw new Error(`Line TTS failed ${res.status}: ${(await res.text()).slice(0, 160)}`)
+  const data = await res.json()
+  const audioUrl = data.audio?.url || data.url || null
+  if (!audioUrl) throw new Error('Line TTS returned no audio URL')
+
+  const audioRes = await fetch(audioUrl)
+  if (!audioRes.ok) throw new Error(`Line audio download failed: ${audioRes.status}`)
+  const buf = Buffer.from(await audioRes.arrayBuffer())
+  const path = join(tmpDir, `line-scene-${sceneNumber}.mp3`)
+  writeFileSync(path, buf)
+  return { url: audioUrl, path }
+}
+
+// Lip-sync a clip to a line of audio via fal-ai/sync-lipsync/v2. Returns a new
+// public video URL (stitch downloads it like any other clip). Throws on failure
+// so the caller can fall back to the original clip.
+async function lipSyncClip(videoUrl, audioUrl, sceneNumber) {
+  console.log(`[worker]   Scene ${sceneNumber}: lip-syncing character line...`)
+  const res = await fetch('https://fal.run/fal-ai/sync-lipsync/v2', {
+    method: 'POST',
+    headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
+    // sync_mode: 'silence' — the spoken line is shorter than the clip; keep the FULL
+    // clip length and leave the mouth still after the line ends (speaks once, then quiet).
+    body: JSON.stringify({ video_url: videoUrl, audio_url: audioUrl, sync_mode: 'silence' })
+  })
+  if (!res.ok) throw new Error(`Lip-sync failed ${res.status}: ${(await res.text()).slice(0, 160)}`)
+  const data = await res.json()
+  const url = data.video?.url || data.url || null
+  if (!url) throw new Error('Lip-sync returned no video URL')
+  return url
+}
+
 // ── Suggested policy-safe rewrite (when Runway rejects a scene) ────────────────
 async function generateSafeRewrite(sceneDescription, rejectionReason) {
   const systemPrompt = `You are a film editor helping adapt a book trailer scene that was rejected by an automated content-moderation filter. Rewrite the scene description so it conveys the same dramatic mood and story beat WITHOUT any content that could trigger moderation (no nudity, no explicit sexual content, no graphic gore/violence). Keep it cinematic, suggestive rather than explicit, and suitable for a general-audience book trailer. Return ONLY the rewritten scene description, 1-3 sentences, no preamble.`
@@ -682,10 +913,38 @@ async function runPipeline(job) {
   const sceneLength = tier === 'pro' ? 10 : 5
   const scenesToGenerate = scenes.slice(0, maxScenes)
 
+  // Character punch-lines — pick 1 (Author) or 2 (Pro) iconic spoken lines, voiced
+  // per-character and lip-synced onto their scene. Fully non-fatal: any failure just
+  // ships the trailer narrator-only. Keyed by scene_number so the loop knows which
+  // clip to lip-sync. Only scenes in scenesToGenerate are eligible.
+  const tmpDirLines = `/tmp/bookreel-${bookId}`
+  if (!existsSync(tmpDirLines)) mkdirSync(tmpDirLines, { recursive: true })
+  const maxLines = tier === 'pro' ? 2 : 1
+  const lineBySceneNumber = new Map()
+  try {
+    const { data: characters } = await supabase.from('characters').select('*').eq('book_id', bookId)
+    const eligibleSceneNumbers = new Set(scenesToGenerate.map(s => s.scene_number))
+    const selected = await selectCharacterLines(book.title, book.genre, characters || [], scenesToGenerate, maxLines)
+    for (const ln of selected) {
+      if (!eligibleSceneNumbers.has(ln.scene_number)) continue
+      if (lineBySceneNumber.has(ln.scene_number)) continue // one line per scene
+      lineBySceneNumber.set(ln.scene_number, ln)
+    }
+    if (lineBySceneNumber.size > 0) {
+      console.log(`[worker]   Selected ${lineBySceneNumber.size} character line(s): ` +
+        [...lineBySceneNumber.values()].map(l => `S${l.scene_number} ${l.character_name}: "${l.line}"`).join(' | '))
+    } else {
+      console.log('[worker]   No character lines selected (narrator-only trailer)')
+    }
+  } catch (e) {
+    console.error('[worker]   Character-line selection failed (non-fatal, narrator-only):', e.message)
+  }
+
   console.log(`[worker]   Generating ${scenesToGenerate.length} clips (max ${maxScenes} for ${tier})...`)
 
   const clipUrls = []
   const rejectedScenes = []
+  const characterLineTracks = []  // { clipIndex, path } → passed to stitch for timed mixing
   let firstSceneImageUrl = null  // auto-cover if book has none
 
   for (const scene of scenesToGenerate) {
@@ -717,6 +976,24 @@ async function runPipeline(job) {
         clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text)
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
+
+      // Character punch-line: if this scene was chosen, voice the line and lip-sync
+      // it onto the clip. Non-fatal — on any failure we keep the original clip and
+      // simply skip this line, so the trailer always ships.
+      const chosenLine = lineBySceneNumber.get(scene.scene_number)
+      if (chosenLine) {
+        try {
+          const { url: lineAudioUrl, path: lineAudioPath } =
+            await generateCharacterLineAudio(chosenLine.line, chosenLine.voice, tmpDirLines, scene.scene_number)
+          const syncedUrl = await lipSyncClip(clipUrl, lineAudioUrl, scene.scene_number)
+          clipUrl = syncedUrl
+          // clipUrls.length is this clip's index (we push next).
+          characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
+          console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line lip-synced`)
+        } catch (lineErr) {
+          console.error(`[worker]   Scene ${scene.scene_number}: character line failed (non-fatal, keeping original clip):`, lineErr.message)
+        }
+      }
 
       clipUrls.push(clipUrl)
 
@@ -782,7 +1059,7 @@ async function runPipeline(job) {
 
   // Stitch and upload
   console.log('[worker]   Stitching clips...')
-  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, voiceoverAudioPath, musicAudioPath)
+  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, voiceoverAudioPath, musicAudioPath, characterLineTracks)
   console.log('[worker]   ✅ Final video:', finalVideoUrl.substring(0, 80))
 
   // Auto-save cover: use first scene image if book has no cover set
