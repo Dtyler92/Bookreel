@@ -239,10 +239,13 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5
     
     if (status.status === 'SUCCEEDED') return status.output[0]
     if (status.status === 'FAILED') {
-      const failureMsg = status.failure || JSON.stringify(status).substring(0, 200)
-      const err = new Error(`Runway generation failed: ${failureMsg}`)
+      // Capture the FULL failure detail — Runway puts the real reason in failure / failureCode
+      const failureMsg = status.failure || 'unknown'
+      const failureCode = status.failureCode || status.failure_code || 'none'
+      console.error(`[worker]   ❌ Runway FAILED — code=${failureCode} failure="${failureMsg}" full=${JSON.stringify(status).substring(0, 400)}`)
+      const err = new Error(`Runway generation failed [${failureCode}]: ${failureMsg}`)
       // Flag content-moderation failures distinctly so the pipeline can surface them to the author
-      if (/content moderation|moderation|safety|policy|inappropriate|nsfw/i.test(failureMsg)) {
+      if (/content moderation|moderation|safety|policy|inappropriate|nsfw|SAFETY/i.test(`${failureMsg} ${failureCode}`)) {
         err.isModeration = true
       }
       throw err
@@ -514,7 +517,8 @@ async function runPipeline(job) {
       } catch (clipErr) {
         // Don't retry moderation rejections — they'll fail again. Retry only transient errors.
         if (clipErr.isModeration) throw clipErr
-        console.log(`[worker]   Scene ${scene.scene_number}: ⚠ first attempt failed (${clipErr.message}), retrying once...`)
+        console.log(`[worker]   Scene ${scene.scene_number}: ⚠ first attempt failed (${clipErr.message}), waiting 15s then retrying...`)
+        await new Promise(r => setTimeout(r, 15000))
         clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
