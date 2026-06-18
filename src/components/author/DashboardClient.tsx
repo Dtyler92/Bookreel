@@ -148,6 +148,7 @@ function CoverModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          bookId,          // pass bookId so the API saves directly to DB
           title: bookTitle,
           genre: bookGenre ?? 'Fiction',
           description: bookDescription ?? '',
@@ -166,10 +167,38 @@ function CoverModal({
     }
   }
 
-  const handleSave = () => {
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
     if (!coverPreview) return
-    onCoverUpdated(bookId, coverPreview)
-    onClose()
+    setSaving(true)
+    setError(null)
+    try {
+      let persistedUrl = coverPreview
+
+      // If it's a local file (data URL), upload it to Supabase via the API
+      if (coverPreview.startsWith('data:')) {
+        const blob = await (await fetch(coverPreview)).blob()
+        const formData = new FormData()
+        formData.append('file', blob, 'cover.jpg')
+        formData.append('bookId', bookId)
+        const res = await fetch('/api/books/upload-cover', { method: 'POST', body: formData })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}))
+          throw new Error(d.error ?? 'Failed to upload cover')
+        }
+        const data = await res.json()
+        persistedUrl = data.coverUrl ?? data.url ?? persistedUrl
+      }
+      // If it's already a Supabase URL (from generate), generate-cover already saved it to DB
+
+      onCoverUpdated(bookId, persistedUrl)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save cover')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -276,20 +305,20 @@ function CoverModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={!coverPreview}
+            disabled={!coverPreview || saving}
             style={{
-              background: coverPreview ? '#C8402F' : '#E8E2D5',
+              background: (coverPreview && !saving) ? '#C8402F' : '#E8E2D5',
               border: 'none',
               borderRadius: '8px',
               padding: '10px 20px',
               fontFamily: 'var(--font-inter), sans-serif',
               fontSize: '14px',
               fontWeight: 600,
-              color: coverPreview ? '#FFFFFF' : '#8A8278',
-              cursor: coverPreview ? 'pointer' : 'not-allowed',
+              color: (coverPreview && !saving) ? '#FFFFFF' : '#8A8278',
+              cursor: (coverPreview && !saving) ? 'pointer' : 'not-allowed',
             }}
           >
-            Use this cover
+            {saving ? 'Saving…' : 'Use this cover'}
           </button>
         </div>
       </div>

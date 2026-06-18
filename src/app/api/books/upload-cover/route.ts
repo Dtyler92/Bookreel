@@ -81,13 +81,13 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    // Upload image to Supabase Storage (books bucket)
+    // Upload image to Supabase Storage (media bucket — public)
     const fileExt = mimeType === 'image/webp' ? 'webp' : mimeType === 'image/png' ? 'png' : 'jpg'
-    const storagePath = `${authorId}/covers/${bookId}-${Date.now()}.${fileExt}`
+    const storagePath = `covers/${bookId}-${Date.now()}.${fileExt}`
     const fileBuffer = new Uint8Array(await imageFile.arrayBuffer())
 
     const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('books')
+      .from('media')
       .upload(storagePath, fileBuffer, {
         contentType: mimeType,
         upsert: true,
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     // Get public URL
     const {
       data: { publicUrl },
-    } = supabase.storage.from('books').getPublicUrl(uploadData.path)
+    } = supabase.storage.from('media').getPublicUrl(uploadData.path)
 
     // Update books table with cover_image_url
     const { error: updateError } = await supabase
