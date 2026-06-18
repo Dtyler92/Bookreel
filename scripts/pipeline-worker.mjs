@@ -728,8 +728,15 @@ function musicMoodForGenre(genre) {
 async function generateMusicBed(genre, durationSeconds, tmpDir, ledger = null) {
   console.log(`[worker]   Generating music bed (${durationSeconds}s, genre=${genre || 'n/a'})...`)
   const prompt = musicMoodForGenre(genre)
-  // Stable Audio caps at ~47s; clamp and we loop it to fill if the trailer is longer.
-  const reqSeconds = Math.min(Math.max(Math.ceil(durationSeconds), 10), 47)
+  // Stable Audio bakes a ~4s outro fade into the END of whatever length it generates.
+  // If we request exactly the trailer length, that fade lands right where we want the
+  // music to SWELL (under the end card), so the trailer dies in silence. Fix: request
+  // EXTRA seconds (so the baked fade falls past the trailer), then strip the faded tail
+  // below. Net result: the audio we actually mix is all full-energy and OUR code owns
+  // every fade. Stable Audio caps at ~47s; we loop the clean segment to fill if longer.
+  const OUTRO_FADE = 4   // seconds of baked outro fade stable-audio adds at the end
+  const TAIL_PAD = 8     // extra seconds requested so that fade lands outside our usable region
+  const reqSeconds = Math.min(Math.max(Math.ceil(durationSeconds) + TAIL_PAD, 10), 47)
 
   const res = await fetch('https://fal.run/fal-ai/stable-audio', {
     method: 'POST',
@@ -757,8 +764,22 @@ async function generateMusicBed(genre, durationSeconds, tmpDir, ledger = null) {
   if (!musicRes.ok) throw new Error(`Music download failed: ${musicRes.status}`)
   const musicBuffer = Buffer.from(await musicRes.arrayBuffer())
 
+  const rawPath = join(tmpDir, 'music-raw.mp3')
+  writeFileSync(rawPath, musicBuffer)
+
+  // Strip the baked-in outro fade so the looped/used bed is all full-energy. We keep
+  // (actual duration − OUTRO_FADE) seconds. The mix stage then applies its own swell
+  // and a clean 3s button fade at the real trailer end.
   const musicPath = join(tmpDir, 'music.mp3')
-  writeFileSync(musicPath, musicBuffer)
+  try {
+    const rawDur = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${rawPath}`).toString().trim()) || reqSeconds
+    const keep = Math.max(8, rawDur - OUTRO_FADE)
+    execSync(`ffmpeg -i ${rawPath} -t ${keep.toFixed(2)} -c copy -y ${musicPath} 2>&1`)
+    console.log(`[worker]   Music bed trimmed: ${rawDur.toFixed(1)}s raw → ${keep.toFixed(1)}s full-energy (stripped baked outro fade)`)
+  } catch (e) {
+    console.log('[worker]   Music tail-trim failed (non-fatal, using raw bed):', e.message)
+    writeFileSync(musicPath, musicBuffer)
+  }
   console.log(`[worker]   Music bed saved: ${musicBuffer.length} bytes`)
   if (ledger) ledger.add('music bed (stable-audio)', 'fal', PRICING.music_bed)
   return musicPath
