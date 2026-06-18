@@ -568,12 +568,19 @@ async function runPipeline(job) {
 
   const clipUrls = []
   const rejectedScenes = []
+  let firstSceneImageUrl = null  // auto-cover if book has none
+
   for (const scene of scenesToGenerate) {
     try {
       console.log(`[worker]   Scene ${scene.scene_number}: generating image...`)
 
       // Generate image and upload to Supabase (so URL doesn't expire)
       let imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
+
+      // Save first scene image as book cover if no cover is set
+      if (scene.scene_number === scenesToGenerate[0].scene_number && !book.cover_image_url) {
+        firstSceneImageUrl = imageUrl
+      }
 
       // Generate video. Runway failures come in two flavors:
       //  - DETERMINISTIC (isModeration / isBadOutput / isRateLimit): a retry with a
@@ -659,6 +666,16 @@ async function runPipeline(job) {
   console.log('[worker]   Stitching clips...')
   const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, voiceoverAudioPath)
   console.log('[worker]   ✅ Final video:', finalVideoUrl.substring(0, 80))
+
+  // Auto-save cover: use first scene image if book has no cover set
+  if (firstSceneImageUrl && !book.cover_image_url) {
+    try {
+      await supabase.from('books').update({ cover_image_url: firstSceneImageUrl }).eq('id', bookId)
+      console.log('[worker]   📸 Auto-cover saved from scene 1')
+    } catch (e) {
+      console.log('[worker]   Auto-cover save failed (non-fatal):', e.message)
+    }
+  }
 
   await updateTrailerStatus(bookId, 'complete', { videoUrl: finalVideoUrl })
   console.log(`[worker] ✅ Pipeline complete: bookId=${bookId}`)
