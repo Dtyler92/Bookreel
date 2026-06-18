@@ -209,8 +209,12 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5
   })
 
   if (!createRes.ok) {
-    const err = await createRes.text()
-    throw new Error(`Runway create failed ${createRes.status}: ${err.substring(0, 200)}`)
+    const errText = await createRes.text()
+    const err = new Error(`Runway create failed ${createRes.status}: ${errText.substring(0, 200)}`)
+    // 429 = daily task limit reached. Retrying is pointless and burns nothing but time —
+    // flag it so the scene loop stops immediately instead of hammering the same wall.
+    if (createRes.status === 429) err.isRateLimit = true
+    throw err
   }
 
   const task = await createRes.json()
@@ -247,6 +251,14 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5
       // Flag content-moderation failures distinctly so the pipeline can surface them to the author
       if (/content moderation|moderation|safety|policy|inappropriate|nsfw|SAFETY/i.test(`${failureMsg} ${failureCode}`)) {
         err.isModeration = true
+      }
+      // INTERNAL.BAD_OUTPUT and other INTERNAL.* codes are DETERMINISTIC for a given
+      // input — Runway generated frames then rejected the output (almost always its
+      // post-generation safety filter on dark/violent imagery). A fresh image of the
+      // same scene fails identically, so retrying 3x just burns the daily task cap.
+      // Flag it as non-retryable; the scene loop will skip after a single attempt.
+      if (/^INTERNAL\./i.test(failureCode)) {
+        err.isBadOutput = true
       }
       throw err
     }
@@ -509,29 +521,21 @@ async function runPipeline(job) {
       // Generate image and upload to Supabase (so URL doesn't expire)
       let imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
 
-      // Generate video — Runway INTERNAL.BAD_OUTPUT errors are intermittent and
-      // often caused by stray text/watermarks in the input image. On retry we
-      // regenerate a FRESH image (a new image usually clears the bad-output flag),
-      // and back off to let transient Runway issues settle.
+      // Generate video. Runway failures come in two flavors:
+      //  - DETERMINISTIC (isModeration / isBadOutput / isRateLimit): a retry with a
+      //    fresh image fails identically and just burns the daily task cap. Bail at once.
+      //  - TRANSIENT (network blip, timeout): worth one fresh-image retry.
       console.log(`[worker]   Scene ${scene.scene_number}: generating video clip...`)
       let clipUrl
       try {
         clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
       } catch (clipErr) {
-        // Don't retry true content-moderation rejections — they'll fail again.
-        if (clipErr.isModeration) throw clipErr
-        console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying in 15s...`)
+        // Non-retryable: moderation, internal bad-output, or daily-cap. Don't waste generations.
+        if (clipErr.isModeration || clipErr.isBadOutput || clipErr.isRateLimit) throw clipErr
+        console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying once in 15s...`)
         await new Promise(r => setTimeout(r, 15000))
-        try {
-          imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
-          clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
-        } catch (clipErr2) {
-          if (clipErr2.isModeration) throw clipErr2
-          console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 2 failed (${clipErr2.message}), final retry with fresh image in 20s...`)
-          await new Promise(r => setTimeout(r, 20000))
-          imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
-          clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
-        }
+        imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
+        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
@@ -545,11 +549,25 @@ async function runPipeline(job) {
         suggested_edit: null,
       }).eq('id', scene.id)
     } catch (sceneErr) {
+      // Daily-cap hit: every remaining scene will 429 too. Stop the loop NOW so we
+      // don't waste time (and so the trailer can still stitch whatever already succeeded).
+      if (sceneErr.isRateLimit) {
+        console.log(`[worker]   Scene ${scene.scene_number}: ⛔ Runway daily task limit reached — halting remaining scenes for this run.`)
+        await supabase.from('scenes').update({
+          moderation_status: 'pending',
+          moderation_reason: 'Trailer paused: the studio hit its daily render limit. This scene will resume automatically on the next run.',
+          last_moderation_at: new Date().toISOString(),
+        }).eq('id', scene.id)
+        break
+      }
+
       // Skip this scene rather than failing the entire trailer
       console.log(`[worker]   Scene ${scene.scene_number}: ❌ skipped (${sceneErr.message})`)
 
-      if (sceneErr.isModeration) {
-        // Build a friendly reason + an AI-suggested policy-safe rewrite for the author
+      if (sceneErr.isModeration || sceneErr.isBadOutput) {
+        // Both land in the author-review bucket: moderation = explicit policy block;
+        // bad-output = Runway's post-generation safety filter rejected the rendered
+        // frames (common on dark/violent imagery). Same fix path for the author: soften it.
         const friendlyReason = 'This scene was blocked by the studio\'s content-safety filter. It may contain imagery (violence, nudity, or explicit content) that can\'t be turned into video. Edit the scene below to soften it, or use our suggested version.'
         console.log(`[worker]   Scene ${scene.scene_number}: generating suggested safe rewrite...`)
         const suggestion = await generateSafeRewrite(scene.description, sceneErr.message)
