@@ -1084,13 +1084,23 @@ async function runPipeline(job) {
   // Narration beats — SPARSE per-scene narrator phrases tied to the scenes we're
   // actually rendering. Each beat is rendered to its own TTS file keyed by scene
   // number, then placed at that scene's timestamp during the mix. Non-fatal.
+  // IMPORTANT: a scene gets EITHER a character line OR a narration beat, never both —
+  // otherwise the narrator and the character talk over each other in the same clip.
+  // We exclude scenes that already have a character line before asking for beats.
   const narrationBySceneNumber = new Map()
   try {
-    const beats = await generateVoiceoverBeats(book.title, scenesToGenerate, book.genre || 'dramatic', ledger)
-    for (const b of beats) {
-      if (narrationBySceneNumber.has(b.scene_number)) continue
-      const path = await generateVoiceoverAudio(b.text, tmpDir, ledger, `beat-s${b.scene_number}`)
-      if (path) narrationBySceneNumber.set(b.scene_number, { text: b.text, path })
+    const lineSceneNumbers = new Set(lineBySceneNumber.keys())
+    const narrationEligibleScenes = scenesToGenerate.filter(s => !lineSceneNumbers.has(s.scene_number))
+    if (narrationEligibleScenes.length === 0) {
+      console.log('[worker]   No scenes free for narration (all have character lines) — skipping beats')
+    } else {
+      const beats = await generateVoiceoverBeats(book.title, narrationEligibleScenes, book.genre || 'dramatic', ledger)
+      for (const b of beats) {
+        if (narrationBySceneNumber.has(b.scene_number)) continue
+        if (lineSceneNumbers.has(b.scene_number)) continue // belt-and-suspenders: never share a scene with dialogue
+        const path = await generateVoiceoverAudio(b.text, tmpDir, ledger, `beat-s${b.scene_number}`)
+        if (path) narrationBySceneNumber.set(b.scene_number, { text: b.text, path })
+      }
     }
     if (narrationBySceneNumber.size > 0) {
       console.log(`[worker]   Narration beats: ` +
