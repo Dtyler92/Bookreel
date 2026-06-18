@@ -17,8 +17,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY
  *   PIPELINE_WORKER_SECRET  (must match what's set in Vercel)
  *   NEXT_PUBLIC_APP_URL     (e.g. https://bookreel-five.vercel.app)
- *   FAL_API_KEY
- *   RUNWAYML_API_KEY
+ *   FAL_API_KEY             (image gen via flux/dev + video via Kling 2.1)
  *   ANTHROPIC_API_KEY or OPENROUTER_API_KEY
  */
 
@@ -38,7 +37,6 @@ const SUPABASE_SERVICE_ROLE_KEY = getEnv('SUPABASE_SERVICE_ROLE_KEY')
 const PIPELINE_WORKER_SECRET = getEnv('PIPELINE_WORKER_SECRET')
 const APP_URL = getEnv('NEXT_PUBLIC_APP_URL') || 'https://bookreel-five.vercel.app'
 const FAL_API_KEY = getEnv('FAL_API_KEY')
-const RUNWAY_API_KEY = getEnv('RUNWAYML_API_KEY')
 const ANTHROPIC_API_KEY = getEnv('ANTHROPIC_API_KEY')
 const OPENROUTER_API_KEY = getEnv('OPENROUTER_API_KEY')
 
@@ -47,7 +45,6 @@ process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL
 process.env.SUPABASE_SERVICE_ROLE_KEY = SUPABASE_SERVICE_ROLE_KEY
 process.env.FAL_API_KEY = FAL_API_KEY
 process.env.FAL_KEY = FAL_API_KEY
-process.env.RUNWAYML_API_KEY = RUNWAY_API_KEY
 process.env.ANTHROPIC_API_KEY = ANTHROPIC_API_KEY
 process.env.OPENROUTER_API_KEY = OPENROUTER_API_KEY
 
@@ -63,10 +60,6 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 }
 if (isPlaceholder(PIPELINE_WORKER_SECRET)) {
   console.error('[worker] FATAL: PIPELINE_WORKER_SECRET not set — set it in .env.local AND Vercel env vars')
-  process.exit(1)
-}
-if (isPlaceholder(RUNWAY_API_KEY)) {
-  console.error('[worker] FATAL: RUNWAYML_API_KEY not set')
   process.exit(1)
 }
 if (isPlaceholder(FAL_API_KEY)) {
@@ -187,84 +180,83 @@ async function generateSceneImage(sceneDescription, genre) {
   return urlData.publicUrl
 }
 
-// ── Video generation (Runway) ─────────────────────────────────────────────────
+// ── Video generation (Kling 2.1 via fal.ai) ───────────────────────────────────
+// Replaced Runway gen4_turbo: Runway's post-generation safety filter consistently
+// rejected dark/Gothic/thriller content (INTERNAL.BAD_OUTPUT.CODE01). Kling 2.1
+// standard on fal.ai passes the same content cleanly, has no daily tier walls,
+// and costs ~$0.035/s (similar economics to Runway).
 async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5) {
-  const runwayDuration = durationSeconds >= 8 ? 10 : 5
+  const klingDuration = durationSeconds >= 8 ? '10' : '5'
   const safePromptText = softenForModeration(sceneDescription)
 
-  const createRes = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
+  // Submit to Kling queue
+  const submitRes = await fetch('https://queue.fal.run/fal-ai/kling-video/v2.1/standard/image-to-video', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${RUNWAY_API_KEY}`,
-      'Content-Type': 'application/json',
-      'X-Runway-Version': '2024-11-06'
+      'Authorization': `Key ${FAL_API_KEY}`,
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'gen4_turbo',
-      promptImage: imageUrl,
-      promptText: safePromptText,
-      duration: runwayDuration,
-      ratio: '1280:720'
+      prompt: safePromptText,
+      image_url: imageUrl,
+      duration: klingDuration,
+      aspect_ratio: '16:9',
+      negative_prompt: 'text, words, letters, watermark, nudity, explicit, low quality, blur, distortion',
+      cfg_scale: 0.5
     })
   })
 
-  if (!createRes.ok) {
-    const errText = await createRes.text()
-    const err = new Error(`Runway create failed ${createRes.status}: ${errText.substring(0, 200)}`)
-    // 429 = daily task limit reached. Retrying is pointless and burns nothing but time —
-    // flag it so the scene loop stops immediately instead of hammering the same wall.
-    if (createRes.status === 429) err.isRateLimit = true
+  if (!submitRes.ok) {
+    const errText = await submitRes.text()
+    const err = new Error(`Kling submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
+    if (submitRes.status === 429) err.isRateLimit = true
     throw err
   }
 
-  const task = await createRes.json()
-  if (!task.id) throw new Error(`Runway no task ID: ${JSON.stringify(task)}`)
-
-  console.log(`[worker]   Runway task: ${task.id}`)
+  const submitData = await submitRes.json()
+  const statusUrl = submitData.status_url
+  const resultUrl = submitData.response_url
+  console.log(`[worker]   Kling task: ${submitData.request_id}`)
 
   // Poll for up to 5 minutes (60 attempts × 5s)
   for (let i = 0; i < 60; i++) {
     await new Promise(r => setTimeout(r, 5000))
-    
-    const statusRes = await fetch(`https://api.dev.runwayml.com/v1/tasks/${task.id}`, {
-      headers: {
-        'Authorization': `Bearer ${RUNWAY_API_KEY}`,
-        'X-Runway-Version': '2024-11-06'
-      }
+
+    const statusRes = await fetch(statusUrl, {
+      headers: { 'Authorization': `Key ${FAL_API_KEY}` }
     })
-    
+
     if (!statusRes.ok) {
-      console.error(`[worker]   Runway status check failed: ${statusRes.status}`)
+      console.error(`[worker]   Kling status check failed: ${statusRes.status}`)
       continue
     }
-    
+
     const status = await statusRes.json()
-    console.log(`[worker]   Runway poll ${i+1}: ${status.status} progress=${status.progress}`)
-    
-    if (status.status === 'SUCCEEDED') return status.output[0]
+    console.log(`[worker]   Kling poll ${i+1}: ${status.status}`)
+
+    if (status.status === 'COMPLETED') {
+      const resultRes = await fetch(resultUrl, {
+        headers: { 'Authorization': `Key ${FAL_API_KEY}` }
+      })
+      const result = await resultRes.json()
+      const videoUrl = result.video?.url || result.output?.[0] || null
+      if (!videoUrl) throw new Error('Kling returned no video URL')
+      return videoUrl
+    }
+
     if (status.status === 'FAILED') {
-      // Capture the FULL failure detail — Runway puts the real reason in failure / failureCode
-      const failureMsg = status.failure || 'unknown'
-      const failureCode = status.failureCode || status.failure_code || 'none'
-      console.error(`[worker]   ❌ Runway FAILED — code=${failureCode} failure="${failureMsg}" full=${JSON.stringify(status).substring(0, 400)}`)
-      const err = new Error(`Runway generation failed [${failureCode}]: ${failureMsg}`)
-      // Flag content-moderation failures distinctly so the pipeline can surface them to the author
-      if (/content moderation|moderation|safety|policy|inappropriate|nsfw|SAFETY/i.test(`${failureMsg} ${failureCode}`)) {
+      const detail = JSON.stringify(status).substring(0, 300)
+      console.error(`[worker]   ❌ Kling FAILED — ${detail}`)
+      const err = new Error(`Kling generation failed: ${status.error || detail}`)
+      // Flag content-moderation failures distinctly
+      if (/content|moderation|safety|policy|inappropriate|nsfw/i.test(detail)) {
         err.isModeration = true
-      }
-      // INTERNAL.BAD_OUTPUT and other INTERNAL.* codes are DETERMINISTIC for a given
-      // input — Runway generated frames then rejected the output (almost always its
-      // post-generation safety filter on dark/violent imagery). A fresh image of the
-      // same scene fails identically, so retrying 3x just burns the daily task cap.
-      // Flag it as non-retryable; the scene loop will skip after a single attempt.
-      if (/^INTERNAL\./i.test(failureCode)) {
-        err.isBadOutput = true
       }
       throw err
     }
   }
-  
-  throw new Error('Runway generation timed out after 5 minutes')
+
+  throw new Error('Kling generation timed out after 5 minutes')
 }
 
 // ── Video stitching (ffmpeg) ──────────────────────────────────────────────────
