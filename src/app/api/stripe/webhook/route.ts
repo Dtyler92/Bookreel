@@ -41,25 +41,27 @@ export async function POST(request: Request) {
         if (session.mode === 'payment' && session.metadata?.type === 'trailer_credit') {
           const userId = session.metadata.userId
           if (userId) {
-            // Grant 1 credit + log to ledger
+            // How many credits this purchase grants (1-credit or 3-credit pack)
+            const granted = Math.max(1, parseInt(session.metadata.credits ?? '1', 10) || 1)
+
             const { data: profile } = await supabase
               .from('profiles')
               .select('trailer_credits, purchased_credits_total')
               .eq('id', userId)
               .single()
 
-            const newBalance = (profile?.trailer_credits ?? 0) + 1
+            const newBalance = (profile?.trailer_credits ?? 0) + granted
             await supabase
               .from('profiles')
               .update({
                 trailer_credits: newBalance,
-                purchased_credits_total: (profile?.purchased_credits_total ?? 0) + 1,
+                purchased_credits_total: (profile?.purchased_credits_total ?? 0) + granted,
               })
               .eq('id', userId)
 
             await supabase.from('credit_ledger').insert({
               user_id: userId,
-              delta: 1,
+              delta: granted,
               reason: 'purchase',
               balance_after: newBalance,
             })
