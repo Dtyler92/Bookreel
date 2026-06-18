@@ -270,7 +270,42 @@ async function downloadFile(url, destPath) {
   })
 }
 
-async function stitchAndUpload(clipUrls, bookId) {
+// Escape a string for safe use inside an ffmpeg drawtext textfile (none needed — we use textfile=)
+function buildTitleCard(tmpDir, width, height, fps, title, authorName) {
+  const cardPath = join(tmpDir, 'endcard.mp4')
+  const titleTxt = join(tmpDir, 'title.txt')
+  const authorTxt = join(tmpDir, 'author.txt')
+
+  // Write text to files so we never have to escape quotes/colons for drawtext
+  writeFileSync(titleTxt, (title || 'Untitled').toUpperCase())
+  const hasAuthor = authorName && authorName.length > 0
+  if (hasAuthor) writeFileSync(authorTxt, `by ${authorName}`)
+
+  // Font sizes scale with video height (tuned for 720p, scales up/down)
+  const titleSize = Math.round(height * 0.085)   // ~61px at 720p
+  const authorSize = Math.round(height * 0.040)  // ~29px at 720p
+  const dur = 4.0
+  const fontBold = '/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf'
+  const fontReg = '/usr/share/fonts/truetype/freefont/FreeSerif.ttf'
+
+  // Title sits just above vertical center; author just below
+  const titleY = hasAuthor ? '(h/2)-text_h-12' : '(h-text_h)/2'
+  let vf = `drawtext=fontfile=${fontBold}:textfile=${titleTxt}:fontcolor=white:fontsize=${titleSize}:x=(w-text_w)/2:y=${titleY}`
+  if (hasAuthor) {
+    vf += `,drawtext=fontfile=${fontReg}:textfile=${authorTxt}:fontcolor=0xCFC9BE:fontsize=${authorSize}:x=(w-text_w)/2:y=(h/2)+16`
+  }
+  // Gentle fade in/out for a cinematic feel
+  vf += `,fade=t=in:st=0:d=0.6,fade=t=out:st=${dur - 0.6}:d=0.6`
+
+  execSync(
+    `ffmpeg -f lavfi -i color=c=black:s=${width}x${height}:d=${dur}:r=${fps} ` +
+    `-vf "${vf}" -c:v libx264 -pix_fmt yuv420p -t ${dur} ${cardPath} -y 2>&1`
+  )
+  console.log('[worker]   End card generated:', cardPath)
+  return cardPath
+}
+
+async function stitchAndUpload(clipUrls, bookId, title, authorName) {
   const tmpDir = `/tmp/bookreel-${bookId}`
   if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
 
@@ -282,11 +317,50 @@ async function stitchAndUpload(clipUrls, bookId) {
     clipPaths.push(clipPath)
   }
 
-  const concatFile = join(tmpDir, 'concat.txt')
-  writeFileSync(concatFile, clipPaths.map(p => `file '${p}'`).join('\n'))
+  // Probe the first clip for resolution + fps so the end card matches exactly
+  let width = 1280, height = 720, fps = 24
+  try {
+    const probe = execSync(
+      `ffprobe -v error -select_streams v:0 -show_entries stream=width,height,r_frame_rate -of csv=p=0 ${clipPaths[0]}`
+    ).toString().trim()
+    const [w, h, rate] = probe.split(',')
+    if (w && h) { width = parseInt(w, 10); height = parseInt(h, 10) }
+    if (rate && rate.includes('/')) {
+      const [num, den] = rate.split('/').map(Number)
+      if (num && den) fps = Math.round(num / den)
+    }
+    console.log(`[worker]   Clip params: ${width}x${height} @ ${fps}fps`)
+  } catch (e) {
+    console.log('[worker]   ffprobe failed, using defaults 1280x720@24 (non-fatal):', e.message)
+  }
+
+  // Generate the title/author end card (non-fatal — if it fails we ship without it)
+  let endCardPath = null
+  try {
+    endCardPath = buildTitleCard(tmpDir, width, height, fps, title, authorName)
+  } catch (e) {
+    console.log('[worker]   End card generation failed (non-fatal, shipping without):', e.message)
+  }
+
+  const allInputs = [...clipPaths]
+  if (endCardPath) allInputs.push(endCardPath)
 
   const outputPath = join(tmpDir, 'trailer.mp4')
-  execSync(`ffmpeg -f concat -safe 0 -i ${concatFile} -c copy ${outputPath} -y 2>&1`)
+
+  // Re-encode + concat via the concat FILTER so mismatched codec params between
+  // the Runway clips and our generated card can't cause playback glitches.
+  // Every input is scaled to a uniform WxH/fps/SAR before concatenation.
+  const inputArgs = allInputs.map(p => `-i ${p}`).join(' ')
+  const filterParts = allInputs
+    .map((_, i) => `[${i}:v]scale=${width}:${height},setsar=1,fps=${fps},format=yuv420p[v${i}]`)
+    .join(';')
+  const concatInputs = allInputs.map((_, i) => `[v${i}]`).join('')
+  const filterComplex = `${filterParts};${concatInputs}concat=n=${allInputs.length}:v=1:a=0[out]`
+
+  execSync(
+    `ffmpeg ${inputArgs} -filter_complex "${filterComplex}" ` +
+    `-map "[out]" -c:v libx264 -pix_fmt yuv420p -movflags +faststart ${outputPath} -y 2>&1`
+  )
   console.log('[worker]   FFmpeg stitch complete:', outputPath)
 
   // Upload to Supabase
@@ -394,7 +468,16 @@ async function runPipeline(job) {
     throw new Error('No approved scenes found for book ' + bookId)
   }
 
-  console.log(`[worker]   Book: "${book.title}", ${scenes.length} scenes`)
+  // Fetch author display name for the end card (non-fatal if missing)
+  let authorName = ''
+  try {
+    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', book.author_id).single()
+    authorName = (profile?.full_name || '').trim()
+  } catch (e) {
+    console.log('[worker]   Could not fetch author name (non-fatal):', e.message)
+  }
+
+  console.log(`[worker]   Book: "${book.title}" by ${authorName || '(unknown author)'}, ${scenes.length} scenes`)
 
   // Voiceover (non-fatal)
   try {
@@ -486,7 +569,7 @@ async function runPipeline(job) {
 
   // Stitch and upload
   console.log('[worker]   Stitching clips...')
-  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId)
+  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName)
   console.log('[worker]   ✅ Final video:', finalVideoUrl.substring(0, 80))
 
   await updateTrailerStatus(bookId, 'complete', { videoUrl: finalVideoUrl })

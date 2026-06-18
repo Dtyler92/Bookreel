@@ -1025,7 +1025,7 @@ export default function UploadPage() {
                   color: '#0D0D0B',
                   margin: '0 0 6px',
                 }}>
-                  Generate with AI
+                  Design one for me
                 </p>
                 <p style={{
                   fontFamily: 'var(--font-inter), sans-serif',
@@ -1033,7 +1033,7 @@ export default function UploadPage() {
                   color: '#8A8278',
                   margin: '0 0 16px',
                 }}>
-                  We'll design a unique cover based on your book.
+                  Our studio will craft a unique cover based on your book.
                 </p>
                 <button
                   type="button"
@@ -1077,7 +1077,7 @@ export default function UploadPage() {
                     width: '100%',
                   }}
                 >
-                  {step4Generating ? 'Designing your cover…' : 'Generate Cover with AI'}
+                  {step4Generating ? 'Designing your cover…' : 'Design My Cover'}
                 </button>
                 {step4Generating && (
                   <div style={{ width: '100%', height: 3, background: '#E8E2D5', borderRadius: 2, overflow: 'hidden', marginTop: '10px', position: 'relative' }}>
