@@ -382,7 +382,7 @@ function buildTitleCard(tmpDir, width, height, fps, title, authorName) {
   return cardPath
 }
 
-async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAudioPath = null, musicAudioPath = null, characterLines = []) {
+async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTracks = [], musicAudioPath = null, characterLines = []) {
   const tmpDir = `/tmp/bookreel-${bookId}`
   if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
 
@@ -450,51 +450,47 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
   const videoTotal = clipsTotal + endCardDur
   console.log(`[worker]   Video timeline: ${clipsTotal.toFixed(1)}s clips + ${endCardDur.toFixed(1)}s end card = ${videoTotal.toFixed(1)}s total`)
 
-  // ── Pace the narration to fit the video ─────────────────────────────────────
-  // The narrator was rushed because the raw VO (~natural speed) ran much shorter
-  // than the video, so it front-loaded then went silent. We stretch it with atempo
-  // to fill the CLIPS portion (leaving the end card for a musical button), with a
-  // floor of 0.82x so it slows naturally without sounding drunk. atempo<1 = slower.
-  let pacedVoPath = voiceoverAudioPath
-  let pacedVoDur = 0
-  if (voiceoverAudioPath) {
-    try {
-      const voDur = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${voiceoverAudioPath}`).toString().trim()) || 0
-      pacedVoDur = voDur
-      // Target: narration spans ~92% of the clips section (a little air at the end).
-      const target = clipsTotal * 0.92
-      if (voDur > 0 && target > 0) {
-        let tempo = voDur / target          // <1 slows down (stretches), >1 speeds up
-        tempo = Math.max(0.82, Math.min(1.05, tempo)) // clamp to a natural-sounding range
-        if (Math.abs(tempo - 1) > 0.02) {
-          pacedVoPath = join(tmpDir, 'voiceover-paced.mp3')
-          execSync(`ffmpeg -i ${voiceoverAudioPath} -filter:a atempo=${tempo.toFixed(3)} -y ${pacedVoPath} 2>&1`)
-          pacedVoDur = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${pacedVoPath}`).toString().trim()) || voDur
-          console.log(`[worker]   Narration paced: ${voDur.toFixed(1)}s → ${pacedVoDur.toFixed(1)}s (atempo=${tempo.toFixed(3)}, target ${target.toFixed(1)}s)`)
-        }
-      }
-    } catch (e) {
-      console.log('[worker]   Narration pacing failed (non-fatal, using raw VO):', e.message)
-      pacedVoPath = voiceoverAudioPath
-    }
-  }
-
-  // ── Compute character-line timestamps ──────────────────────────────────────
-  // Each line is tied to a clip index; start time = cumulative duration of prior clips.
-  const usableLines = []
-  if (Array.isArray(characterLines) && characterLines.length > 0) {
-    const clipStart = []
+  // ── Place per-scene voice tracks on the timeline ────────────────────────────
+  // Both narration beats AND character lines are tied to a clipIndex; their start
+  // time is the cumulative duration of all prior clips (+ a small lead-in for air).
+  // NO atempo stretching anymore — each beat is short and naturally sized to its
+  // clip, so the narrator speaks in time with the cuts and falls silent between
+  // them (the cinematic cadence). This replaces the old single-block VO + stretch.
+  const clipStart = []
+  {
     let acc = 0
     for (let i = 0; i < clipDurations.length; i++) { clipStart[i] = acc; acc += clipDurations[i] }
+  }
+
+  const probeDur = (p, fallback) => {
+    try { return parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${p}`).toString().trim()) || fallback } catch { return fallback }
+  }
+
+  // Narration beats: short phrase per selected scene. Start near the top of the clip
+  // (0.5s lead-in) so it reads as "narrator speaking over this shot". If a beat would
+  // overrun its clip, that's fine — it simply tails into the next cut.
+  const narrationPlaced = []
+  if (Array.isArray(narrationTracks)) {
+    for (const nb of narrationTracks) {
+      if (nb.clipIndex == null || nb.clipIndex < 0 || nb.clipIndex >= clipPaths.length) continue
+      if (!nb.path || !existsSync(nb.path)) continue
+      const dur = probeDur(nb.path, 2.0)
+      const start = clipStart[nb.clipIndex] + 0.5
+      narrationPlaced.push({ path: nb.path, start, end: start + dur })
+    }
+  }
+  if (narrationPlaced.length > 0) {
+    console.log(`[worker]   Narration beats placed: ` +
+      narrationPlaced.map(n => `@${n.start.toFixed(1)}s(${(n.end - n.start).toFixed(1)}s)`).join(' '))
+  }
+
+  // Character lines: centered within their clip so they have air before AND after.
+  const usableLines = []
+  if (Array.isArray(characterLines) && characterLines.length > 0) {
     for (const ln of characterLines) {
       if (ln.clipIndex == null || ln.clipIndex < 0 || ln.clipIndex >= clipPaths.length) continue
       if (!ln.path || !existsSync(ln.path)) continue
-      let lineDur = 2.5
-      try {
-        lineDur = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${ln.path}`).toString().trim()) || 2.5
-      } catch {}
-      // Center the line within its clip so it has air before AND after — fixes the
-      // "abrupt" feel. Lead-in scales with spare room in the clip (up to 1.2s).
+      const lineDur = probeDur(ln.path, 2.5)
       const spare = Math.max(0, clipDurations[ln.clipIndex] - lineDur)
       const lead = Math.min(1.2, spare / 2)
       const start = clipStart[ln.clipIndex] + lead
@@ -503,53 +499,37 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
   }
 
   // ── Unified audio mix ───────────────────────────────────────────────────────
-  // One code path that correctly handles narrator + music + character lines, mixed
-  // across the FULL video length. Fixes: (1) music silent after 2s (bad fade at t=0);
-  // (2) audio dying before video ends (clamped to narrator length); (3) abrupt lines.
-  if (pacedVoPath || musicAudioPath || usableLines.length > 0) {
+  // Per-scene cadence: narration beats + character lines are each placed at their
+  // clip's timestamp (short, naturally sized — no stretching). Music plays as a bed
+  // underneath, DUCKS under every voice window (narration or line), and SWELLS in the
+  // gaps + end card so the trailer breathes between beats and ends on a musical high.
+  const hasVoice = narrationPlaced.length > 0 || usableLines.length > 0
+  if (hasVoice || musicAudioPath) {
     const parts = []
     const extraInputs = []   // ffmpeg -i args appended after clips/endcard
     let idx = allInputs.length
     const mixLabels = []
 
-    // Narrator: full volume, no padding needed (it's mixed with duration=longest below).
-    if (pacedVoPath) {
-      const voIdx = idx++; extraInputs.push(`-i ${pacedVoPath}`)
-      parts.push(`[${voIdx}:a]volume=1.0[vo]`)
-      mixLabels.push('[vo]')
-    }
+    // All voice windows (narration beats + character lines) — used to duck music.
+    const voiceWindows = [...narrationPlaced, ...usableLines]
+    // The last moment any voice is speaking — music swells AFTER this.
+    const lastVoiceEnd = voiceWindows.length > 0 ? Math.max(...voiceWindows.map(w => w.end)) : 0
 
-    // Music: loop to cover the WHOLE video, sit at a musical bed level, and fade out
-    // only over the final 3s (the button). apad+atrim guarantees it spans videoTotal.
-    if (musicAudioPath) {
-      const mIdx = idx++; extraInputs.push(`-stream_loop -1 -i ${musicAudioPath}`)
-      const fadeStart = Math.max(0, videoTotal - 3)
-      if (pacedVoPath && pacedVoDur > 0 && pacedVoDur < videoTotal - 2) {
-        // Narrator present: music sits low (0.28) UNDER the VO, then SWELLS up to
-        // 0.6 once narration ends so the final clips + end card land on a musical
-        // high instead of going quiet. swellStart = when the narrator stops talking.
-        const swellStart = pacedVoDur
-        parts.push(
-          `[${mIdx}:a]atrim=0:${videoTotal.toFixed(2)},` +
-          `volume='if(lt(t,${swellStart.toFixed(2)}),0.28,0.6)':eval=frame,` +
-          `afade=t=out:st=${fadeStart.toFixed(2)}:d=3[mus]`
-        )
-      } else {
-        // Music-only trailer (VO failed) — play the bed louder throughout.
-        const bedVol = pacedVoPath ? 0.28 : 0.6
-        parts.push(
-          `[${mIdx}:a]atrim=0:${videoTotal.toFixed(2)},volume=${bedVol},afade=t=out:st=${fadeStart.toFixed(2)}:d=3[mus]`
-        )
-      }
-      mixLabels.push('[mus]')
-    }
+    // Narration beats: delay to scene timestamp, gentle 120ms in/out fade, full level.
+    narrationPlaced.forEach((n, i) => {
+      const nIdx = idx++; extraInputs.push(`-i ${n.path}`)
+      const d = Math.round(n.start * 1000)
+      parts.push(
+        `[${nIdx}:a]adelay=${d}|${d},afade=t=in:st=${n.start.toFixed(2)}:d=0.12,` +
+        `afade=t=out:st=${(n.end - 0.12).toFixed(2)}:d=0.12,volume=1.1[nb${i}]`
+      )
+      mixLabels.push(`[nb${i}]`)
+    })
 
-    // Character lines: delay to their timestamp, gentle 150ms in/out fade so they
-    // don't pop, slightly hot so they cut through the bed.
+    // Character lines: delay to their timestamp, gentle 150ms fades, slightly hot.
     usableLines.forEach((l, i) => {
       const lIdx = idx++; extraInputs.push(`-i ${l.path}`)
       const d = Math.round(l.start * 1000)
-      const lineDur = (l.end - l.start)
       parts.push(
         `[${lIdx}:a]adelay=${d}|${d},afade=t=in:st=${l.start.toFixed(2)}:d=0.15,` +
         `afade=t=out:st=${(l.end - 0.15).toFixed(2)}:d=0.15,volume=1.5[ln${i}]`
@@ -557,23 +537,31 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
       mixLabels.push(`[ln${i}]`)
     })
 
-    // Duck the narrator+music under each character line so the line is clearly heard.
-    // We apply ducking by lowering the bed during line windows via a sidechain-free
-    // volume enable expression on the pre-mix bed group.
+    // Music: loop to cover the WHOLE video. Sits low (0.28) under voice, swells to 0.6
+    // in the gaps + after the last beat, fades out over the final 3s (the button).
+    if (musicAudioPath) {
+      const mIdx = idx++; extraInputs.push(`-stream_loop -1 -i ${musicAudioPath}`)
+      const fadeStart = Math.max(0, videoTotal - 3)
+      let volExpr
+      if (voiceWindows.length > 0) {
+        // Duck (0.28) during any voice window, swell (0.6) everywhere else.
+        const duckExpr = voiceWindows.map(w => `between(t,${w.start.toFixed(2)},${w.end.toFixed(2)})`).join('+')
+        volExpr = `if(gt(${duckExpr},0),0.28,0.6)`
+      } else {
+        volExpr = '0.6'
+      }
+      parts.push(
+        `[${mIdx}:a]atrim=0:${videoTotal.toFixed(2)},` +
+        `volume='${volExpr}':eval=frame,` +
+        `afade=t=out:st=${fadeStart.toFixed(2)}:d=3[mus]`
+      )
+      mixLabels.push('[mus]')
+    }
+
     let finalAudioLabel
     if (mixLabels.length === 1) {
       finalAudioLabel = mixLabels[0]
     } else {
-      // If there are character lines, duck everything that isn't a line during the
-      // line windows. Build a duck expr; apply to vo and music before final amix.
-      if (usableLines.length > 0) {
-        const duckExpr = usableLines.map(l => `between(t,${l.start.toFixed(2)},${l.end.toFixed(2)})`).join('+')
-        // Re-tag vo/mus with ducking.
-        for (let i = 0; i < parts.length; i++) {
-          if (parts[i].endsWith('[vo]')) parts[i] = parts[i].replace('[vo]', `[vo0];[vo0]volume=0.4:enable='${duckExpr}'[vo]`)
-          if (parts[i].endsWith('[mus]')) parts[i] = parts[i].replace('[mus]', `[mus0];[mus0]volume=0.5:enable='${duckExpr}'[mus]`)
-        }
-      }
       // Mix everything across the FULL video length (duration=longest, normalize=0).
       parts.push(`${mixLabels.join('')}amix=inputs=${mixLabels.length}:duration=longest:normalize=0:dropout_transition=0[aout]`)
       finalAudioLabel = '[aout]'
@@ -587,7 +575,7 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
       `-c:v libx264 -c:a aac -b:a 192k -pix_fmt yuv420p ` +
       `-movflags +faststart ${outputPath} -y 2>&1`
     )
-    console.log(`[worker]   FFmpeg mix complete — VO:${!!pacedVoPath} music:${!!musicAudioPath} lines:${usableLines.length} over ${videoTotal.toFixed(1)}s`)
+    console.log(`[worker]   FFmpeg mix complete — narration beats:${narrationPlaced.length} music:${!!musicAudioPath} lines:${usableLines.length} (last voice ends @${lastVoiceEnd.toFixed(1)}s) over ${videoTotal.toFixed(1)}s`)
   } else {
     execSync(
       `ffmpeg ${inputArgs} -filter_complex "${filterComplex}" ` +
@@ -614,52 +602,85 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
   return publicUrl
 }
 
-// ── Voiceover script (Anthropic or OpenRouter) ────────────────────────────────
-async function generateVoiceoverScript(bookTitle, scenes, tone, ledger = null, maxWords = 120) {
-  const userContent = `Write a voiceover script for a book trailer for "${bookTitle}". Tone: ${tone}. Key scenes: ${scenes.map(s => s.description).join('. ')}`
-  // Word budget is derived from the actual trailer length (~1.9 words/sec of speech)
-  // so the narration fits the visuals instead of overrunning them. Short test renders
-  // (TEST_MAX_CLIPS) get proportionally shorter scripts. The cap is HARD — overrunning
-  // narration was the "rushed / talked-over / abrupt" bug.
-  const systemPrompt = `You are a voiceover writer for cinematic book trailers. Write compelling, atmospheric narration. HARD LIMIT: maximum ${maxWords} words — this is non-negotiable; the narration must fit a short trailer and going over makes it sound rushed. Fewer words is better than more. No character names in the first line. Build tension. End with the book title.`
+// ── Voiceover beats (Anthropic or OpenRouter) ─────────────────────────────────
+// SPARSE per-scene narration: returns a small array of short beats, each tied to a
+// scene_number, NOT one continuous block. The narrator speaks a punchy phrase over
+// some scenes and stays SILENT on others — the cinematic trailer cadence. Beats are
+// placed at their scene's timestamp downstream (no time-stretching).
+//   scenes: [{ scene_number, description }, ...] (the scenes actually being rendered)
+//   returns: [{ scene_number, text }, ...]  (subset of scenes; ~half, max 8 words each)
+async function generateVoiceoverBeats(bookTitle, scenes, tone, ledger = null) {
+  // Sparse: narrate roughly half the scenes (min 1), so there's musical breathing room.
+  const beatCount = Math.max(1, Math.round(scenes.length / 2))
+  const sceneList = scenes.map(s => `Scene ${s.scene_number}: ${s.description}`).join('\n')
+  const userContent =
+    `Book trailer for "${bookTitle}". Tone: ${tone}.\n` +
+    `Scenes (in order):\n${sceneList}\n\n` +
+    `Write ${beatCount} short voiceover beats spread across these scenes. Choose the ${beatCount} most ` +
+    `evocative scenes to narrate and leave the rest silent (music only). The FINAL beat must land on ` +
+    `the last scene and end with the book title "${bookTitle}".`
+  const systemPrompt =
+    `You are a voiceover writer for cinematic book trailers. You write SPARSE, punchy narration — ` +
+    `a few short phrases timed to individual shots, never a continuous paragraph. ` +
+    `RULES:\n` +
+    `- Each beat is MAX 8 words. Fragments and single phrases are good. Fewer words = more cinematic.\n` +
+    `- Do NOT narrate every scene — pick the most evocative ones; silence between beats is intentional.\n` +
+    `- No character names in the first beat. Build dread/tension. The last beat ends with the title.\n` +
+    `Return ONLY a JSON array, no markdown, each item: {"scene_number": <number>, "text": "<phrase>"}.`
 
-  if (!isPlaceholder(ANTHROPIC_API_KEY)) {
-    const { default: Anthropic } = await import('@anthropic-ai/sdk')
-    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY })
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 512,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userContent }]
+  const raw = await (async () => {
+    if (!isPlaceholder(ANTHROPIC_API_KEY)) {
+      const { default: Anthropic } = await import('@anthropic-ai/sdk')
+      const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY })
+      const message = await anthropic.messages.create({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 512,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userContent }]
+      })
+      if (ledger) ledger.add('voiceover beats (claude sonnet)', 'llm', llmCost(message.usage))
+      return message.content[0].type === 'text' ? message.content[0].text : ''
+    }
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'anthropic/claude-sonnet-4-5',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent }
+        ]
+      })
     })
-    if (ledger) ledger.add('voiceover script (claude sonnet)', 'llm', llmCost(message.usage))
-    return message.content[0].type === 'text' ? message.content[0].text : ''
+    const data = await res.json()
+    if (ledger) ledger.add('voiceover beats (claude sonnet via openrouter)', 'llm', llmCost(data.usage))
+    return data.choices?.[0]?.message?.content || ''
+  })()
+
+  // Parse the JSON array defensively (strip markdown fences if present).
+  try {
+    const cleaned = raw.replace(/```json\s*|\s*```/g, '').trim()
+    const start = cleaned.indexOf('[')
+    const end = cleaned.lastIndexOf(']')
+    if (start === -1 || end === -1) return []
+    const arr = JSON.parse(cleaned.slice(start, end + 1))
+    const valid = scenes.map(s => s.scene_number)
+    return (Array.isArray(arr) ? arr : [])
+      .filter(b => b && typeof b.text === 'string' && b.text.trim() && valid.includes(b.scene_number))
+      .map(b => ({ scene_number: b.scene_number, text: b.text.trim() }))
+  } catch (e) {
+    console.log('[worker]   Voiceover beat parse failed (non-fatal, narrator-less):', e.message)
+    return []
   }
-
-  // Fallback to OpenRouter
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'anthropic/claude-sonnet-4-5',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent }
-      ]
-    })
-  })
-  const data = await res.json()
-  if (ledger) ledger.add('voiceover script (claude sonnet via openrouter)', 'llm', llmCost(data.usage))
-  return data.choices?.[0]?.message?.content || ''
 }
 
 // ── Voiceover audio (ElevenLabs v3 via fal.ai) ───────────────────────────────
-async function generateVoiceoverAudio(script, tmpDir, ledger = null) {
+async function generateVoiceoverAudio(script, tmpDir, ledger = null, fileTag = '') {
   if (!script || script.trim().length === 0) return null
-  console.log('[worker]   Generating voiceover audio...')
+  console.log(`[worker]   Generating voiceover audio${fileTag ? ` (${fileTag})` : ''}...`)
 
   // ElevenLabs eleven_v3 via fal.ai — deep cinematic narrator voice
   const res = await fetch('https://fal.run/fal-ai/elevenlabs/tts/eleven-v3', {
@@ -690,7 +711,7 @@ async function generateVoiceoverAudio(script, tmpDir, ledger = null) {
   if (!audioRes.ok) throw new Error(`Audio download failed: ${audioRes.status}`)
   const audioBuffer = Buffer.from(await audioRes.arrayBuffer())
 
-  const audioPath = join(tmpDir, 'voiceover.mp3')
+  const audioPath = join(tmpDir, `voiceover${fileTag ? `-${fileTag}` : ''}.mp3`)
   writeFileSync(audioPath, audioBuffer)
   console.log(`[worker]   Voiceover audio saved: ${audioBuffer.length} bytes`)
   if (ledger) ledger.add(`narrator voiceover (${script.length} chars, elevenlabs v3)`, 'fal', (script.length / 1000) * PRICING.tts_per_1k_char)
@@ -1001,33 +1022,14 @@ async function runPipeline(job) {
 
   console.log(`[worker]   Book: "${book.title}" by ${authorName || '(unknown author)'}, ${scenes.length} scenes`)
 
-  // Voiceover — generate script then render to audio
-  let voiceoverAudioPath = null
-  try {
-    // Word budget tied to the ACTUAL trailer length so narration fits the visuals.
-    // Mirror the clip-count/length math from scene generation below (incl. TEST_MAX_CLIPS),
-    // measure narration capacity at ~1.9 words/sec over ~92% of the clips section.
-    const voBaseClips = tier === 'pro' ? 8 : 6
-    const voClips = TEST_MAX_CLIPS > 0 ? Math.min(voBaseClips, TEST_MAX_CLIPS) : voBaseClips
-    const voClipLen = tier === 'pro' ? 10 : 5
-    const voSpeakSecs = voClips * voClipLen * 0.92
-    const voWordBudget = Math.max(12, Math.round(voSpeakSecs * 1.9))
-    console.log(`[worker]   Narration budget: ${voWordBudget} words (~${voSpeakSecs.toFixed(0)}s of speech over ${voClips} clips)`)
-    const voiceover = await generateVoiceoverScript(book.title, scenes, book.genre || 'dramatic', ledger, voWordBudget)
-    console.log(`[worker]   Voiceover script (${voiceover.length} chars)`)
-    const tmpDir = `/tmp/bookreel-${bookId}`
-    if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
-    voiceoverAudioPath = await generateVoiceoverAudio(voiceover, tmpDir, ledger)
-    if (voiceoverAudioPath) console.log('[worker]   Voiceover audio ready')
-  } catch (e) {
-    console.error('[worker]   Voiceover failed (non-fatal, shipping without audio):', e.message)
-  }
+  // Voiceover beats are generated AFTER we know which scenes are actually rendering
+  // (see below, near character-line selection) so each beat ties to a real clip.
+  const tmpDir = `/tmp/bookreel-${bookId}`
+  if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
 
   // Music bed — derive mood from genre, size to the trailer length. Non-fatal.
   let musicAudioPath = null
   try {
-    const tmpDir = `/tmp/bookreel-${bookId}`
-    if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
     // Estimate trailer length: clips × per-clip length (+ ~4s end card).
     // Respect TEST_MAX_CLIPS so short test renders get a correctly-sized music bed.
     const baseClips = tier === 'pro' ? 8 : 6
@@ -1079,11 +1081,33 @@ async function runPipeline(job) {
     console.error('[worker]   Character-line selection failed (non-fatal, narrator-only):', e.message)
   }
 
+  // Narration beats — SPARSE per-scene narrator phrases tied to the scenes we're
+  // actually rendering. Each beat is rendered to its own TTS file keyed by scene
+  // number, then placed at that scene's timestamp during the mix. Non-fatal.
+  const narrationBySceneNumber = new Map()
+  try {
+    const beats = await generateVoiceoverBeats(book.title, scenesToGenerate, book.genre || 'dramatic', ledger)
+    for (const b of beats) {
+      if (narrationBySceneNumber.has(b.scene_number)) continue
+      const path = await generateVoiceoverAudio(b.text, tmpDir, ledger, `beat-s${b.scene_number}`)
+      if (path) narrationBySceneNumber.set(b.scene_number, { text: b.text, path })
+    }
+    if (narrationBySceneNumber.size > 0) {
+      console.log(`[worker]   Narration beats: ` +
+        [...narrationBySceneNumber.entries()].map(([sn, b]) => `S${sn}: "${b.text}"`).join(' | '))
+    } else {
+      console.log('[worker]   No narration beats (music-only trailer)')
+    }
+  } catch (e) {
+    console.error('[worker]   Narration-beat generation failed (non-fatal, music-only):', e.message)
+  }
+
   console.log(`[worker]   Generating ${scenesToGenerate.length} clips (max ${maxScenes} for ${tier})...`)
 
   const clipUrls = []
   const rejectedScenes = []
   const characterLineTracks = []  // { clipIndex, path } → passed to stitch for timed mixing
+  const narrationTracks = []      // { clipIndex, path } → per-scene narrator beats
   let firstSceneImageUrl = null  // auto-cover if book has none
 
   for (const scene of scenesToGenerate) {
@@ -1132,6 +1156,13 @@ async function runPipeline(job) {
         } catch (lineErr) {
           console.error(`[worker]   Scene ${scene.scene_number}: character line failed (non-fatal, keeping original clip):`, lineErr.message)
         }
+      }
+
+      // Per-scene narration beat: if this scene was chosen, tie its TTS file to this
+      // clip's index so the mix places it at this clip's timestamp.
+      const narrationBeat = narrationBySceneNumber.get(scene.scene_number)
+      if (narrationBeat) {
+        narrationTracks.push({ clipIndex: clipUrls.length, path: narrationBeat.path })
       }
 
       clipUrls.push(clipUrl)
@@ -1198,7 +1229,7 @@ async function runPipeline(job) {
 
   // Stitch and upload
   console.log('[worker]   Stitching clips...')
-  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, voiceoverAudioPath, musicAudioPath, characterLineTracks)
+  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, narrationTracks, musicAudioPath, characterLineTracks)
   console.log('[worker]   ✅ Final video:', finalVideoUrl.substring(0, 80))
 
   // Auto-save cover: use first scene image if book has no cover set
