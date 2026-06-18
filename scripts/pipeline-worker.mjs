@@ -136,9 +136,12 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
 // ── Image generation (fal.ai) ────────────────────────────────────────────────
 async function generateSceneImage(sceneDescription, genre) {
   const safeDescription = softenForModeration(sceneDescription)
-  const prompt = `${safeDescription}, ${genre} mood, cinematic composition, dramatic atmospheric lighting, film still, photorealistic, highly detailed, tasteful, suitable for a general audience movie trailer, clean image with no text or lettering or watermarks`
-  
-  const res = await fetch('https://fal.run/fal-ai/flux/dev', {
+  // Cinematic photorealism prompt — written for flux-pro/v1.1-ultra raw mode
+  const prompt = `${safeDescription}, ${genre} mood, cinematic film still, shot on ARRI Alexa, anamorphic lens, shallow depth of field, dramatic atmospheric lighting, ultra-realistic, photorealistic, 8K, no text, no watermarks, no logos, tasteful, general audience`
+
+  // flux-pro/v1.1-ultra: highest-quality Flux tier, raw=true = photographic realism
+  // (raw bypasses aesthetic post-processing for true photographic output)
+  const res = await fetch('https://fal.run/fal-ai/flux-pro/v1.1-ultra', {
     method: 'POST',
     headers: {
       'Authorization': `Key ${FAL_API_KEY}`,
@@ -146,35 +149,35 @@ async function generateSceneImage(sceneDescription, genre) {
     },
     body: JSON.stringify({
       prompt,
-      negative_prompt: IMAGE_NEGATIVE_PROMPT,
-      image_size: 'landscape_16_9',
+      aspect_ratio: '16:9',
       num_images: 1,
-      num_inference_steps: 28,
-      enable_safety_checker: false
+      output_format: 'jpeg',
+      raw: true,          // photographic realism — less AI-processed look
+      safety_tolerance: '6' // most permissive; we enforce content policy at prompt level
     })
   })
-  
+
   if (!res.ok) {
     const err = await res.text()
     throw new Error(`fal.ai image gen failed ${res.status}: ${err.substring(0, 200)}`)
   }
-  
+
   const data = await res.json()
   const falImageUrl = data.images?.[0]?.url
   if (!falImageUrl) throw new Error('fal.ai returned no image URL')
-  
-  // IMPORTANT: Download and re-upload to Supabase so URL doesn't expire before Runway uses it
+
+  // Download and re-upload to Supabase so URL doesn't expire before Kling uses it
   const imgRes = await fetch(falImageUrl)
   if (!imgRes.ok) throw new Error(`Failed to download fal.ai image: ${imgRes.status}`)
   const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
-  
+
   const storagePath = `scene-images/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`
   const { error: uploadErr } = await supabase.storage
     .from('media')
     .upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: false })
-  
+
   if (uploadErr) throw new Error(`Supabase image upload failed: ${uploadErr.message}`)
-  
+
   const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
   console.log(`[worker]   Image uploaded to Supabase: ${urlData.publicUrl.substring(0, 80)}`)
   return urlData.publicUrl
