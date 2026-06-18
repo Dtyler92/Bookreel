@@ -39,8 +39,12 @@ Rules:
 
 Scene field guidance (IMPORTANT for video quality):
 - "description": what the shot LOOKS like — setting, characters present, lighting, mood, composition. A single vivid cinematic frame. This drives the still image.
-- "screenplay_text": what HAPPENS in the shot over its few seconds — the camera move and the subject motion. This drives the video animation, so be concrete and cinematic. Specify ONE clear camera movement (e.g. "slow push-in", "tracking shot", "tilt up", "dolly back", "handheld orbit") and ONE clear subject action (e.g. "she turns sharply toward the door", "fog rolls across the floor", "his hand tightens on the blade"). Keep it to 1-2 sentences. Avoid cuts — each scene is ONE continuous shot.
-- "duration_seconds": 5 or 10. Use 10 for establishing/emotional beats, 5 for tense quick hits.
+- "screenplay_text": what HAPPENS in the shot. This drives the video animation. CRITICAL — each clip is a FIXED, SHORT length and the motion MUST realistically complete inside that window, or the trailer feels rushed and ignores the script:
+    • Specify exactly ONE camera movement (e.g. "slow push-in", "tracking shot", "tilt up", "dolly back", "handheld orbit") AND exactly ONE subject action (e.g. "she turns sharply toward the door", "fog rolls across the floor", "his hand tightens on the blade").
+    • Pace the action to the clip length. For a ~5-second clip: one quick, simple gesture or a slow drift — nothing that needs steps in sequence. For a ~10-second clip: one slow, continuous, deliberate beat — a gradual push-in as a single expression changes, fog slowly filling a room. NEVER chain multiple actions ("he stands, walks to the window, then turns") — that cannot fit and the model will speed it up unnaturally. ONE beat per clip.
+    • Describe motion as continuous and gradual ("slowly", "gradually", "drifts", "creeps") rather than fast cuts. Each scene is ONE continuous shot — no cuts.
+    • Keep it to 1-2 sentences.
+- "duration_seconds": 5 or 10. Use 10 for establishing/emotional beats that breathe, 5 for tense quick hits. Match the action density in screenplay_text to this number.
 
 For each character extract:
 - appearance: Be as specific as possible about physical traits drawn directly from the book text. Include height, build, hair, eyes, age, skin tone, distinguishing features, and typical clothing.
