@@ -397,7 +397,10 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
   if (uploadErr) throw new Error(`Video upload failed: ${uploadErr.message}`)
 
   const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
-  return urlData.publicUrl
+  // Append a cache-busting timestamp so browsers always fetch the latest render
+  // instead of serving a stale cached version of a previous trailer.
+  const publicUrl = `${urlData.publicUrl}?v=${Date.now()}`
+  return publicUrl
 }
 
 // ── Voiceover script (Anthropic or OpenRouter) ────────────────────────────────
