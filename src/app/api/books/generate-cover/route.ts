@@ -66,9 +66,33 @@ export async function POST(request: Request) {
       } as any,
     }) as { data: FalImageResult; requestId: string }
 
-    const imageUrl = result.data.images[0]?.url
-    if (!imageUrl) {
+    const falImageUrl = result.data.images[0]?.url
+    if (!falImageUrl) {
       return Response.json({ error: 'No image generated' }, { status: 500 })
+    }
+
+    // Download from fal.ai and re-upload to Supabase so the cover URL doesn't expire.
+    // (fal.ai URLs are temporary; uploaded/generated covers must persist permanently.)
+    let imageUrl = falImageUrl
+    try {
+      const supabase = getServiceClient()
+      const imgRes = await fetch(falImageUrl)
+      if (!imgRes.ok) throw new Error(`download failed ${imgRes.status}`)
+      const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
+
+      const storagePath = `covers/${bookId ?? 'preview'}-${Date.now()}.jpg`
+      const { error: uploadErr } = await supabase.storage
+        .from('media')
+        .upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: true })
+
+      if (uploadErr) throw new Error(uploadErr.message)
+
+      const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
+      imageUrl = urlData.publicUrl
+      console.log('[generate-cover] Cover persisted to Supabase:', imageUrl.substring(0, 80))
+    } catch (persistErr) {
+      // Non-fatal: fall back to the temporary fal.ai URL so the user still sees a cover
+      console.error('[generate-cover] Failed to persist cover, using temporary URL:', persistErr)
     }
 
     // If bookId is provided, save cover URL to books table
