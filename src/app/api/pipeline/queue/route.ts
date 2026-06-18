@@ -29,13 +29,20 @@ export async function GET(request: Request) {
 
   const supabase = getServiceClient()
 
-  // Fetch trailers with status 'pending' or stuck in 'generating' for >10 min
+  // Fetch trailers that are 'pending', or stuck mid-render for >10 min.
+  // The worker writes status 'processing' while it runs; older code used
+  // 'generating'. Recover BOTH so a worker restart mid-run can't orphan a
+  // trailer forever (it just gets re-picked once it's been stuck >10 min).
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
 
   const { data: pendingJobs, error } = await supabase
     .from('trailers')
     .select('id, book_id, quality_tier, status, processing_started_at, created_at')
-    .or(`status.eq.pending,and(status.eq.generating,processing_started_at.lt.${tenMinutesAgo})`)
+    .or(
+      `status.eq.pending,` +
+      `and(status.eq.generating,processing_started_at.lt.${tenMinutesAgo}),` +
+      `and(status.eq.processing,processing_started_at.lt.${tenMinutesAgo})`
+    )
     .order('created_at', { ascending: true })
     .limit(5)
 

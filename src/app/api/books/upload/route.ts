@@ -37,6 +37,11 @@ Rules:
 - No explicit sexual content
 - Return ONLY the JSON object, nothing else
 
+Scene field guidance (IMPORTANT for video quality):
+- "description": what the shot LOOKS like — setting, characters present, lighting, mood, composition. A single vivid cinematic frame. This drives the still image.
+- "screenplay_text": what HAPPENS in the shot over its few seconds — the camera move and the subject motion. This drives the video animation, so be concrete and cinematic. Specify ONE clear camera movement (e.g. "slow push-in", "tracking shot", "tilt up", "dolly back", "handheld orbit") and ONE clear subject action (e.g. "she turns sharply toward the door", "fog rolls across the floor", "his hand tightens on the blade"). Keep it to 1-2 sentences. Avoid cuts — each scene is ONE continuous shot.
+- "duration_seconds": 5 or 10. Use 10 for establishing/emotional beats, 5 for tense quick hits.
+
 For each character extract:
 - appearance: Be as specific as possible about physical traits drawn directly from the book text. Include height, build, hair, eyes, age, skin tone, distinguishing features, and typical clothing.
 - temperament: Describe their personality, emotional tendencies, how they react under pressure, speech patterns, and key mannerisms as described in the book.

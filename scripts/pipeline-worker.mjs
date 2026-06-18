@@ -188,9 +188,16 @@ async function generateSceneImage(sceneDescription, genre) {
 // rejected dark/Gothic/thriller content (INTERNAL.BAD_OUTPUT.CODE01). Kling 2.1
 // standard on fal.ai passes the same content cleanly, has no daily tier walls,
 // and costs ~$0.035/s (similar economics to Runway).
-async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5) {
+async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5, screenplayText = null) {
   const klingDuration = durationSeconds >= 8 ? '10' : '5'
-  const safePromptText = softenForModeration(sceneDescription)
+  // Feed the screenplay action beats (motion, camera) to Kling alongside the
+  // visual description so the generated clip follows the intended timing/movement
+  // instead of a near-static pan. Description = what it looks like; screenplay =
+  // what happens. Kling's image-to-video uses the prompt to drive motion.
+  const motionText = screenplayText && screenplayText.trim().length > 0
+    ? `${sceneDescription}. Action and camera: ${screenplayText}`
+    : sceneDescription
+  const safePromptText = softenForModeration(motionText)
 
   // Submit to Kling queue
   const submitRes = await fetch('https://queue.fal.run/fal-ai/kling-video/v2.1/pro/image-to-video', {
@@ -315,7 +322,7 @@ function buildTitleCard(tmpDir, width, height, fps, title, authorName) {
   return cardPath
 }
 
-async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAudioPath = null) {
+async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAudioPath = null, musicAudioPath = null) {
   const tmpDir = `/tmp/bookreel-${bookId}`
   if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
 
@@ -366,7 +373,26 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
   const concatInputs = allInputs.map((_, i) => `[v${i}]`).join('')
   const filterComplex = `${filterParts};${concatInputs}concat=n=${allInputs.length}:v=1:a=0[out]`
 
-  if (voiceoverAudioPath) {
+  if (voiceoverAudioPath && musicAudioPath) {
+    // Mix BOTH: voiceover on top, music ducked underneath and looped/trimmed to
+    // the video length. voIdx = first audio input, musicIdx = second.
+    const voIdx = allInputs.length
+    const musicIdx = allInputs.length + 1
+    // Music: loop to cover full length, lower to ~22% volume, fade out at the end.
+    // Voiceover: full volume. amix combines them; -shortest clamps to video.
+    const audioFilter =
+      `[${voIdx}:a]volume=1.0[vo];` +
+      `[${musicIdx}:a]volume=0.22,afade=t=out:st=${Math.max(0, 0)}:d=2[mus];` +
+      `[vo][mus]amix=inputs=2:duration=first:dropout_transition=0[aout]`
+    execSync(
+      `ffmpeg ${inputArgs} -i ${voiceoverAudioPath} -stream_loop -1 -i ${musicAudioPath} ` +
+      `-filter_complex "${filterComplex};${audioFilter}" ` +
+      `-map "[out]" -map "[aout]" ` +
+      `-c:v libx264 -c:a aac -b:a 192k -pix_fmt yuv420p ` +
+      `-shortest -movflags +faststart ${outputPath} -y 2>&1`
+    )
+    console.log('[worker]   FFmpeg stitch + voiceover + music mix complete:', outputPath)
+  } else if (voiceoverAudioPath) {
     // Mix voiceover under the video — audio index = allInputs.length (last input)
     const audioIdx = allInputs.length
     execSync(
@@ -377,6 +403,17 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAud
       `-shortest -movflags +faststart ${outputPath} -y 2>&1`
     )
     console.log('[worker]   FFmpeg stitch + audio mix complete:', outputPath)
+  } else if (musicAudioPath) {
+    // Music only (voiceover failed): loop music to length at full-ish volume.
+    const musicIdx = allInputs.length
+    execSync(
+      `ffmpeg ${inputArgs} -stream_loop -1 -i ${musicAudioPath} ` +
+      `-filter_complex "${filterComplex};[${musicIdx}:a]volume=0.7[aout]" ` +
+      `-map "[out]" -map "[aout]" ` +
+      `-c:v libx264 -c:a aac -b:a 192k -pix_fmt yuv420p ` +
+      `-shortest -movflags +faststart ${outputPath} -y 2>&1`
+    )
+    console.log('[worker]   FFmpeg stitch + music-only mix complete:', outputPath)
   } else {
     execSync(
       `ffmpeg ${inputArgs} -filter_complex "${filterComplex}" ` +
@@ -478,6 +515,72 @@ async function generateVoiceoverAudio(script, tmpDir) {
   return audioPath
 }
 
+// ── Trailer music bed (Stable Audio via fal.ai) ──────────────────────────────
+// Maps a book genre to an instrumental cinematic-trailer music prompt. Music_mood
+// from the screenplay step isn't persisted, so we derive a reliable mood from genre
+// — this works for every existing book with no schema migration.
+const GENRE_MUSIC_MOOD = {
+  horror: 'dark cinematic horror trailer score, ominous low drones, dissonant strings, tense building dread, sparse piano, deep impacts',
+  gothic: 'gothic cinematic trailer score, haunting solo cello, mournful choir, candlelit melancholy, slow building tension',
+  thriller: 'tense cinematic thriller trailer score, driving pulse, staccato strings, rising suspense, dramatic percussion hits',
+  mystery: 'mysterious cinematic trailer score, intriguing pizzicato strings, soft piano, curious unfolding tension',
+  paranormal: 'eerie supernatural cinematic trailer score, ethereal pads, ghostly choir, shimmering tension, unsettling atmosphere',
+  romance: 'sweeping romantic cinematic trailer score, emotive piano, warm strings, swelling orchestral emotion',
+  fantasy: 'epic fantasy cinematic trailer score, soaring orchestra, heroic brass, magical choir, grand adventure',
+  'sci-fi': 'epic sci-fi cinematic trailer score, pulsing synth, cinematic braams, futuristic orchestral tension',
+  scifi: 'epic sci-fi cinematic trailer score, pulsing synth, cinematic braams, futuristic orchestral tension',
+  adventure: 'epic adventure cinematic trailer score, driving orchestra, heroic brass, propulsive percussion',
+  drama: 'emotional cinematic trailer score, intimate piano, building strings, poignant swell',
+}
+
+function musicMoodForGenre(genre) {
+  const key = (genre || '').toLowerCase().trim()
+  for (const g of Object.keys(GENRE_MUSIC_MOOD)) {
+    if (key.includes(g)) return GENRE_MUSIC_MOOD[g]
+  }
+  return 'epic cinematic trailer score, dramatic orchestra, building tension, emotional swell, atmospheric'
+}
+
+// Generate an instrumental music bed sized to the trailer length. Non-fatal:
+// if it fails we simply ship the trailer with voiceover-only audio.
+async function generateMusicBed(genre, durationSeconds, tmpDir) {
+  console.log(`[worker]   Generating music bed (${durationSeconds}s, genre=${genre || 'n/a'})...`)
+  const prompt = musicMoodForGenre(genre)
+  // Stable Audio caps at ~47s; clamp and we loop it to fill if the trailer is longer.
+  const reqSeconds = Math.min(Math.max(Math.ceil(durationSeconds), 10), 47)
+
+  const res = await fetch('https://fal.run/fal-ai/stable-audio', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Key ${FAL_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      prompt,
+      seconds_total: reqSeconds,
+      steps: 100
+    })
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Music gen failed ${res.status}: ${err.substring(0, 200)}`)
+  }
+
+  const data = await res.json()
+  const musicUrl = data.audio_file?.url || data.audio?.url || data.url || null
+  if (!musicUrl) throw new Error('Music gen returned no audio URL')
+
+  const musicRes = await fetch(musicUrl)
+  if (!musicRes.ok) throw new Error(`Music download failed: ${musicRes.status}`)
+  const musicBuffer = Buffer.from(await musicRes.arrayBuffer())
+
+  const musicPath = join(tmpDir, 'music.mp3')
+  writeFileSync(musicPath, musicBuffer)
+  console.log(`[worker]   Music bed saved: ${musicBuffer.length} bytes`)
+  return musicPath
+}
+
 // ── Suggested policy-safe rewrite (when Runway rejects a scene) ────────────────
 async function generateSafeRewrite(sceneDescription, rejectionReason) {
   const systemPrompt = `You are a film editor helping adapt a book trailer scene that was rejected by an automated content-moderation filter. Rewrite the scene description so it conveys the same dramatic mood and story beat WITHOUT any content that could trigger moderation (no nudity, no explicit sexual content, no graphic gore/violence). Keep it cinematic, suggestive rather than explicit, and suitable for a general-audience book trailer. Return ONLY the rewritten scene description, 1-3 sentences, no preamble.`
@@ -556,6 +659,21 @@ async function runPipeline(job) {
     console.error('[worker]   Voiceover failed (non-fatal, shipping without audio):', e.message)
   }
 
+  // Music bed — derive mood from genre, size to the trailer length. Non-fatal.
+  let musicAudioPath = null
+  try {
+    const tmpDir = `/tmp/bookreel-${bookId}`
+    if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
+    // Estimate trailer length: clips × per-clip length (+ ~4s end card)
+    const estClips = tier === 'pro' ? 8 : 6
+    const estClipLen = tier === 'pro' ? 10 : 5
+    const estDuration = estClips * estClipLen + 4
+    musicAudioPath = await generateMusicBed(book.genre || 'dramatic', estDuration, tmpDir)
+    if (musicAudioPath) console.log('[worker]   Music bed ready')
+  } catch (e) {
+    console.error('[worker]   Music bed failed (non-fatal, shipping without music):', e.message)
+  }
+
   // Determine max scenes based on tier — targets: Author ≈30s, Pro ≈80s
   // (Runway gen4_turbo renders 5s or 10s clips)
   //   Author: 6 clips × 5s  = 30s
@@ -589,14 +707,14 @@ async function runPipeline(job) {
       console.log(`[worker]   Scene ${scene.scene_number}: generating video clip...`)
       let clipUrl
       try {
-        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
+        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text)
       } catch (clipErr) {
         // Non-retryable: moderation, internal bad-output, or daily-cap. Don't waste generations.
         if (clipErr.isModeration || clipErr.isBadOutput || clipErr.isRateLimit) throw clipErr
         console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying once in 15s...`)
         await new Promise(r => setTimeout(r, 15000))
         imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic')
-        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength)
+        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text)
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
@@ -664,7 +782,7 @@ async function runPipeline(job) {
 
   // Stitch and upload
   console.log('[worker]   Stitching clips...')
-  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, voiceoverAudioPath)
+  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, voiceoverAudioPath, musicAudioPath)
   console.log('[worker]   ✅ Final video:', finalVideoUrl.substring(0, 80))
 
   // Auto-save cover: use first scene image if book has no cover set
