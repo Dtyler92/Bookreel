@@ -4,6 +4,11 @@ import { DashboardClient } from '@/components/author/DashboardClient'
 import { getCreditState } from '@/lib/credits'
 import type { TrailerStatus } from '@/types/database'
 
+// Always render fresh — never serve a cached dashboard. Trailer status changes
+// while the pipeline runs, so stale data makes finished trailers look unrendered.
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 interface BookWithStatus {
   id: string
   title: string
