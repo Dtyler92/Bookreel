@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Image from 'next/image'
 import { BrandLogo } from '@/components/shared/BrandLogo'
 import type { Character, Item } from '@/types/database'
@@ -11,6 +12,7 @@ import type { Character, Item } from '@/types/database'
 interface Props {
   bookId: string
   bookTitle?: string
+  bookGenre?: string | null
   initialCharacters: Character[]
   initialItems: Item[]
   userId?: string
@@ -677,7 +679,7 @@ function ItemCard({
 
 // ─── Main ReviewImagesClient ──────────────────────────────────────────────────
 
-export default function ReviewImagesClient({ bookId, bookTitle, initialCharacters, initialItems, userId }: Props) {
+export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initialCharacters, initialItems, userId }: Props) {
   const router = useRouter()
   const [characters, setCharacters] = useState<Character[]>(initialCharacters)
   const [items, setItems] = useState<Item[]>(initialItems)
@@ -813,7 +815,99 @@ export default function ReviewImagesClient({ bookId, bookTitle, initialCharacter
   const progressPct = totalItems > 0 ? (totalApproved / totalItems) * 100 : 0
 
   return (
-    <div className="space-y-12 pb-36">
+    <div
+      style={{
+        minHeight: '100vh',
+        backgroundColor: '#FAFAF7',
+        paddingTop: '64px',
+      }}
+    >
+      {/* ── Sticky page header (matches screenplay review) ───────────────────── */}
+      <div
+        style={{
+          position: 'sticky',
+          top: '64px',
+          zIndex: 40,
+          backgroundColor: '#FFFFFF',
+          borderBottom: '1px solid #E8E2D5',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '1300px',
+            margin: '0 auto',
+            padding: '24px 40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+          }}
+        >
+          {/* Left */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <Link
+              href="/dashboard"
+              style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '14px',
+                color: '#8A8278',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              ← Back to Dashboard
+            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <h1
+                style={{
+                  fontFamily: 'var(--font-playfair), serif',
+                  fontWeight: 700,
+                  fontSize: '28px',
+                  color: '#0D0D0B',
+                  margin: 0,
+                  lineHeight: 1.2,
+                }}
+              >
+                {bookTitle}
+              </h1>
+              {bookGenre && (
+                <span
+                  style={{
+                    backgroundColor: '#EDE9E0',
+                    color: '#8A8278',
+                    borderRadius: '100px',
+                    padding: '4px 12px',
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {bookGenre}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Right: progress */}
+          <span
+            style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: '14px',
+              color: '#8A8278',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {totalApproved} of {totalItems} approved
+          </span>
+        </div>
+      </div>
+
+      {/* ── Main content ─────────────────────────────────────────────────────── */}
+      <div className="max-w-[1300px] mx-auto px-4 sm:px-10 pt-8 space-y-12 pb-36">
       {/* ── Upgrade Required Modal ─────────────────────────────────────── */}
       {showUpgradeModal && (
         <div style={{
@@ -941,10 +1035,12 @@ export default function ReviewImagesClient({ bookId, bookTitle, initialCharacter
           </div>
         )}
       </section>
+      </div>
+      {/* ── end main content ─────────────────────────────────────────────────── */}
 
       {/* ── Sticky bottom bar ─────────────────────────────────────── */}
       <div className="fixed bottom-0 inset-x-0 border-t border-[#E8E2D5] bg-white shadow-lg z-10">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-6">
+        <div className="max-w-[1300px] mx-auto px-4 sm:px-10 py-4 flex items-center gap-6">
           {/* Progress */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-1">
