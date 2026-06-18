@@ -315,7 +315,7 @@ function buildTitleCard(tmpDir, width, height, fps, title, authorName) {
   return cardPath
 }
 
-async function stitchAndUpload(clipUrls, bookId, title, authorName) {
+async function stitchAndUpload(clipUrls, bookId, title, authorName, voiceoverAudioPath = null) {
   const tmpDir = `/tmp/bookreel-${bookId}`
   if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
 
@@ -357,9 +357,8 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName) {
 
   const outputPath = join(tmpDir, 'trailer.mp4')
 
-  // Re-encode + concat via the concat FILTER so mismatched codec params between
-  // the Runway clips and our generated card can't cause playback glitches.
-  // Every input is scaled to a uniform WxH/fps/SAR before concatenation.
+  // Re-encode + concat via concat filter so mismatched codec params don't cause glitches.
+  // Every input is scaled to uniform WxH/fps/SAR before concatenation.
   const inputArgs = allInputs.map(p => `-i ${p}`).join(' ')
   const filterParts = allInputs
     .map((_, i) => `[${i}:v]scale=${width}:${height},setsar=1,fps=${fps},format=yuv420p[v${i}]`)
@@ -367,11 +366,24 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName) {
   const concatInputs = allInputs.map((_, i) => `[v${i}]`).join('')
   const filterComplex = `${filterParts};${concatInputs}concat=n=${allInputs.length}:v=1:a=0[out]`
 
-  execSync(
-    `ffmpeg ${inputArgs} -filter_complex "${filterComplex}" ` +
-    `-map "[out]" -c:v libx264 -pix_fmt yuv420p -movflags +faststart ${outputPath} -y 2>&1`
-  )
-  console.log('[worker]   FFmpeg stitch complete:', outputPath)
+  if (voiceoverAudioPath) {
+    // Mix voiceover under the video — audio index = allInputs.length (last input)
+    const audioIdx = allInputs.length
+    execSync(
+      `ffmpeg ${inputArgs} -i ${voiceoverAudioPath} ` +
+      `-filter_complex "${filterComplex}" ` +
+      `-map "[out]" -map ${audioIdx}:a ` +
+      `-c:v libx264 -c:a aac -b:a 128k -pix_fmt yuv420p ` +
+      `-shortest -movflags +faststart ${outputPath} -y 2>&1`
+    )
+    console.log('[worker]   FFmpeg stitch + audio mix complete:', outputPath)
+  } else {
+    execSync(
+      `ffmpeg ${inputArgs} -filter_complex "${filterComplex}" ` +
+      `-map "[out]" -c:v libx264 -pix_fmt yuv420p -movflags +faststart ${outputPath} -y 2>&1`
+    )
+    console.log('[worker]   FFmpeg stitch complete (no audio):', outputPath)
+  }
 
   // Upload to Supabase
   const { readFileSync } = await import('fs')
@@ -422,6 +434,45 @@ async function generateVoiceoverScript(bookTitle, scenes, tone) {
   })
   const data = await res.json()
   return data.choices?.[0]?.message?.content || ''
+}
+
+// ── Voiceover audio (ElevenLabs v3 via fal.ai) ───────────────────────────────
+async function generateVoiceoverAudio(script, tmpDir) {
+  if (!script || script.trim().length === 0) return null
+  console.log('[worker]   Generating voiceover audio...')
+
+  // ElevenLabs eleven_v3 via fal.ai — deep cinematic narrator voice
+  const res = await fetch('https://fal.run/fal-ai/elevenlabs/tts/eleven-v3', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Key ${FAL_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      text: script,
+      voice_id: 'onwK4e9ZLuTAKqWW03F9', // "Daniel" — deep, cinematic, authoritative
+      output_format: 'mp3_44100_128'
+    })
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`TTS failed ${res.status}: ${err.substring(0, 200)}`)
+  }
+
+  const data = await res.json()
+  const audioUrl = data.audio?.url || data.url || null
+  if (!audioUrl) throw new Error('TTS returned no audio URL')
+
+  // Download the MP3
+  const audioRes = await fetch(audioUrl)
+  if (!audioRes.ok) throw new Error(`Audio download failed: ${audioRes.status}`)
+  const audioBuffer = Buffer.from(await audioRes.arrayBuffer())
+
+  const audioPath = join(tmpDir, 'voiceover.mp3')
+  writeFileSync(audioPath, audioBuffer)
+  console.log(`[worker]   Voiceover audio saved: ${audioBuffer.length} bytes`)
+  return audioPath
 }
 
 // ── Suggested policy-safe rewrite (when Runway rejects a scene) ────────────────
@@ -489,12 +540,17 @@ async function runPipeline(job) {
 
   console.log(`[worker]   Book: "${book.title}" by ${authorName || '(unknown author)'}, ${scenes.length} scenes`)
 
-  // Voiceover (non-fatal)
+  // Voiceover — generate script then render to audio
+  let voiceoverAudioPath = null
   try {
     const voiceover = await generateVoiceoverScript(book.title, scenes, book.genre || 'dramatic')
-    console.log(`[worker]   Voiceover generated (${voiceover.length} chars)`)
+    console.log(`[worker]   Voiceover script (${voiceover.length} chars)`)
+    const tmpDir = `/tmp/bookreel-${bookId}`
+    if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
+    voiceoverAudioPath = await generateVoiceoverAudio(voiceover, tmpDir)
+    if (voiceoverAudioPath) console.log('[worker]   Voiceover audio ready')
   } catch (e) {
-    console.error('[worker]   Voiceover failed (non-fatal):', e.message)
+    console.error('[worker]   Voiceover failed (non-fatal, shipping without audio):', e.message)
   }
 
   // Determine max scenes based on tier — targets: Author ≈30s, Pro ≈80s
@@ -598,7 +654,7 @@ async function runPipeline(job) {
 
   // Stitch and upload
   console.log('[worker]   Stitching clips...')
-  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName)
+  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, voiceoverAudioPath)
   console.log('[worker]   ✅ Final video:', finalVideoUrl.substring(0, 80))
 
   await updateTrailerStatus(bookId, 'complete', { videoUrl: finalVideoUrl })

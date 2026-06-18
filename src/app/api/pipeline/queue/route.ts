@@ -48,7 +48,7 @@ export async function GET(request: Request) {
   const jobs = (pendingJobs || []).map(job => ({
     trailerId: job.id,
     bookId: job.book_id,
-    tier: (job.quality_tier === 'cinematic' ? 'pro' : 'author') as 'author' | 'pro',
+    tier: (job.quality_tier === 'pro' || job.quality_tier === 'cinematic' ? 'pro' : 'author') as 'author' | 'pro',
     status: job.status,
     stuckSince: job.processing_started_at
   }))

@@ -498,10 +498,22 @@ export async function POST(request: Request) {
 
     // ── Step 9: Save trailer record ───────────────────────────────────────────
     try {
+      // Look up the author's subscription tier so the pipeline knows which
+      // clip count / duration to use (author = 6×5s, pro = 8×10s)
+      let qualityTier: 'basic' | 'pro' = 'basic'
+      if (authorId) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('subscription_tier')
+          .eq('id', authorId)
+          .single()
+        if (profile?.subscription_tier === 'pro') qualityTier = 'pro'
+      }
+
       const { error: trailerError } = await supabase.from('trailers').insert({
         book_id: bookId,
         status: 'review',
-        quality_tier: 'basic',
+        quality_tier: qualityTier,
         view_count: 0,
         click_count: 0
       })
