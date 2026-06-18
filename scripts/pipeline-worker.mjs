@@ -757,14 +757,16 @@ function musicMoodForGenre(genre) {
 async function generateMusicBed(genre, durationSeconds, tmpDir, ledger = null) {
   console.log(`[worker]   Generating music bed (${durationSeconds}s, genre=${genre || 'n/a'})...`)
   const prompt = musicMoodForGenre(genre)
-  // Stable Audio bakes a ~4s outro fade into the END of whatever length it generates.
-  // If we request exactly the trailer length, that fade lands right where we want the
-  // music to SWELL (under the end card), so the trailer dies in silence. Fix: request
-  // EXTRA seconds (so the baked fade falls past the trailer), then strip the faded tail
-  // below. Net result: the audio we actually mix is all full-energy and OUR code owns
-  // every fade. Stable Audio caps at ~47s; we loop the clean segment to fill if longer.
+  // Stable Audio bakes BOTH a ~8s soft intro ramp (silence → full energy) AND a ~4s
+  // outro fade into whatever length it generates. If we use the raw clip, the intro
+  // ramp shows up as a dropout under any SILENT scene early on, and the outro fade
+  // kills the end card. Fix: request EXTRA seconds (so both baked envelopes fall
+  // OUTSIDE our usable region), then strip the intro ramp AND the outro tail below.
+  // Net result: the audio we actually mix is all full-energy and OUR code owns every
+  // fade. Stable Audio caps at ~47s; we loop the clean segment to fill if longer.
+  const INTRO_RAMP = 8   // seconds of baked intro ramp-up stable-audio adds at the start
   const OUTRO_FADE = 4   // seconds of baked outro fade stable-audio adds at the end
-  const TAIL_PAD = 8     // extra seconds requested so that fade lands outside our usable region
+  const TAIL_PAD = INTRO_RAMP + OUTRO_FADE + 4  // extra seconds so both envelopes fall outside our region
   const reqSeconds = Math.min(Math.max(Math.ceil(durationSeconds) + TAIL_PAD, 10), 47)
 
   const res = await fetch('https://fal.run/fal-ai/stable-audio', {
@@ -796,17 +798,19 @@ async function generateMusicBed(genre, durationSeconds, tmpDir, ledger = null) {
   const rawPath = join(tmpDir, 'music-raw.mp3')
   writeFileSync(rawPath, musicBuffer)
 
-  // Strip the baked-in outro fade so the looped/used bed is all full-energy. We keep
-  // (actual duration − OUTRO_FADE) seconds. The mix stage then applies its own swell
-  // and a clean 3s button fade at the real trailer end.
+  // Strip BOTH the baked intro ramp (from the start) and outro fade (from the end) so
+  // the looped/used bed is all full-energy. We keep the middle: skip INTRO_RAMP at the
+  // front, and end OUTRO_FADE before the raw end. The mix stage then applies its own
+  // swell and a clean 3s button fade at the real trailer end.
   const musicPath = join(tmpDir, 'music.mp3')
   try {
     const rawDur = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${rawPath}`).toString().trim()) || reqSeconds
-    const keep = Math.max(8, rawDur - OUTRO_FADE)
-    execSync(`ffmpeg -i ${rawPath} -t ${keep.toFixed(2)} -c copy -y ${musicPath} 2>&1`)
-    console.log(`[worker]   Music bed trimmed: ${rawDur.toFixed(1)}s raw → ${keep.toFixed(1)}s full-energy (stripped baked outro fade)`)
+    const keep = Math.max(8, rawDur - INTRO_RAMP - OUTRO_FADE)
+    // Re-encode (not -c copy) because we're cutting mid-stream from a non-keyframe start.
+    execSync(`ffmpeg -ss ${INTRO_RAMP} -i ${rawPath} -t ${keep.toFixed(2)} -c:a libmp3lame -q:a 2 -y ${musicPath} 2>&1`)
+    console.log(`[worker]   Music bed trimmed: ${rawDur.toFixed(1)}s raw → ${keep.toFixed(1)}s full-energy (stripped ${INTRO_RAMP}s intro ramp + ${OUTRO_FADE}s outro fade)`)
   } catch (e) {
-    console.log('[worker]   Music tail-trim failed (non-fatal, using raw bed):', e.message)
+    console.log('[worker]   Music trim failed (non-fatal, using raw bed):', e.message)
     writeFileSync(musicPath, musicBuffer)
   }
   console.log(`[worker]   Music bed saved: ${musicBuffer.length} bytes`)
