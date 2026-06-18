@@ -57,6 +57,11 @@ const KLING_TIER = (process.env.KLING_TIER || 'pro').toLowerCase() === 'standard
 const KLING_ENDPOINT = `https://queue.fal.run/fal-ai/kling-video/v2.1/${KLING_TIER}/image-to-video`
 const KLING_PER_SEC = KLING_TIER === 'standard' ? 0.056 : 0.098
 
+// Troubleshoot mode — cap the number of clips to render a SHORT trailer while we
+// iterate on audio/quality, so we don't burn credits on full-length renders. Set
+// TEST_MAX_CLIPS=2 for a ~20s trailer (2×10s pro clips). Unset/0 = full length.
+const TEST_MAX_CLIPS = parseInt(process.env.TEST_MAX_CLIPS || '0', 10) || 0
+
 function isPlaceholder(v) {
   return !v || ['***', 'xxx', 'placeholder'].includes(v) || v.length < 10
 }
@@ -109,6 +114,7 @@ function softenForModeration(text) {
 console.log('[worker] App URL:', APP_URL)
 console.log('[worker] Anthropic key available:', !isPlaceholder(ANTHROPIC_API_KEY))
 console.log(`[worker] Video engine: Kling 2.1 ${KLING_TIER.toUpperCase()} via fal.ai ($${KLING_PER_SEC}/s)`)
+if (TEST_MAX_CLIPS > 0) console.log(`[worker] ⚠ TEST MODE active: TEST_MAX_CLIPS=${TEST_MAX_CLIPS} (short renders to save credits)`)
 
 // ── Supabase client ──────────────────────────────────────────────────────────
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
@@ -988,8 +994,10 @@ async function runPipeline(job) {
   try {
     const tmpDir = `/tmp/bookreel-${bookId}`
     if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
-    // Estimate trailer length: clips × per-clip length (+ ~4s end card)
-    const estClips = tier === 'pro' ? 8 : 6
+    // Estimate trailer length: clips × per-clip length (+ ~4s end card).
+    // Respect TEST_MAX_CLIPS so short test renders get a correctly-sized music bed.
+    const baseClips = tier === 'pro' ? 8 : 6
+    const estClips = TEST_MAX_CLIPS > 0 ? Math.min(baseClips, TEST_MAX_CLIPS) : baseClips
     const estClipLen = tier === 'pro' ? 10 : 5
     const estDuration = estClips * estClipLen + 4
     musicAudioPath = await generateMusicBed(book.genre || 'dramatic', estDuration, tmpDir, ledger)
@@ -999,11 +1007,15 @@ async function runPipeline(job) {
   }
 
   // Determine max scenes based on tier — targets: Author ≈30s, Pro ≈80s
-  // (Runway gen4_turbo renders 5s or 10s clips)
   //   Author: 6 clips × 5s  = 30s
   //   Pro:    8 clips × 10s = 80s
-  const maxScenes = tier === 'pro' ? 8 : 6
+  // TEST_MAX_CLIPS (env) caps this for short troubleshooting renders (e.g. 2 = ~20s).
   const sceneLength = tier === 'pro' ? 10 : 5
+  let maxScenes = tier === 'pro' ? 8 : 6
+  if (TEST_MAX_CLIPS > 0) {
+    maxScenes = Math.min(maxScenes, TEST_MAX_CLIPS)
+    console.log(`[worker]   ⚠ TEST MODE: capping to ${maxScenes} clips (~${maxScenes * sceneLength}s) to save credits`)
+  }
   const scenesToGenerate = scenes.slice(0, maxScenes)
 
   // Character punch-lines — pick 1 (Author) or 2 (Pro) iconic spoken lines, voiced
