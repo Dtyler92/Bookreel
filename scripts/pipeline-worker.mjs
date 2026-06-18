@@ -798,17 +798,21 @@ async function generateMusicBed(genre, durationSeconds, tmpDir, ledger = null) {
   const rawPath = join(tmpDir, 'music-raw.mp3')
   writeFileSync(rawPath, musicBuffer)
 
-  // Strip BOTH the baked intro ramp (from the start) and outro fade (from the end) so
-  // the looped/used bed is all full-energy. We keep the middle: skip INTRO_RAMP at the
-  // front, and end OUTRO_FADE before the raw end. The mix stage then applies its own
-  // swell and a clean 3s button fade at the real trailer end.
+  // Strip BOTH the baked intro ramp (from the start) and outro fade (from the end),
+  // THEN run dynaudnorm to flatten any residual envelope so the bed is uniformly
+  // full-energy end-to-end. Fixed-second trimming alone is fragile (stable-audio's
+  // fade lengths vary), so normalization is the real guarantee: no dropouts under
+  // silent scenes, and the loop boundary is seamless. The mix stage still owns the
+  // final swell + 3s button fade at the real trailer end.
   const musicPath = join(tmpDir, 'music.mp3')
   try {
     const rawDur = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 ${rawPath}`).toString().trim()) || reqSeconds
     const keep = Math.max(8, rawDur - INTRO_RAMP - OUTRO_FADE)
-    // Re-encode (not -c copy) because we're cutting mid-stream from a non-keyframe start.
-    execSync(`ffmpeg -ss ${INTRO_RAMP} -i ${rawPath} -t ${keep.toFixed(2)} -c:a libmp3lame -q:a 2 -y ${musicPath} 2>&1`)
-    console.log(`[worker]   Music bed trimmed: ${rawDur.toFixed(1)}s raw → ${keep.toFixed(1)}s full-energy (stripped ${INTRO_RAMP}s intro ramp + ${OUTRO_FADE}s outro fade)`)
+    // Re-encode (not -c copy) because we cut mid-stream from a non-keyframe start.
+    // dynaudnorm (f=200ms frames, g=15 gaussian window) gently levels the bed without
+    // audible pumping, erasing any leftover intro/outro taper the fixed trim missed.
+    execSync(`ffmpeg -ss ${INTRO_RAMP} -i ${rawPath} -t ${keep.toFixed(2)} -af dynaudnorm=f=200:g=15 -c:a libmp3lame -q:a 2 -y ${musicPath} 2>&1`)
+    console.log(`[worker]   Music bed trimmed+leveled: ${rawDur.toFixed(1)}s raw → ${keep.toFixed(1)}s uniform full-energy (stripped ${INTRO_RAMP}s intro + ${OUTRO_FADE}s outro, dynaudnorm flattened)`)
   } catch (e) {
     console.log('[worker]   Music trim failed (non-fatal, using raw bed):', e.message)
     writeFileSync(musicPath, musicBuffer)
