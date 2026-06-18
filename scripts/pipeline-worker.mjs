@@ -101,7 +101,7 @@ function softenForModeration(text) {
 
 console.log('[worker] App URL:', APP_URL)
 console.log('[worker] Anthropic key available:', !isPlaceholder(ANTHROPIC_API_KEY))
-console.log('[worker] Video engine: Kling 2.1 via fal.ai')
+console.log('[worker] Video engine: Kling 2.1 Pro via fal.ai')
 
 // ── Supabase client ──────────────────────────────────────────────────────────
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
@@ -193,7 +193,7 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5
   const safePromptText = softenForModeration(sceneDescription)
 
   // Submit to Kling queue
-  const submitRes = await fetch('https://queue.fal.run/fal-ai/kling-video/v2.1/standard/image-to-video', {
+  const submitRes = await fetch('https://queue.fal.run/fal-ai/kling-video/v2.1/pro/image-to-video', {
     method: 'POST',
     headers: {
       'Authorization': `Key ${FAL_API_KEY}`,
