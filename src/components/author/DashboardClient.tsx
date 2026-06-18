@@ -176,7 +176,7 @@ function CoverModal({
     try {
       let persistedUrl = coverPreview
 
-      // If it's a local file (data URL), upload it to Supabase via the API
+      // If it's a local file (data URL), upload it to Supabase first
       if (coverPreview.startsWith('data:')) {
         const blob = await (await fetch(coverPreview)).blob()
         const formData = new FormData()
@@ -190,7 +190,19 @@ function CoverModal({
         const data = await res.json()
         persistedUrl = data.coverUrl ?? data.url ?? persistedUrl
       }
-      // If it's already a Supabase URL (from generate), generate-cover already saved it to DB
+
+      // Always explicitly save the final URL to DB — covers both generated
+      // and uploaded covers, and acts as a guaranteed fallback even if
+      // generate-cover's own DB save silently failed.
+      const saveRes = await fetch(`/api/books/${bookId}/save-cover`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coverUrl: persistedUrl }),
+      })
+      if (!saveRes.ok) {
+        const d = await saveRes.json().catch(() => ({}))
+        throw new Error(d.error ?? 'Failed to save cover')
+      }
 
       onCoverUpdated(bookId, persistedUrl)
       onClose()
