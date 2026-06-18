@@ -616,16 +616,17 @@ async function generateVoiceoverBeats(bookTitle, scenes, tone, ledger = null) {
   const userContent =
     `Book trailer for "${bookTitle}". Tone: ${tone}.\n` +
     `Scenes (in order):\n${sceneList}\n\n` +
-    `Write ${beatCount} short voiceover beats spread across these scenes. Choose the ${beatCount} most ` +
-    `evocative scenes to narrate and leave the rest silent (music only). The FINAL beat must land on ` +
-    `the last scene and end with the book title "${bookTitle}".`
+    `Write ${beatCount} short voiceover beat(s) spread across these scenes. Choose the ${beatCount} most ` +
+    `evocative scene(s) to narrate and leave the rest silent (music only). The FINAL beat should weave ` +
+    `in the book title "${bookTitle}" as part of a full phrase (e.g. "His name was ${bookTitle}." — NOT the bare title alone).`
   const systemPrompt =
     `You are a voiceover writer for cinematic book trailers. You write SPARSE, punchy narration — ` +
     `a few short phrases timed to individual shots, never a continuous paragraph. ` +
     `RULES:\n` +
-    `- Each beat is MAX 8 words. Fragments and single phrases are good. Fewer words = more cinematic.\n` +
+    `- Each beat is a COMPLETE evocative phrase of 3–8 words. Never a single bare word or just a name.\n` +
+    `- Fewer words = more cinematic, but it must read as a line of narration, not a label.\n` +
     `- Do NOT narrate every scene — pick the most evocative ones; silence between beats is intentional.\n` +
-    `- No character names in the first beat. Build dread/tension. The last beat ends with the title.\n` +
+    `- No character names in the first beat. Build dread/tension. The final beat works the title into a phrase.\n` +
     `Return ONLY a JSON array, no markdown, each item: {"scene_number": <number>, "text": "<phrase>"}.`
 
   const raw = await (async () => {
