@@ -1142,8 +1142,17 @@ async function runPipeline(job) {
     try {
       console.log(`[worker]   Scene ${scene.scene_number}: generating image...`)
 
+      // If this scene will be lip-synced, bias the image toward a clear face:
+      // medium/close shot, camera-facing, minimal motion — gives the lip-sync
+      // model the best possible target. Other scenes use the plain description.
+      // willLipSync is also used by the video-clip call below.
+      const willLipSync = lineBySceneNumber.has(scene.scene_number)
+      const imageDescription = willLipSync
+        ? `${scene.description}, medium close-up shot, character facing camera directly, clear face visible, neutral head position, cinematic portrait`
+        : scene.description
+
       // Generate image and upload to Supabase (so URL doesn't expire)
-      let imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic', ledger)
+      let imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger)
 
       // Save first scene image as book cover if no cover is set
       if (scene.scene_number === scenesToGenerate[0].scene_number && !book.cover_image_url) {
@@ -1154,20 +1163,22 @@ async function runPipeline(job) {
       //  - DETERMINISTIC (isModeration / isBadOutput / isRateLimit): a retry with a
       //    fresh image fails identically and just burns the daily task cap. Bail at once.
       //  - TRANSIENT (network blip, timeout): worth one fresh-image retry.
-      console.log(`[worker]   Scene ${scene.scene_number}: generating video clip...`)
-      // If this scene has NO character line, it won't be lip-synced — so suppress
-      // generated talking/mouth movement (flapping lips with no audio looks broken).
-      const willLipSync = lineBySceneNumber.has(scene.scene_number)
+      console.log(`[worker]   Scene ${scene.scene_number}: generating video clip (lip-sync: ${willLipSync})...`)
+      // Lip-sync scenes: keep head steady + facing camera so sync model can track well.
+      // Non-lip-sync: suppress talking (flapping lips with no audio looks broken).
+      const videoDescription = willLipSync
+        ? `${scene.description}, character looking directly at camera, minimal head movement, steady close-up`
+        : scene.description
       let clipUrl
       try {
-        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text, ledger, !willLipSync)
+        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, scene.screenplay_text, ledger, !willLipSync)
       } catch (clipErr) {
         // Non-retryable: moderation, internal bad-output, or daily-cap. Don't waste generations.
         if (clipErr.isModeration || clipErr.isBadOutput || clipErr.isRateLimit) throw clipErr
         console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying once in 15s...`)
         await new Promise(r => setTimeout(r, 15000))
-        imageUrl = await generateSceneImage(scene.description, book.genre || 'dramatic', ledger)
-        clipUrl = await generateVideoClip(imageUrl, scene.description, sceneLength, scene.screenplay_text, ledger, !willLipSync)
+        imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger)
+        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, scene.screenplay_text, ledger, !willLipSync)
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
