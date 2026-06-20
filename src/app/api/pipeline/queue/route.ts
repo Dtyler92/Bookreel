@@ -51,14 +51,21 @@ export async function GET(request: Request) {
     return Response.json({ error: error.message }, { status: 500 })
   }
 
-  // Map quality_tier to author/pro pipeline tier
-  const jobs = (pendingJobs || []).map(job => ({
-    trailerId: job.id,
-    bookId: job.book_id,
-    tier: (job.quality_tier === 'pro' || job.quality_tier === 'cinematic' ? 'pro' : 'author') as 'author' | 'pro',
-    status: job.status,
-    stuckSince: job.processing_started_at
-  }))
+  // Map quality_tier to pipeline tier (clip count) and video quality (seedance tier)
+  // quality_tier values: 'standard' (720p fast, 80cr), 'premium' (1080p, 150cr),
+  //   'basic'/'author' (legacy → standard), 'pro'/'cinematic' (legacy → premium)
+  const jobs = (pendingJobs || []).map(job => {
+    const qt = job.quality_tier ?? 'standard'
+    const isPremium = qt === 'premium' || qt === 'pro' || qt === 'cinematic'
+    return {
+      trailerId: job.id,
+      bookId: job.book_id,
+      tier: (isPremium ? 'pro' : 'author') as 'author' | 'pro',
+      quality: (isPremium ? 'premium' : 'standard') as 'standard' | 'premium',
+      status: job.status,
+      stuckSince: job.processing_started_at
+    }
+  })
 
   return Response.json({ jobs })
 }

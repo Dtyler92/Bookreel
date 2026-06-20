@@ -554,17 +554,14 @@ export async function POST(request: Request) {
 
     // ── Step 9: Save trailer record ───────────────────────────────────────────
     try {
-      // Look up the author's subscription tier so the pipeline knows which
-      // clip count / duration to use (author = 6×5s, pro = 8×10s)
-      let qualityTier: 'basic' | 'pro' = 'basic'
-      if (authorId) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('subscription_tier')
-          .eq('id', authorId)
-          .single()
-        if (profile?.subscription_tier === 'pro') qualityTier = 'pro'
-      }
+      // quality_tier comes from the request body ('standard' or 'premium').
+      // Default to 'standard' (Seedance Fast, 720p, 80 credits).
+      // 'premium' = Seedance Standard, 1080p, 150 credits.
+      let qualityTier: 'standard' | 'premium' = 'standard'
+      try {
+        const reqBody = await request.clone().json() as Record<string, unknown>
+        if (reqBody?.quality === 'premium') qualityTier = 'premium'
+      } catch { /* no body or not JSON — default to standard */ }
 
       const { error: trailerError } = await supabase.from('trailers').insert({
         book_id: bookId,

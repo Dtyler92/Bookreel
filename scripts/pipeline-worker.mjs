@@ -256,7 +256,7 @@ async function generateSceneImage(sceneDescription, genre, ledger = null) {
 //   generateCharacterClip() — reference-to-video for lip-synced character scenes
 //                             (no separate sync-lipsync step needed)
 
-async function pollSeedanceJob(endpoint, requestId, durationSeconds, label, ledger) {
+async function pollSeedanceJob(endpoint, requestId, durationSeconds, label, ledger, perSec = SEEDANCE_PER_SEC) {
   const statusBase = `https://queue.fal.run/${endpoint.replace('https://queue.fal.run/', '')}`
   const statusUrl = `${statusBase}/requests/${requestId}/status`
   const resultUrl = `${statusBase}/requests/${requestId}`
@@ -275,7 +275,7 @@ async function pollSeedanceJob(endpoint, requestId, durationSeconds, label, ledg
       const result = await resultRes.json()
       const videoUrl = result.video?.url || null
       if (!videoUrl) throw new Error('Seedance returned no video URL')
-      if (ledger) ledger.add(label, 'fal', SEEDANCE_PER_SEC * durationSeconds)
+      if (ledger) ledger.add(label, 'fal', perSec * durationSeconds)
       return videoUrl
     }
     if (status.status === 'FAILED') {
@@ -290,7 +290,7 @@ async function pollSeedanceJob(endpoint, requestId, durationSeconds, label, ledg
 }
 
 // Standard image-to-video — for non-character or non-lip-sync scenes
-async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 10, screenplayText = null, ledger = null, suppressTalking = false) {
+async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 10, screenplayText = null, ledger = null, suppressTalking = false, endpoint = SEEDANCE_I2V_ENDPOINT, resolution = '720p', perSec = SEEDANCE_PER_SEC) {
   const duration = String(Math.min(15, Math.max(4, durationSeconds)))
   const motionText = screenplayText?.trim()
     ? `${sceneDescription}. Camera and motion: ${screenplayText}`
@@ -298,14 +298,14 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
   const safePrompt = softenForModeration(motionText)
     + (suppressTalking ? ', subject is silent and still, mouth closed, no talking' : '')
 
-  const submitRes = await fetch(SEEDANCE_I2V_ENDPOINT, {
+  const submitRes = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       prompt: safePrompt,
       image_url: imageUrl,
       duration,
-      resolution: SEEDANCE_TIER === 'fast' ? '720p' : '1080p',
+      resolution,
       aspect_ratio: '16:9',
       generate_audio: false,  // we supply our own music/TTS
     })
@@ -320,21 +320,18 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
 
   const submitData = await submitRes.json()
   const requestId = submitData.request_id
+  const tier = resolution === '1080p' ? 'standard' : 'fast'
   console.log(`[worker]   Seedance i2v task: ${requestId}`)
-  return pollSeedanceJob(SEEDANCE_I2V_ENDPOINT, requestId, Number(duration), `video clip ${duration}s (seedance 2.0 ${SEEDANCE_TIER})`, ledger)
+  return pollSeedanceJob(endpoint, requestId, Number(duration), `video clip ${duration}s (seedance 2.0 ${tier} ${resolution})`, ledger, perSec)
 }
 
 // Reference-to-video — for character scenes with lip-sync.
-// Passes the character face image + TTS audio as references; Seedance natively
-// lip-syncs the speech onto the character. No separate sync-lipsync step needed.
-async function generateCharacterClip(characterImageUrl, ttsAudioUrl, sceneDescription, durationSeconds = 10, ledger = null) {
+async function generateCharacterClip(characterImageUrl, ttsAudioUrl, sceneDescription, durationSeconds = 10, ledger = null, endpoint = SEEDANCE_REF_ENDPOINT, perSec = SEEDANCE_PER_SEC) {
   const duration = String(Math.min(15, Math.max(4, durationSeconds)))
   const safeDesc = softenForModeration(sceneDescription)
-  // @Image1 = character face reference, @Audio1 = TTS voice
-  // "speaks while saying @Audio1" triggers Seedance's native lip-sync
   const prompt = `@Image1 speaks while saying @Audio1. ${safeDesc}. Character looks directly at camera, steady head position, cinematic portrait lighting.`
 
-  const submitRes = await fetch(SEEDANCE_REF_ENDPOINT, {
+  const submitRes = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -342,7 +339,7 @@ async function generateCharacterClip(characterImageUrl, ttsAudioUrl, sceneDescri
       image_urls: [characterImageUrl],
       audio_urls: [ttsAudioUrl],
       duration,
-      resolution: '720p',  // reference-to-video caps at 720p
+      resolution: '720p',  // reference-to-video caps at 720p regardless of tier
       aspect_ratio: '16:9',
       generate_audio: false,
     })
@@ -358,7 +355,7 @@ async function generateCharacterClip(characterImageUrl, ttsAudioUrl, sceneDescri
   const submitData = await submitRes.json()
   const requestId = submitData.request_id
   console.log(`[worker]   Seedance ref2v task: ${requestId}`)
-  return pollSeedanceJob(SEEDANCE_REF_ENDPOINT, requestId, Number(duration), `character clip ${duration}s w/ lip-sync (seedance 2.0 ref2v)`, ledger)
+  return pollSeedanceJob(endpoint, requestId, Number(duration), `character clip ${duration}s w/ lip-sync (seedance 2.0 ref2v)`, ledger, perSec)
 }
 
 // ── Video stitching (ffmpeg) ──────────────────────────────────────────────────
@@ -1035,8 +1032,18 @@ async function generateSafeRewrite(sceneDescription, rejectionReason) {
 const activeJobs = new Set()
 
 async function runPipeline(job) {
-  const { bookId, tier } = job
-  console.log(`\n[worker] ▶ Starting pipeline: bookId=${bookId} tier=${tier}`)
+  const { bookId, tier, quality = 'standard' } = job
+  console.log(`\n[worker] ▶ Starting pipeline: bookId=${bookId} tier=${tier} quality=${quality}`)
+
+  // Select Seedance endpoints + pricing based on quality requested by the user
+  //   standard → Seedance Fast (720p, $0.2419/s, 80 credits)
+  //   premium  → Seedance Standard (1080p, $0.3024/s, 150 credits)
+  const isPremiun = quality === 'premium'
+  const i2vEndpoint  = isPremiun ? 'https://queue.fal.run/bytedance/seedance-2.0/image-to-video'      : 'https://queue.fal.run/bytedance/seedance-2.0/fast/image-to-video'
+  const refEndpoint  = isPremiun ? 'https://queue.fal.run/bytedance/seedance-2.0/reference-to-video'  : 'https://queue.fal.run/bytedance/seedance-2.0/fast/reference-to-video'
+  const perSec       = isPremiun ? 0.3024 : 0.2419
+  const resolution   = isPremiun ? '1080p' : '720p'
+  console.log(`[worker]   Video: Seedance 2.0 ${quality.toUpperCase()} — ${resolution} @ $${perSec}/s`)
 
   await updateTrailerStatus(bookId, 'processing')
 
@@ -1199,14 +1206,14 @@ async function runPipeline(job) {
         : scene.description
       let clipUrl
       try {
-        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, scene.screenplay_text, ledger, !willLipSync)
+        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, scene.screenplay_text, ledger, !willLipSync, i2vEndpoint, resolution, perSec)
       } catch (clipErr) {
         // Non-retryable: moderation, internal bad-output, or daily-cap. Don't waste generations.
         if (clipErr.isModeration || clipErr.isBadOutput || clipErr.isRateLimit) throw clipErr
         console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying once in 15s...`)
         await new Promise(r => setTimeout(r, 15000))
         imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger)
-        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, scene.screenplay_text, ledger, !willLipSync)
+        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, scene.screenplay_text, ledger, !willLipSync, i2vEndpoint, resolution, perSec)
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
@@ -1221,7 +1228,7 @@ async function runPipeline(job) {
             await generateCharacterLineAudio(chosenLine.line, chosenLine.voice, tmpDirLines, scene.scene_number, ledger)
           // Replace the standard clip with a Seedance reference-to-video clip that
           // natively lip-syncs the character's voice onto their face image.
-          const syncedUrl = await generateCharacterClip(imageUrl, lineAudioUrl, scene.description, sceneLength, ledger)
+          const syncedUrl = await generateCharacterClip(imageUrl, lineAudioUrl, scene.description, sceneLength, ledger, refEndpoint, perSec)
           clipUrl = syncedUrl
           // clipUrls.length is this clip's index (we push next).
           characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })

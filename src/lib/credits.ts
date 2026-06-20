@@ -11,17 +11,34 @@ function serviceClient() {
 export interface CreditState {
   credits: number
   resetAt: string
-  tier: 'free' | 'basic' | 'pro'
+  tier: string
 }
 
-// Monthly allotment per tier
+// ── Credit costs per render type ──────────────────────────────────────────────
+// Standard: Seedance Fast (720p, 4 clips × 10s = 40s trailer)  — cheaper tier
+// Premium:  Seedance Standard (1080p, 7 clips × 10s = 70s trailer) — full quality
+export const CREDIT_COSTS = {
+  standard_trailer: 80,   // Seedance Fast 720p — ~$9 COGS at $0.19/cr
+  premium_trailer:  150,  // Seedance Standard 1080p — ~$21 COGS at $0.19/cr
+} as const
+
+export type QualityTier = 'standard' | 'premium'
+
+export function creditCostForQuality(quality: QualityTier): number {
+  return quality === 'premium' ? CREDIT_COSTS.premium_trailer : CREDIT_COSTS.standard_trailer
+}
+
+// ── Monthly allotment per subscription plan ───────────────────────────────────
+// Plans: free | hobbyist | author | publisher
 export function monthlyAllotment(tier: string): number {
-  if (tier === 'pro') return 2
-  if (tier === 'basic') return 1
-  return 1 // free still gets 1 to try
+  if (tier === 'publisher') return 450
+  if (tier === 'author')    return 150
+  if (tier === 'hobbyist')  return 50
+  // free & legacy tiers
+  return 0
 }
 
-// Reads the profile, auto-grants the monthly allotment if the reset date has passed.
+// ── Read credit state, auto-granting monthly allotment if due ─────────────────
 export async function getCreditState(userId: string): Promise<CreditState | null> {
   const supabase = serviceClient()
   const { data: profile } = await supabase
@@ -33,53 +50,66 @@ export async function getCreditState(userId: string): Promise<CreditState | null
   if (!profile) return null
 
   let credits = profile.trailer_credits ?? 0
-  let resetAt = profile.credits_reset_at
-  const tier = (profile.subscription_tier ?? 'free') as 'free' | 'basic' | 'pro'
+  let resetAt  = profile.credits_reset_at
+  const tier   = profile.subscription_tier ?? 'free'
 
   // Auto-grant a fresh month's allotment if due
   if (resetAt && new Date(resetAt) <= new Date()) {
     const grant = monthlyAllotment(tier)
-    credits = credits + grant
-    const nextReset = new Date()
-    nextReset.setMonth(nextReset.getMonth() + 1)
-    resetAt = nextReset.toISOString()
+    if (grant > 0) {
+      credits = credits + grant
+      const nextReset = new Date()
+      nextReset.setMonth(nextReset.getMonth() + 1)
+      resetAt = nextReset.toISOString()
 
-    await supabase
-      .from('profiles')
-      .update({ trailer_credits: credits, credits_reset_at: resetAt })
-      .eq('id', userId)
+      await supabase
+        .from('profiles')
+        .update({ trailer_credits: credits, credits_reset_at: resetAt })
+        .eq('id', userId)
 
-    await logLedger(userId, grant, 'monthly_grant', null, credits)
+      await logLedger(userId, grant, 'monthly_grant', null, credits)
+    }
   }
 
   return { credits, resetAt, tier }
 }
 
-// Atomically consume one credit. Returns false if insufficient balance.
-export async function consumeCredit(userId: string, bookId: string | null): Promise<boolean> {
+// ── Consume credits for a render. Returns false if insufficient balance. ──────
+export async function consumeCredits(
+  userId: string,
+  bookId: string | null,
+  quality: QualityTier = 'standard'
+): Promise<boolean> {
   const supabase = serviceClient()
-  const state = await getCreditState(userId)
-  if (!state || state.credits < 1) return false
+  const state    = await getCreditState(userId)
+  const cost     = creditCostForQuality(quality)
 
-  const newBalance = state.credits - 1
-  const { error } = await supabase
+  if (!state || state.credits < cost) return false
+
+  const newBalance = state.credits - cost
+  const { error }  = await supabase
     .from('profiles')
     .update({ trailer_credits: newBalance })
     .eq('id', userId)
 
   if (error) return false
-  await logLedger(userId, -1, 'trailer_generated', bookId, newBalance)
+  await logLedger(userId, -cost, `trailer_generated_${quality}`, bookId, newBalance)
   return true
 }
 
-// Grant credits (purchase or admin). Returns the new balance.
+// Legacy single-credit consume — kept for backward compatibility
+export async function consumeCredit(userId: string, bookId: string | null): Promise<boolean> {
+  return consumeCredits(userId, bookId, 'standard')
+}
+
+// ── Grant credits (purchase or admin). Returns the new balance. ───────────────
 export async function grantCredits(
   userId: string,
   amount: number,
   reason: string
 ): Promise<number | null> {
-  const supabase = serviceClient()
-  const state = await getCreditState(userId)
+  const supabase   = serviceClient()
+  const state      = await getCreditState(userId)
   if (!state) return null
 
   const newBalance = state.credits + amount

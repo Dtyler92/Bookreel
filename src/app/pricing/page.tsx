@@ -1,910 +1,466 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useState } from 'react'
+import Link from 'next/link'
 
-type BillingPeriod = 'monthly' | 'yearly' | 'beta';
+type BillingPeriod = 'monthly' | 'yearly'
 
-const faqData = [
+// ── Credit economy ─────────────────────────────────────────────────────────────
+// Standard trailer  (Seedance Fast, 720p,  4 clips × 10s = 40s)  = 80 credits
+// Premium trailer   (Seedance 1080p,       7 clips × 10s = 70s)  = 150 credits
+// Audiobook add-on  (ElevenLabs full MS)                          = 50 credits  (coming soon)
+// Social Pack       (vertical cuts + quote cards)                 = 20 credits  (coming soon)
+
+const PLANS = [
   {
-    q: 'Can I really lock in Beta pricing forever?',
-    a: "Yes — that's our promise to our founding members. If you subscribe during Beta, your rate never changes, even when we raise prices for new users. Consider it our thank-you for believing in us early.",
+    id: 'hobbyist',
+    name: 'Hobbyist',
+    monthly: 9,
+    yearly: 75,   // ~$6.25/mo — save 2 months
+    creditsPerMonth: 50,
+    description: 'For authors publishing occasionally.',
+    features: [
+      '50 credits / month',
+      '~0.6 standard trailers/mo or save up credits',
+      'Access to all render types',
+      'Credits roll over month to month',
+      'Blurb generator (coming soon)',
+    ],
+    cta: 'Start Hobbyist',
+    highlight: false,
   },
   {
-    q: 'What happens when Beta ends?',
-    a: "Your plan stays exactly as-is. Founding Members get grandfathered pricing permanently. You'll have access to all features at your locked-in rate — we'll simply open up to new users at higher pricing.",
+    id: 'author',
+    name: 'Author',
+    monthly: 19,
+    yearly: 160,  // ~$13.33/mo — save 2 months
+    creditsPerMonth: 150,
+    description: 'For actively publishing indie authors.',
+    features: [
+      '150 credits / month',
+      '~1 premium trailer or 1–2 standard trailers/mo',
+      'Access to all render types',
+      'Credits roll over month to month',
+      'Blurb generator (coming soon)',
+      'SEO metadata generator (coming soon)',
+    ],
+    cta: 'Start Author Plan',
+    highlight: true,
+    badge: 'Most Popular',
+  },
+  {
+    id: 'publisher',
+    name: 'Publisher',
+    monthly: 49,
+    yearly: 410,  // ~$34/mo — save 2+ months
+    creditsPerMonth: 450,
+    description: 'For high-volume authors and small presses.',
+    features: [
+      '450 credits / month',
+      '~3 premium or 5+ standard trailers/mo',
+      'Access to all render types',
+      'Credits roll over month to month',
+      'Priority render queue',
+      'All coming-soon tools included',
+      'Priority support',
+    ],
+    cta: 'Start Publisher Plan',
+    highlight: false,
+  },
+]
+
+const CREDIT_PACKS = [
+  { credits: 100, price: 19, perCredit: '0.19', label: 'Starter Pack',  badge: null,         trailers: '1 premium or 1 standard + extras' },
+  { credits: 300, price: 49, perCredit: '0.16', label: 'Author Pack',   badge: 'Most Popular', trailers: '2 premium or 3–4 standard trailers' },
+  { credits: 700, price: 99, perCredit: '0.14', label: 'Pro Pack',      badge: 'Best Value',  trailers: '4 premium or 8+ standard trailers' },
+]
+
+const QUALITY_TIERS = [
+  {
+    name: 'Standard',
+    resolution: '720p',
+    credits: 80,
+    runtime: '~40 seconds',
+    clips: '4 clips × 10s',
+    features: ['Seedance Fast video engine', '720p resolution', '1 character spoken line', 'Cinematic narration + music', 'Social-ready format'],
+  },
+  {
+    name: 'Premium',
+    resolution: '1080p',
+    credits: 150,
+    runtime: '~70 seconds',
+    clips: '7 clips × 10s',
+    features: ['Seedance 2.0 Standard engine', '1080p full HD', '2 character spoken lines', 'Native lip-sync (no separate model)', 'Cinematic narration + music', 'Social-ready format'],
+    badge: 'Recommended',
+  },
+]
+
+const FAQ = [
+  {
+    q: 'Do credits expire?',
+    a: 'Never. Credits you buy or earn from a subscription roll over indefinitely — they\'re yours until you use them.',
+  },
+  {
+    q: 'What\'s the difference between Standard and Premium quality?',
+    a: 'Standard uses Seedance Fast at 720p — great quality, shorter trailer (~40s, 4 clips). Premium uses Seedance 2.0 Standard at 1080p — full cinematic quality, longer trailer (~70s, 7 clips), and 2 character spoken lines with native lip-sync. Same AI pipeline, same character reference system, just different resolution and clip count.',
+  },
+  {
+    q: 'Can I mix standard and premium renders?',
+    a: 'Yes — you choose per render. Have 300 credits? You could do 2 premium trailers (150 each), or 3 standard trailers (80 each), or mix and match however you like.',
+  },
+  {
+    q: 'What happens to my subscription credits if I cancel?',
+    a: 'Any credits already in your account remain yours after cancellation. You just won\'t receive new monthly credits — but everything you\'ve accumulated is still usable.',
   },
   {
     q: 'How does the book trailer actually get made?',
-    a: "You upload your manuscript and tell us about your book — genre, tone, key characters. BookReel reads your story and builds a cinematic trailer from your actual content — your characters, your scenes, your words. Pro members get priority turnaround.",
+    a: 'Upload your manuscript. BookReel reads your story, builds a screenplay from your actual characters and scenes, generates cinematic images and video clips, adds character voices with lip-sync, layers in a music bed matched to your genre, and delivers a finished trailer — all automatically.',
   },
   {
-    q: 'Can I upgrade or downgrade between plans?',
-    a: "Absolutely. You can move between Free, Author, and Pro at any time. If you upgrade mid-cycle, we'll prorate the difference. If you downgrade, the change takes effect at the end of your current billing period.",
+    q: 'Can I buy credits without a subscription?',
+    a: 'Absolutely. Credit packs are one-time purchases — no subscription required. Buy what you need, when you need it.',
   },
-];
+]
 
 export default function PricingPage() {
-  const [billing, setBilling] = useState<BillingPeriod>('monthly');
-  const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [billing, setBilling] = useState<BillingPeriod>('monthly')
+  const [openFaq, setOpenFaq] = useState<number | null>(null)
 
-  const authorPrice = billing === 'monthly' ? '$29' : billing === 'yearly' ? '$19' : '$9';
-  const proPrice = billing === 'monthly' ? '$59' : billing === 'yearly' ? '$49' : '$29';
-
-  const authorNote =
-    billing === 'yearly'
-      ? "Billed $228/yr. That's two months free."
-      : billing === 'beta'
-      ? 'Billed $108/yr — Founding Member rate. Yours forever.'
-      : null;
-
-  const proNote =
-    billing === 'yearly'
-      ? 'Billed $588/yr. Save $120 a year.'
-      : billing === 'beta'
-      ? 'Billed as $348/yr. Founding Member rate. Yours forever. Billed annually.'
-      : null;
+  const red    = '#C8402F'
+  const dark   = '#0D0D0B'
+  const muted  = '#8A8278'
+  const border = '#E8E2D5'
+  const cream  = '#FAFAF7'
 
   return (
-    <div
-      style={{
-        fontFamily: 'var(--font-inter), sans-serif',
-        backgroundColor: 'var(--color-bg-primary)',
-        color: 'var(--color-text-body)',
-        minHeight: '100vh',
-      }}
-    >
-      {/* ── 1. Beta Banner ── */}
-      <div
-        style={{
-          background: 'linear-gradient(135deg, #2C1810 0%, #3D2318 50%, #1A0F08 100%)',
-          color: '#F4E4C1',
-          padding: '14px 24px',
-          textAlign: 'center',
-          fontSize: '13px',
-          fontWeight: 500,
-          letterSpacing: '0.01em',
-        }}
-      >
-        <span
-          style={{
-            display: 'inline-block',
-            backgroundColor: '#E8C97A',
-            color: '#1A0F08',
-            fontSize: '10px',
-            fontWeight: 800,
-            letterSpacing: '0.12em',
-            padding: '2px 8px',
-            borderRadius: '2px',
-            marginRight: '10px',
-            verticalAlign: 'middle',
-          }}
-        >
-          🎬 FOUNDING MEMBER
-        </span>
-        BookReel is in Beta — Founding Member pricing available for the first 100 authors. Lock in
-        your rate forever. ✦{' '}
-        <span style={{ color: '#E8C97A', fontWeight: 700 }}>73 spots remaining</span>
-      </div>
-
-      {/* ── Nav ── */}
-      <header
-        className="flex items-center justify-between px-8 py-5"
-        style={{
-          backgroundColor: 'var(--color-bg-primary)',
-          borderBottom: '1px solid var(--color-border)',
-        }}
-      >
-        <Link href="/" className="flex items-center gap-2 text-2xl select-none no-underline">
-          <span
-            style={{
-              color: 'var(--color-text-heading)',
-              fontFamily: 'var(--font-playfair), serif',
-              fontWeight: 900,
-            }}
-          >
-            Book
-          </span>
-          <span
-            style={{
-              display: 'inline-block',
-              width: '11px',
-              height: '11px',
-              border: '2px solid var(--color-accent)',
-              outline: '1px solid var(--color-accent)',
-              outlineOffset: '2px',
-              backgroundColor: 'var(--color-bg-primary)',
-            }}
-          />
-          <span
-            style={{
-              color: 'var(--color-accent)',
-              fontFamily: 'var(--font-playfair), serif',
-              fontWeight: 900,
-              fontStyle: 'italic',
-            }}
-          >
-            Reel
-          </span>
+    <div style={{ background: '#FDFCF9', minHeight: '100vh', color: dark }}>
+      {/* Nav */}
+      <nav style={{
+        position: 'sticky', top: 0, zIndex: 50,
+        background: 'rgba(253,252,249,0.92)', backdropFilter: 'blur(12px)',
+        borderBottom: `1px solid ${border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 32px', height: '60px',
+      }}>
+        <Link href="/" style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: '20px', color: dark, textDecoration: 'none' }}>
+          BookReel
         </Link>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <Link href="/browse" style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: muted, textDecoration: 'none' }}>Browse</Link>
+          <Link href="/dashboard" style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: muted, textDecoration: 'none' }}>Dashboard</Link>
+          <Link href="/dashboard" style={{
+            fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', fontWeight: 600,
+            color: '#fff', background: red, padding: '8px 18px', borderRadius: '8px', textDecoration: 'none',
+          }}>
+            Get Started
+          </Link>
+        </div>
+      </nav>
 
-        <nav className="flex items-center gap-6">
-          <a
-            href="/#how-it-works"
-            className="text-sm font-medium transition-colors"
-            style={{ color: 'var(--color-text-heading)' }}
-          >
-            How It Works
-          </a>
-          <Link
-            href="/pricing"
-            className="text-sm font-medium transition-colors"
-            style={{ color: 'var(--color-accent)', fontWeight: 700 }}
-          >
-            Pricing
-          </Link>
-          <Link
-            href="/for-authors"
-            className="text-sm font-medium transition-colors"
-            style={{ color: 'var(--color-text-heading)' }}
-          >
-            For Authors
-          </Link>
-          <Link
-            href="/login"
-            className="text-sm font-medium transition-colors"
-            style={{ color: 'var(--color-text-heading)' }}
-          >
-            Login
-          </Link>
-          <Link
-            href="/signup"
-            className="px-5 py-2 text-sm font-semibold transition-colors"
-            style={{
-              backgroundColor: 'var(--color-accent)',
-              color: 'var(--color-text-inverse)',
-              borderRadius: '4px',
-            }}
-          >
-            Make My Trailer
-          </Link>
-        </nav>
-      </header>
+      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '0 24px' }}>
 
-      <main>
-        {/* ── 2. Page Header ── */}
-        <section
-          className="text-center px-6"
-          style={{ paddingTop: '72px', paddingBottom: '48px', maxWidth: '720px', margin: '0 auto' }}
-        >
-          <h1
-            style={{
-              fontFamily: 'var(--font-playfair), serif',
-              fontWeight: 900,
-              fontSize: 'clamp(36px, 5vw, 56px)',
-              color: 'var(--color-text-heading)',
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-              marginBottom: '20px',
-            }}
-          >
-            Your story deserves to be seen.
+        {/* Hero */}
+        <div style={{ textAlign: 'center', padding: '72px 0 48px' }}>
+          <h1 style={{
+            fontFamily: 'var(--font-playfair), serif', fontWeight: 700,
+            fontSize: 'clamp(36px, 5vw, 56px)', color: dark, margin: '0 0 16px', lineHeight: 1.15,
+          }}>
+            Pay for what you use.
           </h1>
-          <p
-            style={{
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: 'clamp(15px, 1.8vw, 18px)',
-              color: 'var(--color-text-muted)',
-              lineHeight: 1.7,
-              maxWidth: '640px',
-              margin: '0 auto',
-            }}
-          >
-            BookReel turns your book into a cinematic experience — trailers, social content, and
-            marketing assets, all in one place. Pick the plan that fits where you are in your
-            writing journey.
+          <p style={{
+            fontFamily: 'var(--font-inter), sans-serif', fontSize: '18px',
+            color: muted, maxWidth: '520px', margin: '0 auto 32px', lineHeight: 1.6,
+          }}>
+            Credits never expire. Subscribe for a monthly top-up, or buy a pack when inspiration strikes.
           </p>
-        </section>
 
-        {/* ── 3. Pricing Toggle ── */}
-        <div className="flex justify-center" style={{ marginBottom: '16px' }}>
-          <div
-            className="flex items-center gap-1 p-1"
-            style={{
-              backgroundColor: '#F4F1EB',
-              borderRadius: '40px',
-              display: 'inline-flex',
-            }}
-          >
-            {/* Monthly */}
-            <button
-              onClick={() => setBilling('monthly')}
-              style={{
-                padding: '8px 22px',
-                borderRadius: '32px',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: billing === 'monthly' ? 700 : 500,
-                backgroundColor: billing === 'monthly' ? '#ffffff' : 'transparent',
-                color: billing === 'monthly' ? 'var(--color-text-heading)' : 'var(--color-text-muted)',
-                boxShadow: billing === 'monthly' ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
-                transition: 'all 0.2s',
-                fontFamily: 'var(--font-inter), sans-serif',
-              }}
-            >
-              Monthly
-            </button>
-
-            {/* Yearly */}
-            <button
-              onClick={() => setBilling('yearly')}
-              style={{
-                padding: '8px 22px',
-                borderRadius: '32px',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: billing === 'yearly' ? 700 : 500,
-                backgroundColor: billing === 'yearly' ? '#ffffff' : 'transparent',
-                color: billing === 'yearly' ? 'var(--color-text-heading)' : 'var(--color-text-muted)',
-                boxShadow: billing === 'yearly' ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
-                transition: 'all 0.2s',
-                fontFamily: 'var(--font-inter), sans-serif',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              Yearly
-              <span
+          {/* Billing toggle */}
+          <div style={{
+            display: 'inline-flex', background: '#EFECE6', borderRadius: '12px', padding: '4px', gap: '2px',
+          }}>
+            {(['monthly', 'yearly'] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setBilling(p)}
                 style={{
-                  backgroundColor: '#C0392B',
-                  color: '#fff',
-                  fontSize: '9px',
-                  fontWeight: 800,
-                  letterSpacing: '0.08em',
-                  padding: '2px 5px',
-                  borderRadius: '2px',
+                  fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', fontWeight: 600,
+                  padding: '8px 22px', borderRadius: '9px', border: 'none', cursor: 'pointer',
+                  background: billing === p ? '#fff' : 'transparent',
+                  color: billing === p ? dark : muted,
+                  boxShadow: billing === p ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
+                  transition: 'all 150ms ease',
                 }}
               >
-                SAVE 34%
-              </span>
-            </button>
-
-            {/* Beta */}
-            <button
-              onClick={() => setBilling('beta')}
-              style={{
-                padding: '8px 22px',
-                borderRadius: '32px',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: billing === 'beta' ? 700 : 500,
-                backgroundColor: billing === 'beta' ? '#2C1810' : 'transparent',
-                color: billing === 'beta' ? '#E8C97A' : 'var(--color-text-muted)',
-                boxShadow: billing === 'beta' ? '0 1px 4px rgba(0,0,0,0.2)' : 'none',
-                transition: 'all 0.2s',
-                fontFamily: 'var(--font-inter), sans-serif',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <span
-                style={{
-                  width: '7px',
-                  height: '7px',
-                  borderRadius: '50%',
-                  backgroundColor: billing === 'beta' ? '#E8C97A' : '#A89070',
-                  display: 'inline-block',
-                  animation: billing === 'beta' ? 'goldPulse 1.5s ease-in-out infinite' : 'none',
-                }}
-              />
-              Beta
-            </button>
+                {p === 'monthly' ? 'Monthly' : 'Annual'}{p === 'yearly' ? ' — save 2 months' : ''}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* ── 4. Yearly savings note ── */}
-        {billing === 'yearly' && (
-          <p
-            className="text-center"
-            style={{
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '14px',
-              color: 'var(--color-text-muted)',
-              fontStyle: 'italic',
-              marginBottom: '8px',
-              padding: '0 16px',
-            }}
-          >
-            Switch to yearly and keep two months in your pocket — more budget for coffee, edits,
-            and that next book.
-          </p>
-        )}
-
-        {/* ── 5. Pricing Cards ── */}
-        <section
-          className="px-6"
-          style={{
-            maxWidth: '1100px',
-            margin: '0 auto',
-            paddingTop: '32px',
-            paddingBottom: '64px',
-          }}
-        >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '24px',
-              alignItems: 'start',
-            }}
-          >
-            {/* ── FREE CARD ── */}
-            <div
-              style={{
-                backgroundColor: '#FAFAF7',
-                border: '1px solid rgba(138,130,120,0.25)',
-                borderRadius: '8px',
-                padding: '36px 32px',
-              }}
-            >
-              <h2
-                style={{
-                  fontFamily: 'var(--font-playfair), serif',
-                  fontWeight: 900,
-                  fontSize: '26px',
-                  color: 'var(--color-text-heading)',
-                  marginBottom: '4px',
-                }}
-              >
-                Free
-              </h2>
-              <p
-                style={{
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontStyle: 'italic',
-                  fontSize: '14px',
-                  color: 'var(--color-text-muted)',
-                  marginBottom: '24px',
-                }}
-              >
-                Claim your shelf.
-              </p>
-
-              <div style={{ marginBottom: '6px' }}>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-playfair), serif',
-                    fontWeight: 900,
-                    fontSize: '48px',
-                    color: 'var(--color-text-heading)',
-                    lineHeight: 1,
-                  }}
-                >
-                  $0
-                </span>
-              </div>
-              <p
-                style={{
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: '12px',
-                  color: 'var(--color-text-muted)',
-                  marginBottom: '28px',
-                }}
-              >
-                Always free. No card needed.
-              </p>
-
-              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px 0' }}>
-                {[
-                  'Public author profile',
-                  'Book listing page',
-                  'Genre discovery placement',
-                  'Reader-facing press page',
-                ].map((f) => (
-                  <li
-                    key={f}
-                    style={{
-                      fontFamily: 'var(--font-inter), sans-serif',
-                      fontSize: '14px',
-                      color: 'var(--color-text-body)',
-                      padding: '6px 0',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '10px',
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: '#C0392B',
-                        fontWeight: 700,
-                        lineHeight: '1.5',
-                        flexShrink: 0,
-                      }}
-                    >
-                      ✓
-                    </span>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                href="/signup"
-                style={{
-                  display: 'block',
-                  textAlign: 'center',
-                  padding: '12px 24px',
-                  border: '1.5px solid rgba(138,130,120,0.5)',
-                  borderRadius: '4px',
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  color: 'var(--color-text-heading)',
-                  textDecoration: 'none',
-                  transition: 'all 0.2s',
-                }}
-              >
-                Start Free
-              </Link>
-            </div>
-
-            {/* ── AUTHOR CARD ── */}
-            <div
-              style={{
-                backgroundColor: '#F4F1EB',
-                border: '1px solid rgba(138,130,120,0.3)',
-                borderRadius: '8px',
-                padding: '36px 32px',
-              }}
-            >
-              <h2
-                style={{
-                  fontFamily: 'var(--font-playfair), serif',
-                  fontWeight: 900,
-                  fontSize: '26px',
-                  color: 'var(--color-text-heading)',
-                  marginBottom: '4px',
-                }}
-              >
-                Author
-              </h2>
-              <p
-                style={{
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontStyle: 'italic',
-                  fontSize: '14px',
-                  color: 'var(--color-text-muted)',
-                  marginBottom: '24px',
-                }}
-              >
-                Write it. Show it. Sell it.
-              </p>
-
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', marginBottom: '6px' }}>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-playfair), serif',
-                    fontWeight: 900,
-                    fontSize: '48px',
-                    color: 'var(--color-text-heading)',
-                    lineHeight: 1,
-                  }}
-                >
-                  {authorPrice}
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-inter), sans-serif',
-                    fontSize: '14px',
-                    color: 'var(--color-text-muted)',
-                    marginBottom: '8px',
-                  }}
-                >
-                  /mo
-                </span>
-              </div>
-
-              <div style={{ minHeight: '44px', marginBottom: '20px' }}>
-                {authorNote && (
-                  <p
-                    style={{
-                      fontFamily: 'var(--font-inter), sans-serif',
-                      fontSize: '12px',
-                      color: 'var(--color-text-muted)',
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {authorNote}
-                  </p>
-                )}
-                {billing === 'beta' && (
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      marginTop: '6px',
-                      backgroundColor: '#E8C97A',
-                      color: '#1A0F08',
-                      fontSize: '9px',
-                      fontWeight: 800,
-                      letterSpacing: '0.1em',
-                      padding: '3px 8px',
-                      borderRadius: '2px',
-                    }}
-                  >
-                    🔖 FOUNDING MEMBER
+        {/* ── Subscription Plans ── */}
+        <h2 style={{
+          fontFamily: 'var(--font-playfair), serif', fontWeight: 700,
+          fontSize: '28px', color: dark, margin: '0 0 24px',
+        }}>
+          Monthly credit subscription
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '80px' }}>
+          {PLANS.map((plan) => {
+            const price = billing === 'yearly' ? Math.round(plan.yearly / 12) : plan.monthly
+            const billed = billing === 'yearly' ? `$${plan.yearly}/yr` : null
+            return (
+              <div key={plan.id} style={{
+                background: plan.highlight ? dark : '#fff',
+                border: `2px solid ${plan.highlight ? dark : border}`,
+                borderRadius: '20px', padding: '32px',
+                display: 'flex', flexDirection: 'column',
+                position: 'relative', overflow: 'hidden',
+              }}>
+                {plan.badge && (
+                  <span style={{
+                    position: 'absolute', top: '20px', right: '20px',
+                    background: red, color: '#fff',
+                    fontFamily: 'var(--font-inter), sans-serif', fontSize: '11px', fontWeight: 700,
+                    padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.06em',
+                  }}>
+                    {plan.badge}
                   </span>
                 )}
-                {billing === 'monthly' && (
-                  <p
-                    style={{
-                      fontFamily: 'var(--font-inter), sans-serif',
-                      fontSize: '12px',
-                      color: 'var(--color-text-muted)',
-                    }}
-                  >
-                    Billed monthly.
-                  </p>
-                )}
-              </div>
 
-              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px 0' }}>
-                {[
-                  '1 book trailer per month (20-30 seconds)',
-                  'Standard cinematic quality',
-                  '3 short-form social cuts',
-                  '3 custom quote graphics',
-                  'Weekly performance report',
-                  'Newsletter blurb, ready to paste',
-                  'Digital press kit',
-                ].map((f) => (
-                  <li
-                    key={f}
-                    style={{
-                      fontFamily: 'var(--font-inter), sans-serif',
-                      fontSize: '14px',
-                      color: 'var(--color-text-body)',
-                      padding: '6px 0',
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '10px',
-                    }}
-                  >
-                    <span style={{ color: '#C0392B', fontWeight: 700, lineHeight: '1.5', flexShrink: 0 }}>
-                      ✓
-                    </span>
-                    {f}
-                  </li>
-                ))}
-              </ul>
+                <div style={{
+                  fontFamily: 'var(--font-playfair), serif', fontWeight: 700,
+                  fontSize: '22px', color: plan.highlight ? '#fff' : dark, marginBottom: '6px',
+                }}>
+                  {plan.name}
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px',
+                  color: plan.highlight ? 'rgba(255,255,255,0.6)' : muted, marginBottom: '20px',
+                }}>
+                  {plan.description}
+                </div>
 
-              <Link
-                href="/signup?plan=author"
-                style={{
-                  display: 'block',
-                  textAlign: 'center',
-                  padding: '12px 24px',
-                  backgroundColor: 'var(--color-accent)',
-                  borderRadius: '4px',
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  color: 'var(--color-text-inverse)',
-                  textDecoration: 'none',
-                  transition: 'all 0.2s',
-                }}
-              >
-                Start Writing
-              </Link>
-            </div>
-
-            {/* ── PRO CARD ── */}
-            <div style={{ position: 'relative' }}>
-              {/* Most Popular badge */}
-              <div
-                style={{
-                  textAlign: 'center',
-                  marginBottom: '10px',
-                }}
-              >
-                <span
-                  style={{
-                    display: 'inline-block',
-                    fontFamily: 'var(--font-inter), sans-serif',
-                    fontSize: '10px',
-                    fontWeight: 800,
-                    letterSpacing: '0.2em',
-                    color: '#E8C97A',
-                    background: 'linear-gradient(90deg, #E8C97A 0%, #F5E09A 50%, #E8C97A 100%)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundSize: '200% auto',
-                    animation: 'shimmer 2.5s linear infinite',
-                  }}
-                >
-                  ✦ MOST POPULAR ✦
-                </span>
-              </div>
-
-              <div
-                style={{
-                  backgroundColor: '#1A1208',
-                  borderRadius: '8px',
-                  padding: '40px 36px',
-                  transform: 'translateY(-12px)',
-                  boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-              >
-                {/* Decorative ✦ bottom right */}
-                <span
-                  style={{
-                    position: 'absolute',
-                    bottom: '20px',
-                    right: '24px',
-                    fontSize: '48px',
-                    color: '#E8C97A',
-                    opacity: 0.2,
-                    fontFamily: 'serif',
-                    lineHeight: 1,
-                    pointerEvents: 'none',
-                    userSelect: 'none',
-                  }}
-                >
-                  ✦
-                </span>
-
-                <h2
-                  style={{
-                    fontFamily: 'var(--font-playfair), serif',
-                    fontWeight: 900,
-                    fontSize: '26px',
-                    color: '#F4E4C1',
-                    marginBottom: '4px',
-                  }}
-                >
-                  Pro
-                </h2>
-                <p
-                  style={{
-                    fontFamily: 'var(--font-inter), sans-serif',
-                    fontStyle: 'italic',
-                    fontSize: '14px',
-                    color: 'rgba(232, 201, 122, 0.7)',
-                    marginBottom: '24px',
-                  }}
-                >
-                  For authors who mean business.
-                </p>
-
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', marginBottom: '6px' }}>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-playfair), serif',
-                      fontWeight: 900,
-                      fontSize: '48px',
-                      color: '#F4E4C1',
-                      lineHeight: 1,
-                    }}
-                  >
-                    {proPrice}
+                <div style={{ marginBottom: '4px' }}>
+                  <span style={{
+                    fontFamily: 'var(--font-playfair), serif', fontWeight: 700,
+                    fontSize: '44px', color: plan.highlight ? '#fff' : dark,
+                  }}>
+                    ${price}
                   </span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-inter), sans-serif',
-                      fontSize: '14px',
-                      color: 'rgba(244,228,193,0.6)',
-                      marginBottom: '8px',
-                    }}
-                  >
+                  <span style={{
+                    fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px',
+                    color: plan.highlight ? 'rgba(255,255,255,0.5)' : muted,
+                  }}>
                     /mo
                   </span>
                 </div>
+                {billed && (
+                  <div style={{
+                    fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px',
+                    color: plan.highlight ? 'rgba(255,255,255,0.45)' : muted, marginBottom: '20px',
+                  }}>
+                    Billed {billed}
+                  </div>
+                )}
 
-                <div style={{ minHeight: '44px', marginBottom: '20px' }}>
-                  {proNote && (
-                    <p
-                      style={{
-                        fontFamily: 'var(--font-inter), sans-serif',
-                        fontSize: '12px',
-                        color: 'rgba(244,228,193,0.7)',
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {proNote}
-                    </p>
-                  )}
-                  {billing === 'beta' && (
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        marginTop: '6px',
-                        backgroundColor: '#E8C97A',
-                        color: '#1A0F08',
-                        fontSize: '9px',
-                        fontWeight: 800,
-                        letterSpacing: '0.1em',
-                        padding: '3px 8px',
-                        borderRadius: '2px',
-                      }}
-                    >
-                      🔖 FOUNDING MEMBER
-                    </span>
-                  )}
-                  {billing === 'monthly' && (
-                    <p
-                      style={{
-                        fontFamily: 'var(--font-inter), sans-serif',
-                        fontSize: '12px',
-                        color: 'rgba(244,228,193,0.6)',
-                      }}
-                    >
-                      Billed monthly.
-                    </p>
-                  )}
+                <div style={{
+                  background: plan.highlight ? 'rgba(255,255,255,0.08)' : '#F7F4EF',
+                  borderRadius: '10px', padding: '12px 16px', marginBottom: '24px',
+                }}>
+                  <span style={{
+                    fontFamily: 'var(--font-inter), sans-serif', fontWeight: 700,
+                    fontSize: '18px', color: plan.highlight ? '#fff' : dark,
+                  }}>
+                    {plan.creditsPerMonth} credits
+                  </span>
+                  <span style={{
+                    fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px',
+                    color: plan.highlight ? 'rgba(255,255,255,0.5)' : muted,
+                  }}>
+                    {' '}/ month
+                  </span>
                 </div>
 
-                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px 0' }}>
-                  {[
-                    '2 book trailers per month (60-80 seconds)',
-                    'Cinematic quality — director\'s cut',
-                    'Unlimited short-form social cuts',
-                    '5 custom quote graphics',
-                    'Full analytics dashboard',
-                    'Priority placement in genre feeds',
-                    'Genre-targeted newsletter feature',
-                    'New release boost (launch week)',
-                    'Amazon ranking tracker',
-                    'A/B testing for trailers & covers',
-                  ].map((f) => (
-                    <li
-                      key={f}
-                      style={{
-                        fontFamily: 'var(--font-inter), sans-serif',
-                        fontSize: '14px',
-                        color: '#F4E4C1',
-                        padding: '6px 0',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '10px',
-                      }}
-                    >
-                      <span style={{ color: '#E8C97A', fontWeight: 700, lineHeight: '1.5', flexShrink: 0 }}>
-                        ✓
-                      </span>
+                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 28px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+                  {plan.features.map((f, i) => (
+                    <li key={i} style={{
+                      fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px',
+                      color: plan.highlight ? 'rgba(255,255,255,0.75)' : '#4A4642',
+                      display: 'flex', alignItems: 'flex-start', gap: '10px',
+                    }}>
+                      <span style={{ color: plan.highlight ? 'rgba(255,255,255,0.5)' : red, marginTop: '1px', flexShrink: 0 }}>✓</span>
                       {f}
                     </li>
                   ))}
                 </ul>
 
-                <Link
-                  href="/signup?plan=pro"
-                  style={{
-                    display: 'block',
-                    textAlign: 'center',
-                    padding: '12px 24px',
-                    backgroundColor: 'var(--color-accent)',
-                    border: '1.5px solid #E8C97A',
-                    borderRadius: '4px',
-                    fontFamily: 'var(--font-inter), sans-serif',
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    color: '#ffffff',
-                    textDecoration: 'none',
-                    transition: 'all 0.2s',
-                  }}
-                >
-                  Go Cinematic
+                <Link href="/dashboard" style={{
+                  display: 'block', textAlign: 'center', padding: '14px',
+                  background: plan.highlight ? red : dark,
+                  color: '#fff', borderRadius: '12px',
+                  fontFamily: 'var(--font-inter), sans-serif', fontSize: '15px', fontWeight: 700,
+                  textDecoration: 'none', transition: 'opacity 150ms ease',
+                }}>
+                  {plan.cta}
                 </Link>
               </div>
-            </div>
-          </div>
-        </section>
+            )
+          })}
+        </div>
 
-        {/* ── 6. Trust Line ── */}
-        <p
-          className="text-center px-6"
-          style={{
-            fontFamily: 'var(--font-inter), sans-serif',
-            fontSize: '13px',
-            color: 'var(--color-text-muted)',
-            marginBottom: '72px',
-          }}
-        >
-          🔒 No contracts · Cancel anytime · Secure billing via Stripe · Trusted by indie authors
+        {/* ── Quality Tiers ── */}
+        <h2 style={{
+          fontFamily: 'var(--font-playfair), serif', fontWeight: 700,
+          fontSize: '28px', color: dark, margin: '0 0 12px',
+        }}>
+          Choose your quality per render
+        </h2>
+        <p style={{
+          fontFamily: 'var(--font-inter), sans-serif', fontSize: '15px',
+          color: muted, margin: '0 0 28px',
+        }}>
+          Same AI pipeline, same screenplay intelligence — you pick the resolution and length.
         </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '80px' }}>
+          {QUALITY_TIERS.map((qt) => (
+            <div key={qt.name} style={{
+              background: '#fff', border: `2px solid ${qt.badge ? red : border}`,
+              borderRadius: '20px', padding: '28px', position: 'relative',
+            }}>
+              {qt.badge && (
+                <span style={{
+                  position: 'absolute', top: '20px', right: '20px',
+                  background: red, color: '#fff',
+                  fontFamily: 'var(--font-inter), sans-serif', fontSize: '11px', fontWeight: 700,
+                  padding: '3px 10px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.06em',
+                }}>
+                  {qt.badge}
+                </span>
+              )}
+              <div style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: '22px', color: dark, marginBottom: '4px' }}>
+                {qt.name}
+              </div>
+              <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', color: muted, marginBottom: '20px' }}>
+                {qt.resolution} · {qt.runtime} · {qt.clips}
+              </div>
+              <div style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: '36px', color: red, marginBottom: '20px' }}>
+                {qt.credits} <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '15px', fontWeight: 400, color: muted }}>credits</span>
+              </div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '9px' }}>
+                {qt.features.map((f, i) => (
+                  <li key={i} style={{
+                    fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px',
+                    color: '#4A4642', display: 'flex', alignItems: 'flex-start', gap: '10px',
+                  }}>
+                    <span style={{ color: red, flexShrink: 0, marginTop: '1px' }}>✓</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
 
-        {/* ── 7. FAQ Section ── */}
-        <section
-          className="px-6"
-          style={{
-            maxWidth: '720px',
-            margin: '0 auto',
-            paddingBottom: '80px',
-          }}
-        >
-          <h2
-            className="text-center"
-            style={{
-              fontFamily: 'var(--font-playfair), serif',
-              fontWeight: 900,
-              fontSize: 'clamp(24px, 3.5vw, 36px)',
-              color: 'var(--color-text-heading)',
-              marginBottom: '40px',
-            }}
-          >
-            Questions & Answers
+        {/* ── Credit Packs ── */}
+        <h2 style={{
+          fontFamily: 'var(--font-playfair), serif', fontWeight: 700,
+          fontSize: '28px', color: dark, margin: '0 0 12px',
+        }}>
+          One-time credit packs
+        </h2>
+        <p style={{
+          fontFamily: 'var(--font-inter), sans-serif', fontSize: '15px',
+          color: muted, margin: '0 0 28px',
+        }}>
+          No subscription needed. Credits never expire.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '80px' }}>
+          {CREDIT_PACKS.map((pack) => (
+            <div key={pack.credits} style={{
+              background: pack.badge === 'Best Value' ? dark : '#fff',
+              border: `2px solid ${pack.badge ? (pack.badge === 'Best Value' ? dark : red) : border}`,
+              borderRadius: '18px', padding: '28px', position: 'relative',
+            }}>
+              {pack.badge && (
+                <span style={{
+                  position: 'absolute', top: '18px', right: '18px',
+                  background: pack.badge === 'Best Value' ? red : red,
+                  color: '#fff',
+                  fontFamily: 'var(--font-inter), sans-serif', fontSize: '10px', fontWeight: 700,
+                  padding: '3px 9px', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.06em',
+                }}>
+                  {pack.badge}
+                </span>
+              )}
+              <div style={{
+                fontFamily: 'var(--font-playfair), serif', fontWeight: 700,
+                fontSize: '20px', color: pack.badge === 'Best Value' ? '#fff' : dark, marginBottom: '6px',
+              }}>
+                {pack.label}
+              </div>
+              <div style={{
+                fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px',
+                color: pack.badge === 'Best Value' ? 'rgba(255,255,255,0.55)' : muted, marginBottom: '16px',
+              }}>
+                {pack.trailers}
+              </div>
+              <div style={{
+                fontFamily: 'var(--font-playfair), serif', fontWeight: 700,
+                fontSize: '40px', color: pack.badge === 'Best Value' ? '#fff' : dark,
+              }}>
+                ${pack.price}
+              </div>
+              <div style={{
+                fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px',
+                color: pack.badge === 'Best Value' ? 'rgba(255,255,255,0.45)' : muted, marginBottom: '20px',
+              }}>
+                {pack.credits} credits · ${pack.perCredit}/credit
+              </div>
+              <Link href="/dashboard" style={{
+                display: 'block', textAlign: 'center', padding: '12px',
+                background: red, color: '#fff', borderRadius: '10px',
+                fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', fontWeight: 700,
+                textDecoration: 'none',
+              }}>
+                Buy {pack.credits} credits
+              </Link>
+            </div>
+          ))}
+        </div>
+
+        {/* ── FAQ ── */}
+        <div style={{ maxWidth: '680px', margin: '0 auto 80px' }}>
+          <h2 style={{
+            fontFamily: 'var(--font-playfair), serif', fontWeight: 700,
+            fontSize: '28px', color: dark, margin: '0 0 28px', textAlign: 'center',
+          }}>
+            Common questions
           </h2>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-            {faqData.map((item, idx) => (
-              <div
-                key={idx}
-                style={{
-                  borderTop: idx === 0 ? '1px solid var(--color-border)' : 'none',
-                  borderBottom: '1px solid var(--color-border)',
-                }}
-              >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {FAQ.map((item, i) => (
+              <div key={i} style={{
+                background: '#fff', border: `1.5px solid ${border}`,
+                borderRadius: '14px', overflow: 'hidden',
+              }}>
                 <button
-                  onClick={() => setOpenFaq(openFaq === idx ? null : idx)}
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
                   style={{
-                    width: '100%',
-                    textAlign: 'left',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: '20px 0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
+                    width: '100%', textAlign: 'left', padding: '20px 24px',
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     gap: '16px',
                   }}
                 >
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-inter), sans-serif',
-                      fontSize: '15px',
-                      fontWeight: 600,
-                      color: 'var(--color-text-heading)',
-                    }}
-                  >
+                  <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontWeight: 600, fontSize: '15px', color: dark }}>
                     {item.q}
                   </span>
-                  <span
-                    style={{
-                      color: 'var(--color-text-muted)',
-                      fontSize: '18px',
-                      fontWeight: 300,
-                      lineHeight: 1,
-                      flexShrink: 0,
-                      transition: 'transform 0.2s',
-                      transform: openFaq === idx ? 'rotate(45deg)' : 'rotate(0deg)',
-                    }}
-                  >
-                    +
+                  <span style={{ color: red, fontSize: '18px', flexShrink: 0 }}>
+                    {openFaq === i ? '−' : '+'}
                   </span>
                 </button>
-
-                {openFaq === idx && (
-                  <div
-                    style={{
-                      paddingBottom: '20px',
-                    }}
-                  >
-                    <p
-                      style={{
-                        fontFamily: 'var(--font-inter), sans-serif',
-                        fontSize: '14px',
-                        color: 'var(--color-text-muted)',
-                        lineHeight: 1.75,
-                        margin: 0,
-                      }}
-                    >
+                {openFaq === i && (
+                  <div style={{ padding: '0 24px 20px' }}>
+                    <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: muted, lineHeight: 1.65, margin: 0 }}>
                       {item.a}
                     </p>
                   </div>
@@ -912,47 +468,15 @@ export default function PricingPage() {
               </div>
             ))}
           </div>
-        </section>
-      </main>
+        </div>
 
-      {/* ── 8. Footer tagline ── */}
-      <footer
-        className="text-center px-8 py-10"
-        style={{ borderTop: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-primary)' }}
-      >
-        <p
-          style={{
-            fontFamily: 'var(--font-playfair), serif',
-            fontStyle: 'italic',
-            fontSize: '18px',
-            color: 'var(--color-text-muted)',
-            marginBottom: '8px',
-          }}
-        >
-          Every great story deserves an audience.
-        </p>
-        <p
-          style={{
-            fontFamily: 'var(--font-inter), sans-serif',
-            fontSize: '12px',
-            color: 'var(--color-text-muted)',
-          }}
-        >
-          © {new Date().getFullYear()} BookReel. All rights reserved.
-        </p>
-      </footer>
-
-      {/* Keyframe animations */}
-      <style>{`
-        @keyframes goldPulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(1.3); }
-        }
-        @keyframes shimmer {
-          0% { background-position: 0% center; }
-          100% { background-position: 200% center; }
-        }
-      `}</style>
+        {/* Trust footer */}
+        <div style={{ textAlign: 'center', paddingBottom: '60px' }}>
+          <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', color: muted }}>
+            🔒 Credits never expire · No contracts · Cancel anytime · Secure billing via Stripe
+          </p>
+        </div>
+      </div>
     </div>
-  );
+  )
 }
