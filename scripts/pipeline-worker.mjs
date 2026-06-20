@@ -50,12 +50,18 @@ process.env.OPENROUTER_API_KEY = OPENROUTER_API_KEY
 
 const POLL_INTERVAL_MS = 30_000
 
-// Kling quality tier — switch between 'pro' ($0.098/s, higher fidelity) and
-// 'standard' ($0.056/s, ~43% cheaper) via the KLING_TIER env var with no code edit.
-// Defaults to 'pro'. Used for both the API endpoint and cost logging.
-const KLING_TIER = (process.env.KLING_TIER || 'pro').toLowerCase() === 'standard' ? 'standard' : 'pro'
-const KLING_ENDPOINT = `https://queue.fal.run/fal-ai/kling-video/v2.1/${KLING_TIER}/image-to-video`
-const KLING_PER_SEC = KLING_TIER === 'standard' ? 0.056 : 0.098
+// Seedance 2.0 (ByteDance via fal.ai) — video engine as of Jun 2026
+// Replaced Kling 2.1: Seedance supports 4–15s clips, 1080p, start+end frame control,
+// and native character/lip-sync via reference-to-video endpoint.
+// Standard = 1080p ($0.3024/s), Fast = 720p ($0.2419/s). Default: standard.
+const SEEDANCE_TIER = (process.env.SEEDANCE_TIER || 'standard').toLowerCase() === 'fast' ? 'fast' : 'standard'
+const SEEDANCE_I2V_ENDPOINT = SEEDANCE_TIER === 'fast'
+  ? 'https://queue.fal.run/bytedance/seedance-2.0/fast/image-to-video'
+  : 'https://queue.fal.run/bytedance/seedance-2.0/image-to-video'
+const SEEDANCE_REF_ENDPOINT = SEEDANCE_TIER === 'fast'
+  ? 'https://queue.fal.run/bytedance/seedance-2.0/fast/reference-to-video'
+  : 'https://queue.fal.run/bytedance/seedance-2.0/reference-to-video'
+const SEEDANCE_PER_SEC = SEEDANCE_TIER === 'fast' ? 0.2419 : 0.3024
 
 // Troubleshoot mode — cap the number of clips to render a SHORT trailer while we
 // iterate on audio/quality, so we don't burn credits on full-length renders. Set
@@ -113,7 +119,7 @@ function softenForModeration(text) {
 
 console.log('[worker] App URL:', APP_URL)
 console.log('[worker] Anthropic key available:', !isPlaceholder(ANTHROPIC_API_KEY))
-console.log(`[worker] Video engine: Kling 2.1 ${KLING_TIER.toUpperCase()} via fal.ai ($${KLING_PER_SEC}/s)`)
+console.log(`[worker] Video engine: Seedance 2.0 ${SEEDANCE_TIER.toUpperCase()} via fal.ai ($${SEEDANCE_PER_SEC}/s)`)
 if (TEST_MAX_CLIPS > 0) console.log(`[worker] ⚠ TEST MODE active: TEST_MAX_CLIPS=${TEST_MAX_CLIPS} (short renders to save credits)`)
 
 // ── Supabase client ──────────────────────────────────────────────────────────
@@ -152,10 +158,10 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
 // exactly what each trailer costs so credit pricing ($9.99=1 credit) stays profitable.
 const PRICING = {
   flux_image_ultra: 0.06,   // flux-pro/v1.1-ultra — per image
-  // Kling per-second price is tier-dependent — see KLING_PER_SEC (pro $0.098 / standard $0.056)
+  // Seedance per-second price is tier-dependent — see SEEDANCE_PER_SEC (standard $0.3024 / fast $0.2419)
   tts_per_1k_char: 0.10,    // elevenlabs eleven-v3 — per 1000 chars
   music_bed: 0.015,         // stable-audio — approx (open model, compute-second)
-  lipsync_per_sec: 0.05,    // sync-lipsync/v2 — $3/min of video
+  // No separate lipsync cost — Seedance reference-to-video handles it natively
 }
 // Rough Claude Sonnet token prices (script/line-selection LLM, billed to Anthropic/
 // OpenRouter — a SEPARATE balance from fal, tracked here for full per-render visibility).
@@ -242,98 +248,117 @@ async function generateSceneImage(sceneDescription, genre, ledger = null) {
   return urlData.publicUrl
 }
 
-// ── Video generation (Kling 2.1 via fal.ai) ───────────────────────────────────
-// Replaced Runway gen4_turbo: Runway's post-generation safety filter consistently
-// rejected dark/Gothic/thriller content (INTERNAL.BAD_OUTPUT.CODE01). Kling 2.1
-// standard on fal.ai passes the same content cleanly, has no daily tier walls,
-// and costs ~$0.035/s (similar economics to Runway).
-async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 5, screenplayText = null, ledger = null, suppressTalking = false) {
-  const klingDuration = durationSeconds >= 8 ? '10' : '5'
-  // Feed the screenplay action beats (motion, camera) to Kling alongside the
-  // visual description so the generated clip follows the intended timing/movement
-  // instead of a near-static pan. Description = what it looks like; screenplay =
-  // what happens. Kling's image-to-video uses the prompt to drive motion.
-  const motionText = screenplayText && screenplayText.trim().length > 0
-    ? `${sceneDescription}. Action and camera: ${screenplayText}`
+// ── Video generation (Seedance 2.0 via fal.ai) ────────────────────────────────
+// Replaced Kling 2.1 Jun 2026: Seedance 2.0 supports 4–15s clips, 1080p output,
+// and native character reference + lip-sync via reference-to-video endpoint.
+// Two functions:
+//   generateVideoClip()     — standard image-to-video for non-character scenes
+//   generateCharacterClip() — reference-to-video for lip-synced character scenes
+//                             (no separate sync-lipsync step needed)
+
+async function pollSeedanceJob(endpoint, requestId, durationSeconds, label, ledger) {
+  const statusBase = `https://queue.fal.run/${endpoint.replace('https://queue.fal.run/', '')}`
+  const statusUrl = `${statusBase}/requests/${requestId}/status`
+  const resultUrl = `${statusBase}/requests/${requestId}`
+
+  for (let i = 0; i < 90; i++) {
+    await new Promise(r => setTimeout(r, 5000))
+    const statusRes = await fetch(statusUrl, {
+      headers: { 'Authorization': `Key ${FAL_API_KEY}` }
+    })
+    if (!statusRes.ok) { console.error(`[worker]   Seedance status check failed: ${statusRes.status}`); continue }
+    const status = await statusRes.json()
+    console.log(`[worker]   Seedance poll ${i+1}: ${status.status}`)
+
+    if (status.status === 'COMPLETED') {
+      const resultRes = await fetch(resultUrl, { headers: { 'Authorization': `Key ${FAL_API_KEY}` } })
+      const result = await resultRes.json()
+      const videoUrl = result.video?.url || null
+      if (!videoUrl) throw new Error('Seedance returned no video URL')
+      if (ledger) ledger.add(label, 'fal', SEEDANCE_PER_SEC * durationSeconds)
+      return videoUrl
+    }
+    if (status.status === 'FAILED') {
+      const detail = JSON.stringify(status).substring(0, 300)
+      console.error(`[worker]   ❌ Seedance FAILED — ${detail}`)
+      const err = new Error(`Seedance generation failed: ${status.error || detail}`)
+      if (/content|moderation|safety|policy|inappropriate|nsfw/i.test(detail)) err.isModeration = true
+      throw err
+    }
+  }
+  throw new Error('Seedance generation timed out after 7.5 minutes')
+}
+
+// Standard image-to-video — for non-character or non-lip-sync scenes
+async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 10, screenplayText = null, ledger = null, suppressTalking = false) {
+  const duration = String(Math.min(15, Math.max(4, durationSeconds)))
+  const motionText = screenplayText?.trim()
+    ? `${sceneDescription}. Camera and motion: ${screenplayText}`
     : sceneDescription
-  const safePromptText = softenForModeration(motionText)
+  const safePrompt = softenForModeration(motionText)
+    + (suppressTalking ? ', subject is silent and still, mouth closed, no talking' : '')
 
-  // When this scene WON'T be lip-synced (no character line), suppress generated
-  // talking — mouths flapping with no synced audio looks broken. We push "talking"
-  // into the negative prompt so Kling keeps faces still / non-speaking.
-  const negativePrompt = suppressTalking
-    ? 'talking, speaking, mouth moving, lips moving, open mouth, conversation, dialogue, text, words, letters, watermark, nudity, explicit, low quality, blur, distortion'
-    : 'text, words, letters, watermark, nudity, explicit, low quality, blur, distortion'
-
-  // Submit to Kling queue (tier + endpoint chosen at startup via KLING_TIER env)
-  const submitRes = await fetch(KLING_ENDPOINT, {
+  const submitRes = await fetch(SEEDANCE_I2V_ENDPOINT, {
     method: 'POST',
-    headers: {
-      'Authorization': `Key ${FAL_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
+    headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      prompt: safePromptText,
+      prompt: safePrompt,
       image_url: imageUrl,
-      duration: klingDuration,
+      duration,
+      resolution: SEEDANCE_TIER === 'fast' ? '720p' : '1080p',
       aspect_ratio: '16:9',
-      negative_prompt: negativePrompt,
-      cfg_scale: 0.5
+      generate_audio: false,  // we supply our own music/TTS
     })
   })
 
   if (!submitRes.ok) {
     const errText = await submitRes.text()
-    const err = new Error(`Kling submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
+    const err = new Error(`Seedance i2v submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
     if (submitRes.status === 429) err.isRateLimit = true
     throw err
   }
 
   const submitData = await submitRes.json()
-  const statusUrl = submitData.status_url
-  const resultUrl = submitData.response_url
-  console.log(`[worker]   Kling task: ${submitData.request_id}`)
+  const requestId = submitData.request_id
+  console.log(`[worker]   Seedance i2v task: ${requestId}`)
+  return pollSeedanceJob(SEEDANCE_I2V_ENDPOINT, requestId, Number(duration), `video clip ${duration}s (seedance 2.0 ${SEEDANCE_TIER})`, ledger)
+}
 
-  // Poll for up to 5 minutes (60 attempts × 5s)
-  for (let i = 0; i < 60; i++) {
-    await new Promise(r => setTimeout(r, 5000))
+// Reference-to-video — for character scenes with lip-sync.
+// Passes the character face image + TTS audio as references; Seedance natively
+// lip-syncs the speech onto the character. No separate sync-lipsync step needed.
+async function generateCharacterClip(characterImageUrl, ttsAudioUrl, sceneDescription, durationSeconds = 10, ledger = null) {
+  const duration = String(Math.min(15, Math.max(4, durationSeconds)))
+  const safeDesc = softenForModeration(sceneDescription)
+  // @Image1 = character face reference, @Audio1 = TTS voice
+  // "speaks while saying @Audio1" triggers Seedance's native lip-sync
+  const prompt = `@Image1 speaks while saying @Audio1. ${safeDesc}. Character looks directly at camera, steady head position, cinematic portrait lighting.`
 
-    const statusRes = await fetch(statusUrl, {
-      headers: { 'Authorization': `Key ${FAL_API_KEY}` }
+  const submitRes = await fetch(SEEDANCE_REF_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt,
+      image_urls: [characterImageUrl],
+      audio_urls: [ttsAudioUrl],
+      duration,
+      resolution: '720p',  // reference-to-video caps at 720p
+      aspect_ratio: '16:9',
+      generate_audio: false,
     })
+  })
 
-    if (!statusRes.ok) {
-      console.error(`[worker]   Kling status check failed: ${statusRes.status}`)
-      continue
-    }
-
-    const status = await statusRes.json()
-    console.log(`[worker]   Kling poll ${i+1}: ${status.status}`)
-
-    if (status.status === 'COMPLETED') {
-      const resultRes = await fetch(resultUrl, {
-        headers: { 'Authorization': `Key ${FAL_API_KEY}` }
-      })
-      const result = await resultRes.json()
-      const videoUrl = result.video?.url || result.output?.[0] || null
-      if (!videoUrl) throw new Error('Kling returned no video URL')
-      if (ledger) ledger.add(`video clip ${klingDuration}s (kling 2.1 ${KLING_TIER})`, 'fal', KLING_PER_SEC * Number(klingDuration))
-      return videoUrl
-    }
-
-    if (status.status === 'FAILED') {
-      const detail = JSON.stringify(status).substring(0, 300)
-      console.error(`[worker]   ❌ Kling FAILED — ${detail}`)
-      const err = new Error(`Kling generation failed: ${status.error || detail}`)
-      // Flag content-moderation failures distinctly
-      if (/content|moderation|safety|policy|inappropriate|nsfw/i.test(detail)) {
-        err.isModeration = true
-      }
-      throw err
-    }
+  if (!submitRes.ok) {
+    const errText = await submitRes.text()
+    const err = new Error(`Seedance ref2v submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
+    if (submitRes.status === 429) err.isRateLimit = true
+    throw err
   }
 
-  throw new Error('Kling generation timed out after 5 minutes')
+  const submitData = await submitRes.json()
+  const requestId = submitData.request_id
+  console.log(`[worker]   Seedance ref2v task: ${requestId}`)
+  return pollSeedanceJob(SEEDANCE_REF_ENDPOINT, requestId, Number(duration), `character clip ${duration}s w/ lip-sync (seedance 2.0 ref2v)`, ledger)
 }
 
 // ── Video stitching (ffmpeg) ──────────────────────────────────────────────────
@@ -1048,10 +1073,12 @@ async function runPipeline(job) {
   try {
     // Estimate trailer length: clips × per-clip length (+ ~4s end card).
     // Respect TEST_MAX_CLIPS so short test renders get a correctly-sized music bed.
-    // Kling 2.1 only generates 5s or 10s clips — we use 5s for punchy trailer cuts.
-    const baseClips = tier === 'pro' ? 14 : 6
+    // Seedance 2.0: 10s clips give cinematic breathing room.
+    //   Author: 4 clips × 10s = 40s
+    //   Pro:    7 clips × 10s = 70s
+    const baseClips = tier === 'pro' ? 7 : 4
     const estClips = TEST_MAX_CLIPS > 0 ? Math.min(baseClips, TEST_MAX_CLIPS) : baseClips
-    const estClipLen = 5
+    const estClipLen = 10
     const estDuration = estClips * estClipLen + 4
     musicAudioPath = await generateMusicBed(book.genre || 'dramatic', estDuration, tmpDir, ledger)
     if (musicAudioPath) console.log('[worker]   Music bed ready')
@@ -1059,13 +1086,13 @@ async function runPipeline(job) {
     console.error('[worker]   Music bed failed (non-fatal, shipping without music):', e.message)
   }
 
-  // Determine max scenes based on tier. Kling 2.1 only generates 5s or 10s clips;
-  // we use 5s for punchy, faster-cutting trailers (Tyler: the 10s clips felt long).
-  //   Author: 6 clips  × 5s = 30s
-  //   Pro:    14 clips × 5s = 70s   (60–80s pricing band; faster cuts than 8×10s)
-  // TEST_MAX_CLIPS (env) caps this for short troubleshooting renders (e.g. 4 = ~20s).
-  const sceneLength = 5
-  let maxScenes = tier === 'pro' ? 14 : 6
+  // Determine max scenes based on tier. Seedance 2.0 supports 4–15s clips.
+  // We use 10s for cinematic breathing room.
+  //   Author: 4 clips × 10s = 40s
+  //   Pro:    7 clips × 10s = 70s
+  // TEST_MAX_CLIPS (env) caps this for short troubleshooting renders (e.g. 2 = ~20s).
+  const sceneLength = 10
+  let maxScenes = tier === 'pro' ? 7 : 4
   if (TEST_MAX_CLIPS > 0) {
     maxScenes = Math.min(maxScenes, TEST_MAX_CLIPS)
     console.log(`[worker]   ⚠ TEST MODE: capping to ${maxScenes} clips (~${maxScenes * sceneLength}s) to save credits`)
@@ -1142,13 +1169,14 @@ async function runPipeline(job) {
     try {
       console.log(`[worker]   Scene ${scene.scene_number}: generating image...`)
 
-      // If this scene will be lip-synced, bias the image toward a clear face:
-      // medium/close shot, camera-facing, minimal motion — gives the lip-sync
-      // model the best possible target. Other scenes use the plain description.
+      // If this scene will be lip-synced, generate a proper character portrait:
+      // full face, front-facing, clear defined features — essentially a character
+      // reference sheet pose. Gives Kling the best possible face geometry to work
+      // with so the lip-sync model doesn't have to guess from a partial/angled shot.
       // willLipSync is also used by the video-clip call below.
       const willLipSync = lineBySceneNumber.has(scene.scene_number)
       const imageDescription = willLipSync
-        ? `${scene.description}, medium close-up shot, character facing camera directly, clear face visible, neutral head position, cinematic portrait`
+        ? `${scene.description}, full character portrait, face directly toward camera, front-facing headshot, both eyes clearly visible, symmetrical framing, neutral expression, sharp facial detail, cinematic portrait lighting, full face in frame`
         : scene.description
 
       // Generate image and upload to Supabase (so URL doesn't expire)
@@ -1182,19 +1210,22 @@ async function runPipeline(job) {
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
-      // Character punch-line: if this scene was chosen, voice the line and lip-sync
-      // it onto the clip. Non-fatal — on any failure we keep the original clip and
-      // simply skip this line, so the trailer always ships.
+      // Character punch-line: if this scene was chosen, use Seedance reference-to-video
+      // to generate the clip WITH native lip-sync baked in (image + TTS audio → synced video).
+      // Non-fatal — on any failure we keep the original clip and skip the line.
       const chosenLine = lineBySceneNumber.get(scene.scene_number)
       if (chosenLine) {
         try {
+          // Generate TTS audio for the character line
           const { url: lineAudioUrl, path: lineAudioPath } =
             await generateCharacterLineAudio(chosenLine.line, chosenLine.voice, tmpDirLines, scene.scene_number, ledger)
-          const syncedUrl = await lipSyncClip(clipUrl, lineAudioUrl, scene.scene_number, sceneLength, ledger)
+          // Replace the standard clip with a Seedance reference-to-video clip that
+          // natively lip-syncs the character's voice onto their face image.
+          const syncedUrl = await generateCharacterClip(imageUrl, lineAudioUrl, scene.description, sceneLength, ledger)
           clipUrl = syncedUrl
           // clipUrls.length is this clip's index (we push next).
           characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
-          console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line lip-synced`)
+          console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line lip-synced (Seedance ref2v)`)
         } catch (lineErr) {
           console.error(`[worker]   Scene ${scene.scene_number}: character line failed (non-fatal, keeping original clip):`, lineErr.message)
         }
