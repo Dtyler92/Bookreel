@@ -1393,10 +1393,114 @@ async function runPipeline(job) {
   console.log(`[worker] ✅ Pipeline complete: bookId=${bookId}`)
 }
 
+// ── Audiobook Pipeline ─────────────────────────────────────────────────────────
+// Renders each dialogue segment with its assigned voice, stitches into one MP3.
+async function runAudiobookPipeline(audiobook) {
+  const { id: audiobookId, bookId, segments_json: segments, narrator_voice: narratorVoice } = audiobook
+  console.log(`\n[worker] 🎙 Starting audiobook: audiobookId=${audiobookId} bookId=${bookId}`)
+
+  // Mark processing
+  await supabase.from('audiobooks').update({
+    status: 'processing',
+    processing_started_at: new Date().toISOString(),
+  }).eq('id', audiobookId)
+
+  const tmpDir = `/tmp/bookreel-audio-${audiobookId}`
+  if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
+
+  const segmentPaths = []
+  let totalChars = 0
+
+  // Render each segment with its assigned voice
+  for (const seg of segments) {
+    if (!seg.text?.trim()) continue
+    const voice = seg.speaker === 'NARRATOR' ? (narratorVoice || 'Daniel') : (seg.voice_name || 'Charlie')
+    console.log(`[worker]   Segment ${seg.index} [${seg.speaker}→${voice}]: ${seg.text.substring(0, 60)}...`)
+
+    try {
+      const res = await fetch('https://fal.run/fal-ai/elevenlabs/tts/eleven-v3', {
+        method: 'POST',
+        headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: seg.text,
+          voice,
+          stability: seg.speaker === 'NARRATOR' ? 0.5 : 0.6,
+          output_format: 'mp3_44100_128',
+        })
+      })
+      if (!res.ok) {
+        const err = await res.text()
+        console.error(`[worker]   Segment ${seg.index} TTS failed: ${err.substring(0, 100)}`)
+        continue
+      }
+      const data = await res.json()
+      const audioUrl = data.audio?.url || data.url
+      if (!audioUrl) { console.error(`[worker]   Segment ${seg.index}: no audio URL`); continue }
+
+      const audioRes = await fetch(audioUrl)
+      const audioBuffer = Buffer.from(await audioRes.arrayBuffer())
+      const segPath = join(tmpDir, `seg-${String(seg.index).padStart(5, '0')}.mp3`)
+      writeFileSync(segPath, audioBuffer)
+      segmentPaths.push(segPath)
+      totalChars += seg.text.length
+
+      // Small pause between segments — 250ms silence
+      const silencePath = join(tmpDir, `sil-${String(seg.index).padStart(5, '0')}.mp3`)
+      execSync(`ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 0.25 -q:a 9 "${silencePath}"`, { stdio: 'pipe' })
+      segmentPaths.push(silencePath)
+
+    } catch (e) {
+      console.error(`[worker]   Segment ${seg.index} failed (skipping):`, e.message)
+    }
+  }
+
+  if (segmentPaths.length === 0) {
+    throw new Error('No audio segments were generated')
+  }
+
+  // Write ffmpeg concat list
+  const concatList = join(tmpDir, 'concat.txt')
+  writeFileSync(concatList, segmentPaths.map(p => `file '${p}'`).join('\n'))
+
+  // Stitch all segments into one MP3
+  const outputPath = join(tmpDir, 'audiobook.mp3')
+  execSync(`ffmpeg -y -f concat -safe 0 -i "${concatList}" -c:a libmp3lame -q:a 4 "${outputPath}"`, { stdio: 'pipe' })
+
+  // Upload to Supabase
+  const audioBuffer = readFileSync(outputPath)
+  const storagePath = `audiobooks/${bookId}/${audiobookId}.mp3`
+  const { error: uploadErr } = await supabase.storage
+    .from('media')
+    .upload(storagePath, audioBuffer, { contentType: 'audio/mpeg', upsert: true })
+  if (uploadErr) throw new Error(`Audio upload failed: ${uploadErr.message}`)
+
+  const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
+  const audioUrl = `${urlData.publicUrl}?v=${Date.now()}`
+
+  // Get duration
+  let durationSeconds = 0
+  try {
+    const dur = execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 "${outputPath}"`, { encoding: 'utf8' }).trim()
+    durationSeconds = Math.round(parseFloat(dur))
+  } catch {}
+
+  // Mark complete
+  await supabase.from('audiobooks').update({
+    status: 'complete',
+    audio_url: audioUrl,
+    duration_seconds: durationSeconds,
+    processing_completed_at: new Date().toISOString(),
+  }).eq('id', audiobookId)
+
+  const cost = (totalChars / 1000) * 0.10
+  console.log(`[worker] ✅ Audiobook complete: ${durationSeconds}s, ${segmentPaths.length} segments, $${cost.toFixed(2)} COGS`)
+}
+
 // ── Poll loop ─────────────────────────────────────────────────────────────────
 async function pollLoop() {
   console.log('[worker] Polling queue...')
   try {
+    // Poll trailer jobs
     const jobs = await fetchQueue()
 
     if (jobs.length === 0) {
@@ -1423,6 +1527,38 @@ async function pollLoop() {
           activeJobs.delete(job.bookId)
         })
     }
+
+    // Poll audiobook jobs
+    try {
+      const { data: pendingAudiobooks } = await supabase
+        .from('audiobooks')
+        .select('id, book_id, segments_json, narrator_voice')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: true })
+        .limit(3)
+
+      for (const ab of (pendingAudiobooks || [])) {
+        const key = `audio-${ab.id}`
+        if (activeJobs.has(key)) continue
+        activeJobs.add(key)
+        runAudiobookPipeline({
+          id: ab.id,
+          bookId: ab.book_id,
+          segments_json: ab.segments_json,
+          narrator_voice: ab.narrator_voice,
+        })
+          .catch(async (err) => {
+            console.error(`[worker] ❌ Audiobook error for ${ab.id}:`, err.message)
+            await supabase.from('audiobooks').update({
+              status: 'failed', error_message: err.message
+            }).eq('id', ab.id)
+          })
+          .finally(() => { activeJobs.delete(key) })
+      }
+    } catch (abErr) {
+      console.error('[worker] Audiobook poll error (non-fatal):', abErr.message)
+    }
+
   } catch (err) {
     console.error('[worker] Poll error:', err.message)
   }
