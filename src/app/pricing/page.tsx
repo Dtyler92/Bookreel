@@ -16,7 +16,7 @@ const PLANS = [
     id: 'hobbyist',
     name: 'Hobbyist',
     monthly: 9,
-    yearly: 72,   // 4 months free — pay 8 months ($6/mo effective)
+    yearly: 81,   // 3 months free — pay 9 months ($6.75/mo effective)
     creditsPerMonth: 50,
     description: 'For authors publishing occasionally.',
     features: [
@@ -34,7 +34,7 @@ const PLANS = [
     id: 'author',
     name: 'Author',
     monthly: 19,
-    yearly: 152,  // 4 months free — pay 8 months ($12.67/mo effective)
+    yearly: 171,  // 3 months free — pay 9 months ($14.25/mo effective)
     creditsPerMonth: 150,
     description: 'For actively publishing indie authors.',
     features: [
@@ -54,7 +54,7 @@ const PLANS = [
     id: 'publisher',
     name: 'Publisher',
     monthly: 49,
-    yearly: 392,  // 4 months free — pay 8 months ($32.67/mo effective)
+    yearly: 441,  // 3 months free — pay 9 months ($36.75/mo effective)
     creditsPerMonth: 450,
     description: 'For high-volume authors and small presses.',
     features: [
@@ -73,9 +73,9 @@ const PLANS = [
 ]
 
 const CREDIT_PACKS = [
-  { credits: 100, price: 19, perCredit: '0.19', label: 'Starter Pack',  badge: null,         trailers: '1 premium or 1 standard + extras' },
-  { credits: 300, price: 49, perCredit: '0.16', label: 'Author Pack',   badge: 'Most Popular', trailers: '2 premium or 3–4 standard trailers' },
-  { credits: 700, price: 99, perCredit: '0.14', label: 'Pro Pack',      badge: 'Best Value',  trailers: '4 premium or 8+ standard trailers' },
+  { credits: 100, price: 22, perCredit: '0.22', label: 'Starter Pack',  badge: null,          trailers: '1 premium or 1 standard + extras' },
+  { credits: 300, price: 66, perCredit: '0.22', label: 'Author Pack',   badge: 'Most Popular', trailers: '2 premium or 3–4 standard trailers' },
+  { credits: 700, price: 154, perCredit: '0.22', label: 'Pro Pack',     badge: 'Best Value',   trailers: '4 premium or 8+ standard trailers' },
 ]
 
 const QUALITY_TIERS = [
@@ -194,7 +194,7 @@ export default function PricingPage() {
                   transition: 'all 150ms ease',
                 }}
               >
-                {p === 'monthly' ? 'Monthly' : 'Annual — 4 months free'}
+                {p === 'monthly' ? 'Monthly' : 'Annual — 3 months free'}
               </button>
             ))}
           </div>
@@ -210,7 +210,7 @@ export default function PricingPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '80px' }}>
           {PLANS.map((plan) => {
             const price = billing === 'yearly' ? Math.round(plan.yearly / 12) : plan.monthly
-            const billed = billing === 'yearly' ? `$${plan.yearly}/yr · 4 months free` : null
+            const billed = billing === 'yearly' ? `$${plan.yearly}/yr · 3 months free` : null
             return (
               <div key={plan.id} style={{
                 background: plan.highlight ? dark : '#fff',

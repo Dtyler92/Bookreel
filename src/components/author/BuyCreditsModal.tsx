@@ -15,25 +15,25 @@ const PACKS: CreditPack[] = [
   {
     pack: 'starter',
     credits: 100,
-    price: '$19',
-    perCredit: '$0.19 / credit',
+    price: '$22',
+    perCredit: '$0.22 / credit',
     description: '1 premium trailer or 1 standard + extras',
   },
   {
     pack: 'author',
     credits: 300,
-    price: '$49',
-    perCredit: '$0.16 / credit',
+    price: '$66',
+    perCredit: '$0.22 / credit',
     badge: 'Most popular',
     description: '3–4 trailers — great for active authors',
   },
   {
     pack: 'pro',
     credits: 700,
-    price: '$99',
-    perCredit: '$0.14 / credit',
+    price: '$154',
+    perCredit: '$0.22 / credit',
     badge: 'Best value',
-    description: '8+ trailers — lowest rate per credit',
+    description: '8+ trailers — most credits for your dollar',
   },
 ]
 
