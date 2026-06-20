@@ -1324,6 +1324,41 @@ async function runPipeline(job) {
 
   await updateTrailerStatus(bookId, 'complete', { videoUrl: finalVideoUrl })
 
+  // ── TikTok vertical cut (free — ffmpeg crop only, no AI) ─────────────────
+  // Crop the center 9:16 portion of the trailer and upload as a separate file.
+  // This costs $0 in AI — pure CPU. All subscription plans get this automatically.
+  try {
+    const tiktokPath = join(tmpDir, 'tiktok.mp4')
+    // Get source dimensions to calculate center crop
+    const probeOut = execSync(
+      `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${outputPath}"`,
+      { encoding: 'utf8' }
+    ).trim()
+    const [srcW, srcH] = probeOut.split(',').map(Number)
+    // Calculate 9:16 crop from center
+    const cropH = srcH
+    const cropW = Math.round(srcH * 9 / 16)
+    const cropX = Math.round((srcW - cropW) / 2)
+    execSync(
+      `ffmpeg -y -i "${outputPath}" -vf "crop=${cropW}:${cropH}:${cropX}:0,scale=1080:1920:flags=lanczos" ` +
+      `-c:v libx264 -preset fast -crf 22 -c:a aac -movflags +faststart "${tiktokPath}"`,
+      { stdio: 'pipe' }
+    )
+    const tiktokBuffer = readFileSync(tiktokPath)
+    const tiktokStoragePath = `trailers/${bookId}/tiktok.mp4`
+    const { error: ttErr } = await supabase.storage
+      .from('media')
+      .upload(tiktokStoragePath, tiktokBuffer, { contentType: 'video/mp4', upsert: true })
+    if (ttErr) throw new Error(ttErr.message)
+    const { data: ttUrl } = supabase.storage.from('media').getPublicUrl(tiktokStoragePath)
+    const tiktokUrl = `${ttUrl.publicUrl}?v=${Date.now()}`
+    // Save TikTok URL to the trailer record
+    await supabase.from('trailers').update({ tiktok_url: tiktokUrl }).eq('book_id', bookId)
+    console.log(`[worker]   📱 TikTok vertical cut: ${tiktokUrl.substring(0, 80)}`)
+  } catch (ttErr) {
+    console.error('[worker]   TikTok cut failed (non-fatal):', ttErr.message)
+  }
+
   // ── Per-render cost breakdown ──────────────────────────────────────────────
   const cost = summarizeLedger(ledger)
   const falTotal = cost.byProvider.fal || 0

@@ -16,7 +16,7 @@ const PLANS = [
     id: 'hobbyist',
     name: 'Hobbyist',
     monthly: 9,
-    yearly: 75,   // ~$6.25/mo — save 2 months
+    yearly: 72,   // 4 months free — pay 8 months ($6/mo effective)
     creditsPerMonth: 50,
     description: 'For authors publishing occasionally.',
     features: [
@@ -24,6 +24,7 @@ const PLANS = [
       '~0.6 standard trailers/mo or save up credits',
       'Access to all render types',
       'Credits roll over month to month',
+      'Free TikTok vertical cut of every trailer',
       'Blurb generator (coming soon)',
     ],
     cta: 'Start Hobbyist',
@@ -33,7 +34,7 @@ const PLANS = [
     id: 'author',
     name: 'Author',
     monthly: 19,
-    yearly: 160,  // ~$13.33/mo — save 2 months
+    yearly: 152,  // 4 months free — pay 8 months ($12.67/mo effective)
     creditsPerMonth: 150,
     description: 'For actively publishing indie authors.',
     features: [
@@ -41,6 +42,7 @@ const PLANS = [
       '~1 premium trailer or 1–2 standard trailers/mo',
       'Access to all render types',
       'Credits roll over month to month',
+      'Free TikTok vertical cut of every trailer',
       'Blurb generator (coming soon)',
       'SEO metadata generator (coming soon)',
     ],
@@ -52,7 +54,7 @@ const PLANS = [
     id: 'publisher',
     name: 'Publisher',
     monthly: 49,
-    yearly: 410,  // ~$34/mo — save 2+ months
+    yearly: 392,  // 4 months free — pay 8 months ($32.67/mo effective)
     creditsPerMonth: 450,
     description: 'For high-volume authors and small presses.',
     features: [
@@ -60,6 +62,7 @@ const PLANS = [
       '~3 premium or 5+ standard trailers/mo',
       'Access to all render types',
       'Credits roll over month to month',
+      'Free TikTok vertical cut of every trailer',
       'Priority render queue',
       'All coming-soon tools included',
       'Priority support',
@@ -191,7 +194,7 @@ export default function PricingPage() {
                   transition: 'all 150ms ease',
                 }}
               >
-                {p === 'monthly' ? 'Monthly' : 'Annual'}{p === 'yearly' ? ' — save 2 months' : ''}
+                {p === 'monthly' ? 'Monthly' : 'Annual — 4 months free'}
               </button>
             ))}
           </div>
@@ -207,7 +210,7 @@ export default function PricingPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '80px' }}>
           {PLANS.map((plan) => {
             const price = billing === 'yearly' ? Math.round(plan.yearly / 12) : plan.monthly
-            const billed = billing === 'yearly' ? `$${plan.yearly}/yr` : null
+            const billed = billing === 'yearly' ? `$${plan.yearly}/yr · 4 months free` : null
             return (
               <div key={plan.id} style={{
                 background: plan.highlight ? dark : '#fff',
