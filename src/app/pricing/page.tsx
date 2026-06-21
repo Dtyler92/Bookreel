@@ -86,7 +86,7 @@ const QUALITY_TIERS = [
     credits: 55,
     runtime: '~40 seconds',
     clips: '4 clips × 10s',
-    features: ['Seedance Fast video engine', '720p resolution', '1 character spoken line', 'Cinematic narration + music', 'Social-ready format'],
+    features: ['Cinematic engine · 720p resolution', '1 character spoken line', 'Cinematic narration + music', 'Social-ready format'],
     badge: null,
   },
   {
@@ -95,7 +95,7 @@ const QUALITY_TIERS = [
     credits: 150,
     runtime: '~40 seconds',
     clips: '4 clips × 10s',
-    features: ['Seedance 2.0 Standard engine', '1080p full HD', '2 character spoken lines', 'Native lip-sync (no separate model)', 'Cinematic narration + music', 'Social-ready format'],
+    features: ['Full cinematic engine · 1080p full HD', '2 character spoken lines', 'Native lip-sync · characters brought to life', 'Cinematic narration + music', 'Social-ready format'],
     badge: 'Recommended',
   },
 ]
@@ -107,7 +107,7 @@ const FAQ = [
   },
   {
     q: 'What\'s the difference between Standard and Premium quality?',
-    a: 'Standard uses Seedance Fast at 720p — great quality, shorter trailer (~40s, 4 clips). Premium uses Seedance 2.0 Standard at 1080p — full cinematic quality, longer trailer (~70s, 7 clips), and 2 character spoken lines with native lip-sync. Same AI pipeline, same character reference system, just different resolution and clip count.',
+    a: 'Standard delivers a 720p trailer — sharp, cinematic, and social-ready. Premium upgrades to full 1080p HD with 2 character spoken lines brought to life with native lip-sync. Same cinematic engine, same screenplay crafted from your manuscript — you just pick the resolution.',
   },
   {
     q: 'Can I mix standard and premium renders?',
@@ -324,7 +324,7 @@ export default function PricingPage() {
           fontFamily: 'var(--font-inter), sans-serif', fontSize: '15px',
           color: muted, margin: '0 0 28px',
         }}>
-          Same AI pipeline, same screenplay intelligence — you pick the resolution and length.
+          Same cinematic engine, same screenplay crafted from your manuscript — you pick the resolution.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '80px' }}>
           {QUALITY_TIERS.map((qt) => (

@@ -100,7 +100,7 @@ export default function TermsPage() {
               }}
             >
               BookReel is a platform for authors to create cinematic book trailers from their manuscripts.
-              Our AI tools are designed exclusively for <strong>literary book trailer production</strong> —
+              Our cinematic engine is designed exclusively for <strong>literary book trailer production</strong> —
               turning the characters, scenes, and atmosphere of published or in-progress novels into
               compelling visual and video content.
             </p>
