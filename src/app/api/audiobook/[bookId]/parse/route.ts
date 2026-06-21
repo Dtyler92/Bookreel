@@ -42,14 +42,14 @@ Output format:
 
 export async function POST(
   request: Request,
-  { params }: { params: { bookId: string } }
+  { params }: { params: Promise<{ bookId: string }> }
 ) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { bookId } = params
+    const { bookId } = await params
     const sb = createServiceClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -81,9 +81,10 @@ export async function POST(
     }
     const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer())
 
-    // Use pdf-parse to extract text
-    const { default: pdfParse } = await import('pdf-parse/lib/pdf-parse.js')
-    const pdfData = await pdfParse(pdfBuffer)
+    // Use pdf-parse to extract text (require for CJS compat on server)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParseLib = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
+    const pdfData = await pdfParseLib(pdfBuffer)
     const manuscriptText = pdfData.text
 
     // Truncate to ~60k chars to stay within Claude context (~15k tokens)

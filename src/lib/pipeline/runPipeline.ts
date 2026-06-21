@@ -4,7 +4,7 @@ import { generateSceneImage } from './generateImages'
 import { generateVideoClip } from './generateVideo'
 import { stitchVideoClips } from './stitchVideo'
 import { uploadFinalVideo } from './uploadVideo'
-import { getVideoConfig, getSceneCount } from '../tierGate'
+import { getVideoConfig } from '../tierGate'
 
 export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 'pro') {
   const supabase = createClient(
@@ -12,8 +12,9 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const videoConfig = getVideoConfig(authorTier)
-  const tier = videoConfig.quality
+  const qualityTier: 'standard' | 'premium' = authorTier === 'pro' ? 'premium' : 'standard'
+  const videoConfig = getVideoConfig(qualityTier)
+  const imageTier: 'standard' | 'cinematic' = qualityTier === 'premium' ? 'cinematic' : 'standard'
 
   try {
     // Update status to processing
@@ -54,20 +55,20 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
     void voiceoverScript
 
     // Determine max scenes based on tier
-    const maxScenes = getSceneCount(authorTier)
+    const maxScenes = videoConfig.clips
     const scenesToGenerate = scenes.slice(0, maxScenes)
 
     // Step 2: Generate scene images and video clips
-    console.log(`[Pipeline:${bookId}] 🎬 Step 2: Generating video clips (${scenesToGenerate.length} scenes, max ${maxScenes} for ${tier} tier)...`)
+    console.log(`[Pipeline:${bookId}] 🎬 Step 2: Generating video clips (${scenesToGenerate.length} scenes, max ${maxScenes} for ${qualityTier} tier)...`)
     const clipUrls: string[] = []
 
-    for (const scene of scenesToGenerate) { // tier-based scene limit
+    for (const scene of scenesToGenerate) {
       console.log(`[Pipeline:${bookId}]   Generating image for scene ${scene.scene_number}...`)
       // Generate scene image
       const imageUrl = await generateSceneImage(
         scene.description,
         book.genre || 'dramatic',
-        tier
+        imageTier
       )
       console.log(`[Pipeline:${bookId}]   ✅ Image generated: ${imageUrl.substring(0, 80)}`)
 
@@ -76,8 +77,8 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
       const clipUrl = await generateVideoClip(
         imageUrl,
         scene.description,
-        videoConfig.sceneLength,
-        tier
+        videoConfig.clipDuration,
+        imageTier
       )
       console.log(`[Pipeline:${bookId}]   ✅ Video clip generated: ${clipUrl.substring(0, 80)}`)
 
@@ -115,7 +116,7 @@ export async function runTrailerPipeline(bookId: string, authorTier: 'author' | 
     console.error(`[Pipeline:${bookId}] ❌ Pipeline error:`, errMsg)
     if (errStack) console.error(`[Pipeline:${bookId}] Stack:`, errStack)
 
-    // Try to store error message (requires scripts/update-schema.sql migration to add error_message column)
+    // Try to store error message
     const { error: updateErr } = await supabase.from('trailers')
       .update({ status: 'failed', error_message: errMsg })
       .eq('book_id', bookId)

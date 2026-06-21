@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { getModelForTier } from '@/lib/tierGate'
+import { getVideoConfig } from '@/lib/tierGate'
 import { PlanName } from '@/lib/stripe'
 import { getCreditState, consumeCredit } from '@/lib/credits'
 
@@ -66,8 +66,8 @@ export async function POST(request: Request) {
       }
 
       // Get model config based on tier
-      const modelConfig = getModelForTier(tier)
-      console.log(`Generating trailer for tier "${tier}" using models:`, modelConfig)
+      const modelConfig = getVideoConfig(tier as 'standard' | 'premium')
+      console.log(`Generating trailer for tier "${tier}" using config:`, modelConfig)
     }
 
     // Verify images have been approved before generating video

@@ -55,7 +55,7 @@ export function BuyCreditsModal({ onClose, currentCredits = 0 }: { onClose: () =
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const handleBuy = async (pack: 'starter' | 'author' | 'pro') => {
+  const handleBuy = async (pack: 'starter' | 'author' | 'pro' | 'audiobook') => {
     setLoading(pack)
     setError(null)
     try {

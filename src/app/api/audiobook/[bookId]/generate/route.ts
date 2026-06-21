@@ -8,14 +8,14 @@ export const runtime = 'nodejs'
 
 export async function POST(
   request: Request,
-  { params }: { params: { bookId: string } }
+  { params }: { params: Promise<{ bookId: string }> }
 ) {
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { bookId } = params
+    const { bookId } = await params
     const body = await request.json() as {
       segments: Array<{ index: number; speaker: string; text: string }>
       voiceMap: Record<string, string>      // speaker → voice_key
