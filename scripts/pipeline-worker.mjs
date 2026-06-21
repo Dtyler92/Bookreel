@@ -1166,9 +1166,9 @@ async function runPipeline(job) {
     // Estimate trailer length: clips × per-clip length (+ ~4s end card).
     // Respect TEST_MAX_CLIPS so short test renders get a correctly-sized music bed.
     // Seedance 2.0: 10s clips give cinematic breathing room.
-    //   Author: 4 clips × 10s = 40s
-    //   Pro:    7 clips × 10s = 70s
-    const baseClips = tier === 'pro' ? 7 : 4
+    //   Standard: 4 clips × 10s = 40s
+    //   Premium:  4 clips × 10s = 40s (1080p upgrade, same length)
+    const baseClips = 4
     const estClips = TEST_MAX_CLIPS > 0 ? Math.min(baseClips, TEST_MAX_CLIPS) : baseClips
     const estClipLen = 10
     const estDuration = estClips * estClipLen + 4
@@ -1178,13 +1178,11 @@ async function runPipeline(job) {
     console.error('[worker]   Music bed failed (non-fatal, shipping without music):', e.message)
   }
 
-  // Determine max scenes based on tier. Seedance 2.0 supports 4–15s clips.
-  // We use 10s for cinematic breathing room.
-  //   Author: 4 clips × 10s = 40s
-  //   Pro:    7 clips × 10s = 70s
-  // TEST_MAX_CLIPS (env) caps this for short troubleshooting renders (e.g. 2 = ~20s).
+  // Determine max scenes. Both tiers = 4 clips × 10s = 40s.
+  // Standard = 720p, Premium = 1080p — same length, different quality.
+  // TEST_MAX_CLIPS (env) caps this for short troubleshooting renders.
   const sceneLength = 10
-  let maxScenes = tier === 'pro' ? 7 : 4
+  let maxScenes = 4
   if (TEST_MAX_CLIPS > 0) {
     maxScenes = Math.min(maxScenes, TEST_MAX_CLIPS)
     console.log(`[worker]   ⚠ TEST MODE: capping to ${maxScenes} clips (~${maxScenes * sceneLength}s) to save credits`)
@@ -1197,7 +1195,7 @@ async function runPipeline(job) {
   // clip to lip-sync. Only scenes in scenesToGenerate are eligible.
   const tmpDirLines = `/tmp/bookreel-${bookId}`
   if (!existsSync(tmpDirLines)) mkdirSync(tmpDirLines, { recursive: true })
-  const maxLines = tier === 'pro' ? 2 : 1
+  const maxLines = tier === 'premium' ? 2 : 1
   const lineBySceneNumber = new Map()
   try {
     const { data: characters } = await supabase.from('characters').select('*').eq('book_id', bookId)

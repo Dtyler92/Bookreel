@@ -2,8 +2,8 @@
 // As of Jun 2026: credit-based model. Quality is chosen per-render, not per-subscription.
 //
 // Credit costs:
-//   Standard trailer: 55 credits (Seedance Fast, 720p, 4 clips × 10s = 40s)
-//   Premium trailer:  150 credits (Seedance Standard, 1080p, 7 clips × 10s = 70s)
+// Standard trailer  (Seedance Fast, 720p,  4 clips × 10s = 40s)  = 55 credits
+// Premium trailer   (Seedance 1080p,       4 clips × 10s = 40s)  = 150 credits
 //
 // Monthly subscription allotments (see credits.ts for authoritative source):
 //   Hobbyist:  55 credits/mo
@@ -23,9 +23,9 @@ export const CREDIT_COSTS: Record<QualityTier, number> = {
 export function getVideoConfig(quality: QualityTier) {
   if (quality === 'premium') {
     return {
-      clips: 7,
+      clips: 4,
       clipDuration: 10,           // seconds
-      totalSeconds: 70,
+      totalSeconds: 40,
       resolution: '1080p' as const,
       seedanceTier: 'standard' as const,  // Seedance Standard endpoint
       characterLines: 2,
