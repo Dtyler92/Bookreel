@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { consumeCredits } from '@/lib/credits'
 
 export const runtime = 'nodejs'
 
@@ -44,11 +43,8 @@ export async function POST(
       return Response.json({ error: 'Book not found' }, { status: 404 })
     }
 
-    // Deduct 900 credits
+    // Deduct 900 credits for audiobook
     const AUDIOBOOK_CREDITS = 900
-    const ok = await consumeCredits(user.id, bookId, 'standard') // will deduct 900 in custom call
-    // Override: use direct deduction for audiobook (900 credits flat)
-    // Re-implement inline since consumeCredits is wired for trailer tiers
     const { data: profile } = await sb
       .from('profiles')
       .select('trailer_credits')
