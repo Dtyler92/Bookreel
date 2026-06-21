@@ -127,7 +127,7 @@ const FAQ = [
 ]
 
 export default function PricingPage() {
-  const [billing, setBilling] = useState<BillingPeriod>('monthly')
+  const [billing, setBilling] = useState<BillingPeriod>('yearly')
   const [openFaq, setOpenFaq] = useState<number | null>(null)
 
   const red    = '#C8402F'
