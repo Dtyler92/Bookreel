@@ -2,20 +2,20 @@
 // As of Jun 2026: credit-based model. Quality is chosen per-render, not per-subscription.
 //
 // Credit costs:
-//   Standard trailer: 80 credits (Seedance Fast, 720p, 4 clips × 10s = 40s)
+//   Standard trailer: 55 credits (Seedance Fast, 720p, 4 clips × 10s = 40s)
 //   Premium trailer:  150 credits (Seedance Standard, 1080p, 7 clips × 10s = 70s)
 //
 // Monthly subscription allotments (see credits.ts for authoritative source):
-//   Hobbyist:  50 credits/mo
+//   Hobbyist:  55 credits/mo
 //   Author:    150 credits/mo
-//   Publisher: 450 credits/mo
+//   Publisher: 425 credits/mo
 
 export type QualityTier = 'standard' | 'premium'
 export type PlanName = 'free' | 'hobbyist' | 'author' | 'publisher' | 'pro' | 'basic' // legacy names kept
 
 // Credit cost per render quality
 export const CREDIT_COSTS: Record<QualityTier, number> = {
-  standard: 80,
+  standard: 55,
   premium:  150,
 }
 

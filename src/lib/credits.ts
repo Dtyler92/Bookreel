@@ -18,7 +18,7 @@ export interface CreditState {
 // Standard: Seedance Fast (720p, 4 clips × 10s = 40s trailer)  — cheaper tier
 // Premium:  Seedance Standard (1080p, 7 clips × 10s = 70s trailer) — full quality
 export const CREDIT_COSTS = {
-  standard_trailer: 80,   // Seedance Fast 720p — ~$9 COGS at $0.19/cr
+  standard_trailer: 55,   // Seedance Fast 720p — ~$9 COGS at $0.19/cr
   premium_trailer:  150,  // Seedance Standard 1080p — ~$21 COGS at $0.19/cr
 } as const
 
@@ -31,9 +31,9 @@ export function creditCostForQuality(quality: QualityTier): number {
 // ── Monthly allotment per subscription plan ───────────────────────────────────
 // Plans: free | hobbyist | author | publisher
 export function monthlyAllotment(tier: string): number {
-  if (tier === 'publisher') return 450
+  if (tier === 'publisher') return 425
   if (tier === 'author')    return 150
-  if (tier === 'hobbyist')  return 50
+  if (tier === 'hobbyist')  return 55
   // free & legacy tiers
   return 0
 }

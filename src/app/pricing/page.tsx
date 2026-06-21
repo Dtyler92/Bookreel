@@ -6,7 +6,7 @@ import Link from 'next/link'
 type BillingPeriod = 'monthly' | 'yearly'
 
 // ── Credit economy ─────────────────────────────────────────────────────────────
-// Standard trailer  (Seedance Fast, 720p,  4 clips × 10s = 40s)  = 80 credits
+// Standard trailer  (Seedance Fast, 720p,  4 clips × 10s = 40s)  = 55 credits
 // Premium trailer   (Seedance 1080p,       7 clips × 10s = 70s)  = 150 credits
 // Audiobook add-on  (ElevenLabs full MS)                          = 50 credits  (coming soon)
 // Social Pack       (vertical cuts + quote cards)                 = 20 credits  (coming soon)
@@ -17,11 +17,11 @@ const PLANS = [
     name: 'Hobbyist',
     monthly: 9,
     yearly: 81,   // 3 months free — pay 9 months ($6.75/mo effective)
-    creditsPerMonth: 50,
+    creditsPerMonth: 55,
     description: 'For authors publishing occasionally.',
     features: [
-      '50 credits / month',
-      '~0.6 standard trailers/mo or save up credits',
+      '55 credits / month',
+      '1 standard trailer/mo or save up credits',
       'Access to all render types',
       'Credits roll over month to month',
       'Free TikTok vertical cut of every trailer',
@@ -33,8 +33,8 @@ const PLANS = [
   {
     id: 'author',
     name: 'Author',
-    monthly: 19,
-    yearly: 171,  // 3 months free — pay 9 months ($14.25/mo effective)
+    monthly: 24,
+    yearly: 216,  // 3 months free — pay 9 months ($18/mo effective)
     creditsPerMonth: 150,
     description: 'For actively publishing indie authors.',
     features: [
@@ -53,13 +53,13 @@ const PLANS = [
   {
     id: 'publisher',
     name: 'Publisher',
-    monthly: 49,
-    yearly: 441,  // 3 months free — pay 9 months ($36.75/mo effective)
-    creditsPerMonth: 450,
+    monthly: 69,
+    yearly: 621,  // 3 months free — pay 9 months ($51.75/mo effective)
+    creditsPerMonth: 425,
     description: 'For high-volume authors and small presses.',
     features: [
-      '450 credits / month',
-      '~3 premium or 5+ standard trailers/mo',
+      '425 credits / month',
+      '~2 premium or 7+ standard trailers/mo',
       'Access to all render types',
       'Credits roll over month to month',
       'Free TikTok vertical cut of every trailer',
@@ -82,7 +82,7 @@ const QUALITY_TIERS = [
   {
     name: 'Standard',
     resolution: '720p',
-    credits: 80,
+    credits: 55,
     runtime: '~40 seconds',
     clips: '4 clips × 10s',
     features: ['Seedance Fast video engine', '720p resolution', '1 character spoken line', 'Cinematic narration + music', 'Social-ready format'],
@@ -109,7 +109,7 @@ const FAQ = [
   },
   {
     q: 'Can I mix standard and premium renders?',
-    a: 'Yes — you choose per render. Have 300 credits? You could do 2 premium trailers (150 each), or 3 standard trailers (80 each), or mix and match however you like.',
+    a: 'Yes — you choose per render. Have 300 credits? You could do 2 premium trailers (150 each), or 5 standard trailers (55 each), or mix and match however you like.',
   },
   {
     q: 'What happens to my subscription credits if I cancel?',

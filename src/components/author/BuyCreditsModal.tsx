@@ -39,7 +39,7 @@ const PACKS: CreditPack[] = [
 
 // What each quality tier costs in credits
 const QUALITY_COSTS = {
-  standard: { credits: 80,  label: 'Standard',  resolution: '720p',  description: 'Great quality · 40s trailer · 4 cinematic clips' },
+  standard: { credits: 55,  label: 'Standard',  resolution: '720p',  description: '1 standard trailer · 480p · 40s' },
   premium:  { credits: 150, label: 'Premium',   resolution: '1080p', description: 'Full cinematic · 70s trailer · 7 clips · character voices' },
 }
 
@@ -106,7 +106,7 @@ export function BuyCreditsModal({ onClose, currentCredits = 0 }: { onClose: () =
             fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', color: '#5C5751',
           }}>
             <span>🎬</span>
-            <span>You have <strong>{currentCredits} credits</strong> · enough for {Math.floor(currentCredits / 150)} premium or {Math.floor(currentCredits / 80)} standard trailer{Math.floor(currentCredits / 80) !== 1 ? 's' : ''}</span>
+            <span>You have <strong>{currentCredits} credits</strong> · enough for {Math.floor(currentCredits / 150)} premium or {Math.floor(currentCredits / 55)} standard trailer{Math.floor(currentCredits / 55) !== 1 ? 's' : ''}</span>
           </div>
         )}
 
