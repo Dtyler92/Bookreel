@@ -144,7 +144,7 @@ ${truncated}`
       voiceMap,
       voiceRoster: VOICE_ROSTER,
       wordCount,
-      estimatedCredits: 900,
+      estimatedCredits: 1500,
       estimatedMinutes: Math.round(wordCount / 150), // ~150 words/min narration
     })
   } catch (err) {

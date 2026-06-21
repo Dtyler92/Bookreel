@@ -162,7 +162,7 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
             cursor: 'pointer',
           }}
         >
-          Generate Audiobook — 900 credits
+          Generate Audiobook — 1500 credits
         </button>
       </div>
 
@@ -319,7 +319,7 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
               Generate Audiobook?
             </h2>
             <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: muted, lineHeight: 1.6, textAlign: 'center', margin: '0 0 24px' }}>
-              This will use <strong>900 credits</strong> and render a full-cast audiobook
+              This will use <strong>1500 credits</strong> and render a full-cast audiobook
               with {speakers.length + 1} voice{speakers.length !== 0 ? 's' : ''} across {segments.length} segments.
               Estimated listen time: ~{estimatedMins} minutes.
             </p>
@@ -355,7 +355,7 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
                   opacity: generating ? 0.7 : 1,
                 }}
               >
-                {generating ? 'Starting…' : 'Confirm — 900 credits'}
+                {generating ? 'Starting…' : 'Confirm — 1500 credits'}
               </button>
             </div>
           </div>

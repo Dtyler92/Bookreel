@@ -4,7 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 export const runtime = 'nodejs'
 
 // POST /api/audiobook/[bookId]/generate
-// Saves voice assignments + segments, deducts 900 credits, queues the audiobook job.
+// Saves voice assignments + segments, deducts 1500 credits, queues the audiobook job.
 
 export async function POST(
   request: Request,
@@ -43,8 +43,8 @@ export async function POST(
       return Response.json({ error: 'Book not found' }, { status: 404 })
     }
 
-    // Deduct 900 credits for audiobook
-    const AUDIOBOOK_CREDITS = 900
+    // Deduct 1500 credits for audiobook
+    const AUDIOBOOK_CREDITS = 1500
     const { data: profile } = await sb
       .from('profiles')
       .select('trailer_credits')

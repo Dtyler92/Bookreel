@@ -783,7 +783,7 @@ function BookCard({
                   ;(e.currentTarget as HTMLAnchorElement).style.color = '#5C5751'
                 }}
               >
-                🎙️ Create Audiobook <span style={{ fontSize: '10px', color: '#B0A89E' }}>900 cr</span>
+                🎙️ Create Audiobook <span style={{ fontSize: '10px', color: '#B0A89E' }}>1500 cr</span>
               </Link>
             )}
           </div>

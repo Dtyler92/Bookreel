@@ -16,10 +16,10 @@ import { cookies } from 'next/headers'
 //   Premium trailer (Seedance 1080p)        → 150 credits (~$28.50 value at $0.19/cr)
 
 const CREDIT_PACKS: Record<string, { credits: number; amount: number; label: string; description: string }> = {
-  'starter':   { credits: 100, amount: 2200,  label: '100 Credits',  description: 'Good for 1 premium trailer or 1 standard trailer + extras.' },
+  'starter':   { credits: 100, amount: 2200,  label: '100 Credits',  description: 'Good for 1 standard trailer + 1 extra clip, or put toward a premium render.' },
   'author':    { credits: 300, amount: 6600,  label: '300 Credits',  description: 'Good for 3–4 trailers. Great for active authors.' },
   'pro':       { credits: 700, amount: 15400, label: '700 Credits',  description: 'Good for 8+ trailers. Best rate per credit.' },
-  'audiobook': { credits: 900, amount: 19800, label: '900 Credits',  description: 'Exactly enough for one full-cast audiobook, or 4 premium trailers.' },
+  'audiobook': { credits: 1500, amount: 33000, label: '1500 Credits', description: 'Exactly enough for one full-cast audiobook, or 10 standard trailers.' },
 }
 
 function getServiceClient() {

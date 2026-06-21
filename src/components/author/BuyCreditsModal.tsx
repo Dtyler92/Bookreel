@@ -37,11 +37,11 @@ const PACKS: CreditPack[] = [
   },
   {
     pack: 'audiobook',
-    credits: 900,
-    price: '$198',
+    credits: 1500,
+    price: '$330',
     perCredit: '$0.22 / credit',
     badge: '🎙 Audiobook',
-    description: '1 full-cast audiobook or 4 premium trailers',
+    description: '1 full-cast audiobook or 10 standard trailers',
   },
 ]
 
