@@ -17,7 +17,9 @@
  *   SUPABASE_SERVICE_ROLE_KEY
  *   PIPELINE_WORKER_SECRET  (must match what's set in Vercel)
  *   NEXT_PUBLIC_APP_URL     (e.g. https://bookreel-five.vercel.app)
- *   FAL_API_KEY             (image gen via flux/dev + video via Kling 2.1)
+ *   FAL_API_KEY             (image gen via Flux Pro Ultra + audio via ElevenLabs)
+ *   EVOLINK_API_KEY         (video engine — Seedance 2.0 i2v + ref2v, 54-59% cheaper than fal)
+ *   USE_EVOLINK             (true = EvoLink video [default], false = fal.ai video)
  *   ANTHROPIC_API_KEY or OPENROUTER_API_KEY
  */
 
@@ -37,14 +39,26 @@ const SUPABASE_SERVICE_ROLE_KEY = getEnv('SUPABASE_SERVICE_ROLE_KEY')
 const PIPELINE_WORKER_SECRET = getEnv('PIPELINE_WORKER_SECRET')
 const APP_URL = getEnv('NEXT_PUBLIC_APP_URL') || 'https://bookreel-five.vercel.app'
 const FAL_API_KEY = getEnv('FAL_API_KEY')
+const EVOLINK_API_KEY = getEnv('EVOLINK_API_KEY')   // EvoLink video engine (Seedance 2.0, 54-59% cheaper)
 const ANTHROPIC_API_KEY = getEnv('ANTHROPIC_API_KEY')
 const OPENROUTER_API_KEY = getEnv('OPENROUTER_API_KEY')
+
+// ── Video engine toggle ──────────────────────────────────────────────────────
+// USE_EVOLINK=true  → EvoLink.ai Seedance 2.0 (720p=$0.14/s, 1080p=$0.28/s)
+// USE_EVOLINK=false → fal.ai Seedance 2.0      (720p=$0.2419/s, 1080p=$0.3024/s)
+// Set in .env.local on the VPS. Flip without code changes.
+const USE_EVOLINK = (() => {
+  const v = process.env.USE_EVOLINK ?? getEnv('USE_EVOLINK') ?? 'true'
+  return v.toLowerCase() !== 'false'
+})()
+const EVOLINK_BASE = 'https://api.evolink.ai/v1'
 
 // Expose to child process environment (for imported SDK modules)
 process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL
 process.env.SUPABASE_SERVICE_ROLE_KEY = SUPABASE_SERVICE_ROLE_KEY
 process.env.FAL_API_KEY = FAL_API_KEY
 process.env.FAL_KEY = FAL_API_KEY
+process.env.EVOLINK_API_KEY = EVOLINK_API_KEY
 process.env.ANTHROPIC_API_KEY = ANTHROPIC_API_KEY
 process.env.OPENROUTER_API_KEY = OPENROUTER_API_KEY
 
@@ -81,7 +95,11 @@ if (isPlaceholder(PIPELINE_WORKER_SECRET)) {
   process.exit(1)
 }
 if (isPlaceholder(FAL_API_KEY)) {
-  console.error('[worker] FATAL: FAL_API_KEY not set')
+  console.error('[worker] FATAL: FAL_API_KEY not set (needed for Flux image gen + audio)')
+  process.exit(1)
+}
+if (USE_EVOLINK && isPlaceholder(EVOLINK_API_KEY)) {
+  console.error('[worker] FATAL: USE_EVOLINK=true but EVOLINK_API_KEY not set — add it to .env.local or set USE_EVOLINK=false to fall back to fal.ai')
   process.exit(1)
 }
 
@@ -119,7 +137,8 @@ function softenForModeration(text) {
 
 console.log('[worker] App URL:', APP_URL)
 console.log('[worker] Anthropic key available:', !isPlaceholder(ANTHROPIC_API_KEY))
-console.log(`[worker] Video engine: Seedance 2.0 ${SEEDANCE_TIER.toUpperCase()} via fal.ai ($${SEEDANCE_PER_SEC}/s)`)
+console.log(`[worker] Video engine: Seedance 2.0 ${SEEDANCE_TIER.toUpperCase()} via ${USE_EVOLINK ? `EvoLink.ai ($0.14/s 720p · $0.28/s 1080p)` : `fal.ai ($${SEEDANCE_PER_SEC}/s)`}`)
+if (!USE_EVOLINK) console.log('[worker] ⚠ USE_EVOLINK=false — running on fal.ai (set USE_EVOLINK=true to enable EvoLink)')
 if (TEST_MAX_CLIPS > 0) console.log(`[worker] ⚠ TEST MODE active: TEST_MAX_CLIPS=${TEST_MAX_CLIPS} (short renders to save credits)`)
 
 // ── Supabase client ──────────────────────────────────────────────────────────
@@ -157,8 +176,15 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
 // ONE fal balance, so when it's exhausted, everything stops at once. The ledger logs
 // exactly what each trailer costs so credit pricing ($9.99=1 credit) stays profitable.
 const PRICING = {
-  flux_image_ultra: 0.06,   // flux-pro/v1.1-ultra — per image
-  // Seedance per-second price is tier-dependent — see SEEDANCE_PER_SEC (standard $0.3024 / fast $0.2419)
+  flux_image_ultra: 0.06,   // flux-pro/v1.1-ultra — per image (scene gen + char refs)
+  // ── Video per-second rates ────────────────────────────────────────────────
+  // EvoLink.ai Seedance 2.0 (USE_EVOLINK=true, default — 54-59% cheaper than fal.ai)
+  evolink_seedance_720p:  0.14,   // seedance-2.0-fast-image-to-video (720p)
+  evolink_seedance_1080p: 0.28,   // seedance-2.0-image-to-video (1080p)
+  // fal.ai Seedance 2.0 (USE_EVOLINK=false fallback)
+  fal_seedance_fast: 0.2419,  // seedance-2.0/fast (720p)
+  fal_seedance_std:  0.3024,  // seedance-2.0 standard (1080p)
+  // Seedance per-second price is also resolved at runtime in SEEDANCE_PER_SEC above
   tts_per_1k_char: 0.10,    // elevenlabs eleven-v3 — per 1000 chars
   music_bed: 0.015,         // stable-audio — approx (open model, compute-second)
   // No separate lipsync cost — Seedance reference-to-video handles it natively
@@ -333,48 +359,82 @@ async function generateSceneImage(sceneDescription, genre, ledger = null, charac
   return urlData.publicUrl
 }
 
-// ── Video generation (Seedance 2.0 via fal.ai) ────────────────────────────────
-// Replaced Kling 2.1 Jun 2026: Seedance 2.0 supports 4–15s clips, 1080p output,
-// and native character reference + lip-sync via reference-to-video endpoint.
-// Two functions:
-//   generateVideoClip()     — standard image-to-video for non-character scenes
-//   generateCharacterClip() — reference-to-video for lip-synced character scenes
-//                             (no separate sync-lipsync step needed)
+// ── Video generation (Seedance 2.0 — EvoLink.ai or fal.ai) ───────────────────
+// USE_EVOLINK=true  → EvoLink.ai: one unified endpoint, model name in body, polling via
+//                     GET /v1/tasks/{taskId}, result in data.results[0]
+//                     Models: seedance-2.0-image-to-video / seedance-2.0-fast-image-to-video
+//                             seedance-2.0-reference-to-video / seedance-2.0-fast-reference-to-video
+// USE_EVOLINK=false → fal.ai:  separate URL-per-tier, polling via /requests/{id}/status
+//
+// Two exported functions — same signature as before, internal routing is transparent:
+//   generateVideoClip()     — standard image-to-video
+//   generateCharacterClip() — reference-to-video (lip-sync), falls back gracefully
 
-async function pollSeedanceJob(endpoint, requestId, durationSeconds, label, ledger, perSec = SEEDANCE_PER_SEC) {
+// ── EvoLink polling ──────────────────────────────────────────────────────────
+async function pollEvolinkTask(taskId, durationSeconds, label, ledger, perSec) {
+  const statusUrl = `${EVOLINK_BASE}/tasks/${taskId}`
+  for (let i = 0; i < 90; i++) {
+    await new Promise(r => setTimeout(r, 5000))
+    const res = await fetch(statusUrl, {
+      headers: { 'Authorization': `Bearer ${EVOLINK_API_KEY}` }
+    })
+    if (!res.ok) { console.error(`[worker]   EvoLink status check failed: ${res.status}`); continue }
+    const data = await res.json()
+    console.log(`[worker]   EvoLink poll ${i+1}: ${data.status} (${data.progress ?? '?'}%)`)
+    if (data.status === 'completed') {
+      const videoUrl = Array.isArray(data.results) ? data.results[0] : data.results?.video_url || null
+      if (!videoUrl) throw new Error('EvoLink returned no video URL in results')
+      if (ledger) ledger.add(label, 'evolink', perSec * durationSeconds)
+      return videoUrl
+    }
+    if (data.status === 'failed') {
+      const detail = JSON.stringify(data.error || data).substring(0, 300)
+      const err = new Error(`EvoLink generation failed: ${detail}`)
+      if (/content|moderation|safety|policy|inappropriate|nsfw/i.test(detail)) err.isModeration = true
+      throw err
+    }
+  }
+  throw new Error('EvoLink generation timed out after 7.5 minutes')
+}
+
+// ── fal.ai polling (unchanged) ────────────────────────────────────────────────
+async function pollFalTask(endpoint, requestId, durationSeconds, label, ledger, perSec) {
   const statusBase = `https://queue.fal.run/${endpoint.replace('https://queue.fal.run/', '')}`
   const statusUrl = `${statusBase}/requests/${requestId}/status`
   const resultUrl = `${statusBase}/requests/${requestId}`
-
   for (let i = 0; i < 90; i++) {
     await new Promise(r => setTimeout(r, 5000))
     const statusRes = await fetch(statusUrl, {
       headers: { 'Authorization': `Key ${FAL_API_KEY}` }
     })
-    if (!statusRes.ok) { console.error(`[worker]   Seedance status check failed: ${statusRes.status}`); continue }
+    if (!statusRes.ok) { console.error(`[worker]   fal status check failed: ${statusRes.status}`); continue }
     const status = await statusRes.json()
-    console.log(`[worker]   Seedance poll ${i+1}: ${status.status}`)
-
+    console.log(`[worker]   fal poll ${i+1}: ${status.status}`)
     if (status.status === 'COMPLETED') {
       const resultRes = await fetch(resultUrl, { headers: { 'Authorization': `Key ${FAL_API_KEY}` } })
       const result = await resultRes.json()
       const videoUrl = result.video?.url || null
-      if (!videoUrl) throw new Error('Seedance returned no video URL')
+      if (!videoUrl) throw new Error('fal.ai Seedance returned no video URL')
       if (ledger) ledger.add(label, 'fal', perSec * durationSeconds)
       return videoUrl
     }
     if (status.status === 'FAILED') {
       const detail = JSON.stringify(status).substring(0, 300)
-      console.error(`[worker]   ❌ Seedance FAILED — ${detail}`)
-      const err = new Error(`Seedance generation failed: ${status.error || detail}`)
+      const err = new Error(`fal.ai Seedance failed: ${status.error || detail}`)
       if (/content|moderation|safety|policy|inappropriate|nsfw/i.test(detail)) err.isModeration = true
       throw err
     }
   }
-  throw new Error('Seedance generation timed out after 7.5 minutes')
+  throw new Error('fal.ai Seedance generation timed out after 7.5 minutes')
 }
 
-// Standard image-to-video — for non-character or non-lip-sync scenes
+// ── Kept for backwards compat — used by fal path ─────────────────────────────
+// (alias used by old call-sites; wraps pollFalTask so we don't break any other reference)
+async function pollSeedanceJob(endpoint, requestId, durationSeconds, label, ledger, perSec = SEEDANCE_PER_SEC) {
+  return pollFalTask(endpoint, requestId, durationSeconds, label, ledger, perSec)
+}
+
+// Standard image-to-video
 async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 10, screenplayText = null, ledger = null, suppressTalking = false, endpoint = SEEDANCE_I2V_ENDPOINT, resolution = '720p', perSec = SEEDANCE_PER_SEC) {
   const duration = String(Math.min(15, Math.max(4, durationSeconds)))
   const motionText = screenplayText?.trim()
@@ -383,6 +443,40 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
   const safePrompt = softenForModeration(motionText)
     + (suppressTalking ? ', subject is silent and still, mouth closed, no talking' : '')
 
+  if (USE_EVOLINK) {
+    // EvoLink path — model name encodes tier: fast=720p, standard=1080p
+    const evolinkModel = resolution === '1080p'
+      ? 'seedance-2.0-image-to-video'
+      : 'seedance-2.0-fast-image-to-video'
+    const evolinkPerSec = resolution === '1080p' ? PRICING.evolink_seedance_1080p : PRICING.evolink_seedance_720p
+    console.log(`[worker]   Submitting to EvoLink (${evolinkModel}, ${resolution}, ${duration}s)`)
+    const submitRes = await fetch(`${EVOLINK_BASE}/videos/generations`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${EVOLINK_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: evolinkModel,
+        prompt: safePrompt,
+        image_urls: [imageUrl],
+        duration: parseInt(duration),
+        quality: resolution,
+        aspect_ratio: '16:9',
+        generate_audio: false,
+      })
+    })
+    if (!submitRes.ok) {
+      const errText = await submitRes.text()
+      const err = new Error(`EvoLink i2v submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
+      if (submitRes.status === 429) err.isRateLimit = true
+      throw err
+    }
+    const submitData = await submitRes.json()
+    const taskId = submitData.id
+    const tier = resolution === '1080p' ? 'standard' : 'fast'
+    console.log(`[worker]   EvoLink i2v task: ${taskId}`)
+    return pollEvolinkTask(taskId, Number(duration), `video clip ${duration}s (EvoLink Seedance 2.0 ${tier} ${resolution})`, ledger, evolinkPerSec)
+  }
+
+  // fal.ai path (USE_EVOLINK=false)
   const submitRes = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
@@ -392,30 +486,61 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
       duration,
       resolution,
       aspect_ratio: '16:9',
-      generate_audio: false,  // we supply our own music/TTS
+      generate_audio: false,
     })
   })
-
   if (!submitRes.ok) {
     const errText = await submitRes.text()
     const err = new Error(`Seedance i2v submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
     if (submitRes.status === 429) err.isRateLimit = true
     throw err
   }
-
   const submitData = await submitRes.json()
   const requestId = submitData.request_id
   const tier = resolution === '1080p' ? 'standard' : 'fast'
-  console.log(`[worker]   Seedance i2v task: ${requestId}`)
-  return pollSeedanceJob(endpoint, requestId, Number(duration), `video clip ${duration}s (seedance 2.0 ${tier} ${resolution})`, ledger, perSec)
+  console.log(`[worker]   fal.ai Seedance i2v task: ${requestId}`)
+  return pollFalTask(endpoint, requestId, Number(duration), `video clip ${duration}s (seedance 2.0 ${tier} ${resolution})`, ledger, perSec)
 }
 
-// Reference-to-video — for character scenes with lip-sync.
+// Reference-to-video — character scenes with lip-sync
 async function generateCharacterClip(characterImageUrl, ttsAudioUrl, sceneDescription, durationSeconds = 10, ledger = null, endpoint = SEEDANCE_REF_ENDPOINT, perSec = SEEDANCE_PER_SEC) {
   const duration = String(Math.min(15, Math.max(4, durationSeconds)))
   const safeDesc = softenForModeration(sceneDescription)
   const prompt = `@Image1 speaks while saying @Audio1. ${safeDesc}. Character looks directly at camera, steady head position, cinematic portrait lighting.`
 
+  if (USE_EVOLINK) {
+    // EvoLink ref2v — fully supported (both standard + fast variants available)
+    // Standard (720p) used for ref2v since lip-sync quality is the priority, not resolution.
+    const evolinkModel = 'seedance-2.0-fast-reference-to-video'
+    const evolinkPerSec = PRICING.evolink_seedance_720p
+    console.log(`[worker]   Submitting ref2v to EvoLink (${evolinkModel}, ${duration}s)`)
+    const submitRes = await fetch(`${EVOLINK_BASE}/videos/generations`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${EVOLINK_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: evolinkModel,
+        prompt,
+        image_urls: [characterImageUrl],
+        audio_urls: [ttsAudioUrl],
+        duration: parseInt(duration),
+        quality: '720p',
+        aspect_ratio: '16:9',
+        generate_audio: false,
+      })
+    })
+    if (!submitRes.ok) {
+      const errText = await submitRes.text()
+      const err = new Error(`EvoLink ref2v submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
+      if (submitRes.status === 429) err.isRateLimit = true
+      throw err
+    }
+    const submitData = await submitRes.json()
+    const taskId = submitData.id
+    console.log(`[worker]   EvoLink ref2v task: ${taskId}`)
+    return pollEvolinkTask(taskId, Number(duration), `character clip ${duration}s w/ lip-sync (EvoLink Seedance 2.0 ref2v)`, ledger, evolinkPerSec)
+  }
+
+  // fal.ai path (USE_EVOLINK=false)
   const submitRes = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
@@ -429,18 +554,16 @@ async function generateCharacterClip(characterImageUrl, ttsAudioUrl, sceneDescri
       generate_audio: false,
     })
   })
-
   if (!submitRes.ok) {
     const errText = await submitRes.text()
     const err = new Error(`Seedance ref2v submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
     if (submitRes.status === 429) err.isRateLimit = true
     throw err
   }
-
   const submitData = await submitRes.json()
   const requestId = submitData.request_id
-  console.log(`[worker]   Seedance ref2v task: ${requestId}`)
-  return pollSeedanceJob(endpoint, requestId, Number(duration), `character clip ${duration}s w/ lip-sync (seedance 2.0 ref2v)`, ledger, perSec)
+  console.log(`[worker]   fal.ai Seedance ref2v task: ${requestId}`)
+  return pollFalTask(endpoint, requestId, Number(duration), `character clip ${duration}s w/ lip-sync (seedance 2.0 ref2v)`, ledger, perSec)
 }
 
 // ── Video stitching (ffmpeg) ──────────────────────────────────────────────────
@@ -1121,14 +1244,17 @@ async function runPipeline(job) {
   console.log(`\n[worker] ▶ Starting pipeline: bookId=${bookId} tier=${tier} quality=${quality}`)
 
   // Select Seedance endpoints + pricing based on quality requested by the user
-  //   standard → Seedance Fast (720p, $0.2419/s, 80 credits)
-  //   premium  → Seedance Standard (1080p, $0.3024/s, 150 credits)
+  //   standard → Seedance Fast (720p, $0.2419/s fal / $0.14/s EvoLink)
+  //   premium  → Seedance Standard (1080p, $0.3024/s fal / $0.28/s EvoLink)
   const isPremiun = quality === 'premium'
   const i2vEndpoint  = isPremiun ? 'https://queue.fal.run/bytedance/seedance-2.0/image-to-video'      : 'https://queue.fal.run/bytedance/seedance-2.0/fast/image-to-video'
   const refEndpoint  = isPremiun ? 'https://queue.fal.run/bytedance/seedance-2.0/reference-to-video'  : 'https://queue.fal.run/bytedance/seedance-2.0/fast/reference-to-video'
-  const perSec       = isPremiun ? 0.3024 : 0.2419
+  const perSec       = USE_EVOLINK
+    ? (isPremiun ? PRICING.evolink_seedance_1080p : PRICING.evolink_seedance_720p)
+    : (isPremiun ? PRICING.fal_seedance_std        : PRICING.fal_seedance_fast)
   const resolution   = isPremiun ? '1080p' : '720p'
-  console.log(`[worker]   Video: Seedance 2.0 ${quality.toUpperCase()} — ${resolution} @ $${perSec}/s`)
+  const engineLabel  = USE_EVOLINK ? 'EvoLink.ai' : 'fal.ai'
+  console.log(`[worker]   Video: Seedance 2.0 ${quality.toUpperCase()} via ${engineLabel} — ${resolution} @ $${perSec}/s`)
 
   await updateTrailerStatus(bookId, 'processing')
 
@@ -1503,6 +1629,8 @@ async function runPipeline(job) {
   // ── Per-render cost breakdown ──────────────────────────────────────────────
   const cost = summarizeLedger(ledger)
   const falTotal = cost.byProvider.fal || 0
+  const evolinkTotal = cost.byProvider.evolink || 0
+  const videoTotal = falTotal + evolinkTotal
   const llmTotal = cost.byProvider.llm || 0
   console.log('[worker] ┌─ 💰 RENDER COST BREAKDOWN ─────────────────────────────')
   console.log(`[worker] │ Book: "${book.title}" (${tier}) — ${clipUrls.length}/${scenesToGenerate.length} clips`)
@@ -1510,9 +1638,14 @@ async function runPipeline(job) {
     console.log(`[worker] │   ${it.label.padEnd(46)} $${it.amount.toFixed(4)}  [${it.provider}]`)
   }
   console.log('[worker] │ ' + '─'.repeat(54))
-  console.log(`[worker] │   fal.ai (image/video/audio/lipsync):   $${falTotal.toFixed(2)}`)
-  console.log(`[worker] │   LLM (script/line selection):          $${llmTotal.toFixed(2)}`)
-  console.log(`[worker] │   TOTAL THIS RENDER:                    $${cost.total.toFixed(2)}`)
+  if (USE_EVOLINK) {
+  console.log(`[worker] │   EvoLink (video):                        $${evolinkTotal.toFixed(2)}`)
+  console.log(`[worker] │   fal.ai (image/audio):                   $${falTotal.toFixed(2)}`)
+  } else {
+  console.log(`[worker] │   fal.ai (image/video/audio):             $${falTotal.toFixed(2)}`)
+  }
+  console.log(`[worker] │   LLM (script/line selection):            $${llmTotal.toFixed(2)}`)
+  console.log(`[worker] │   TOTAL THIS RENDER:                      $${cost.total.toFixed(2)}`)
   console.log('[worker] └────────────────────────────────────────────────────────')
 
   // Append to a persistent JSONL ledger so costs can be reviewed/aggregated later.
