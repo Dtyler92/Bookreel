@@ -197,11 +197,93 @@ function llmCost(usage) {
   return (inTok / 1e6) * LLM_PRICING.in_per_1m + (outTok / 1e6) * LLM_PRICING.out_per_1m
 }
 
+// ── Camera movement selection (Claude) ───────────────────────────────────────
+// Asks Claude to pick the ideal camera movement for each scene based on its
+// description, tone, duration and what's happening in the shot.
+async function selectCameraMovement(sceneDescription, screenplayText, genre, durationSeconds, ledger = null) {
+  const prompt = `You are a cinematographer choosing a single camera movement for one clip in a book trailer.
+
+Scene description: ${sceneDescription}
+Screenplay action: ${screenplayText || 'none specified'}
+Genre: ${genre}
+Clip duration: ${durationSeconds}s
+
+Pick ONE camera movement that best serves this scene. Consider:
+- Short clips (5s): simple, subtle movements (slow push-in, gentle tilt, static)
+- Long clips (10s): can support fuller movements (slow dolly, tracking, gradual crane up)
+- Match the energy: tense scenes = handheld or fast push; emotional = slow drift or static; establishing = pull-back or wide pan
+
+Return ONLY the camera movement directive — no explanation, no punctuation, just the movement.
+Examples: slow push-in, pull back to reveal, handheld orbit, static wide shot, gradual tilt up, subtle drift left, slow dolly forward`
+
+  try {
+    if (!ANTHROPIC_API_KEY) return screenplayText || null
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 30, messages: [{ role: 'user', content: prompt }] })
+    })
+    if (!res.ok) return screenplayText || null
+    const data = await res.json()
+    if (ledger) ledger.add('camera movement (claude)', 'anthropic', estimateLlmCost(data.usage || {}))
+    return data.content?.[0]?.text?.trim() || screenplayText || null
+  } catch (e) {
+    console.error('[worker]   Camera movement selection failed (non-fatal):', e.message)
+    return screenplayText || null
+  }
+}
+
+// ── Character reference image generation ─────────────────────────────────────
+// Generates a clean portrait per character once, stored in Supabase characters table.
+// Reused across every scene that character appears in — OpenArt "character library" pattern.
+async function generateCharacterReferenceImage(character, ledger = null) {
+  const safeAppearance = softenForModeration(character.appearance || character.description || character.name)
+  const prompt = `${safeAppearance}, professional character portrait, front-facing headshot, both eyes clearly visible, symmetrical face, neutral expression, sharp facial detail, clean studio lighting, neutral background, ultra-realistic photorealistic portrait, no text, no watermarks`
+
+  const res = await fetch('https://fal.run/fal-ai/flux-pro/v1.1-ultra', {
+    method: 'POST',
+    headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, aspect_ratio: '3:4', num_images: 1, output_format: 'jpeg', raw: true, safety_tolerance: '6' })
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Character ref image failed ${res.status}: ${err.substring(0, 200)}`)
+  }
+  const data = await res.json()
+  const falUrl = data.images?.[0]?.url
+  if (!falUrl) throw new Error('No character ref image URL returned')
+
+  // Download + re-upload to Supabase for a stable permanent URL
+  const imgRes = await fetch(falUrl)
+  if (!imgRes.ok) throw new Error(`Failed to download character ref: ${imgRes.status}`)
+  const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
+  const safeName = (character.name || 'character').replace(/\s+/g, '-').toLowerCase()
+  const storagePath = `character-refs/${safeName}-${Date.now()}.jpg`
+
+  const { error: uploadErr } = await supabase.storage
+    .from('media')
+    .upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: true })
+  if (uploadErr) throw new Error(`Supabase char ref upload failed: ${uploadErr.message}`)
+
+  const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
+  if (ledger) ledger.add(`char ref: ${character.name}`, 'fal', PRICING.flux_image_ultra)
+  console.log(`[worker]   Character ref "${character.name}": ${urlData.publicUrl.substring(0, 80)}`)
+  return urlData.publicUrl
+}
+
 // ── Image generation (fal.ai) ────────────────────────────────────────────────
-async function generateSceneImage(sceneDescription, genre, ledger = null) {
+// characterRefs: [{ name, imageUrl }] — reference portraits for characters in this scene.
+// When provided, injected as @Image tags so Flux anchors on their established look.
+async function generateSceneImage(sceneDescription, genre, ledger = null, characterRefs = []) {
   const safeDescription = softenForModeration(sceneDescription)
+
+  // Build @tag annotations — "Image2 is CharacterName" tells Flux to use that reference
+  const charTags = characterRefs.length > 0
+    ? characterRefs.map((c, i) => `@Image${i + 2} is ${c.name}`).join(', ') + '. '
+    : ''
+
   // Cinematic photorealism prompt — written for flux-pro/v1.1-ultra raw mode
-  const prompt = `${safeDescription}, ${genre} mood, cinematic film still, shot on ARRI Alexa, anamorphic lens, shallow depth of field, dramatic atmospheric lighting, ultra-realistic, photorealistic, 8K, no text, no watermarks, no logos, tasteful, general audience`
+  const prompt = `${charTags}${safeDescription}, ${genre} mood, cinematic film still, shot on ARRI Alexa, anamorphic lens, shallow depth of field, dramatic atmospheric lighting, ultra-realistic, photorealistic, 8K, no text, no watermarks, no logos, tasteful, general audience`
 
   // flux-pro/v1.1-ultra: highest-quality Flux tier, raw=true = photographic realism
   // (raw bypasses aesthetic post-processing for true photographic output)
@@ -217,7 +299,10 @@ async function generateSceneImage(sceneDescription, genre, ledger = null) {
       num_images: 1,
       output_format: 'jpeg',
       raw: true,          // photographic realism — less AI-processed look
-      safety_tolerance: '6' // most permissive; we enforce content policy at prompt level
+      safety_tolerance: '6', // most permissive; we enforce content policy at prompt level
+      // Pass character reference images as image_urls so Flux anchors on their look.
+      // Index 0 = primary reference (first character); subsequent refs are @Image2, @Image3, etc.
+      ...(characterRefs.length > 0 && { image_urls: characterRefs.map(c => c.imageUrl) })
     })
   })
 
@@ -1166,6 +1251,36 @@ async function runPipeline(job) {
 
   console.log(`[worker]   Generating ${scenesToGenerate.length} clips (max ${maxScenes} for ${tier})...`)
 
+  // ── Character reference library (OpenArt pattern) ──────────────────────────
+  // Generate one clean portrait per character BEFORE the scene loop.
+  // Stored on the characters row (reference_image_url) so it's reused if we re-render.
+  // Each scene then gets the refs for its characters_present injected into image gen.
+  const characterRefMap = new Map() // character name → { name, imageUrl }
+  try {
+    const { data: allCharacters } = await supabase.from('characters').select('*').eq('book_id', bookId)
+    if (allCharacters && allCharacters.length > 0) {
+      console.log(`[worker]   Building character reference library for ${allCharacters.length} character(s)...`)
+      for (const char of allCharacters) {
+        try {
+          let refUrl = char.reference_image_url || null
+          if (!refUrl) {
+            refUrl = await generateCharacterReferenceImage(char, ledger)
+            // Persist so future re-renders skip this step
+            await supabase.from('characters').update({ reference_image_url: refUrl }).eq('id', char.id)
+          } else {
+            console.log(`[worker]   Using cached ref for "${char.name}"`)
+          }
+          characterRefMap.set(char.name, { name: char.name, imageUrl: refUrl })
+        } catch (refErr) {
+          console.error(`[worker]   Character ref for "${char.name}" failed (non-fatal, continuing without ref):`, refErr.message)
+        }
+      }
+      console.log(`[worker]   Character library ready: ${[...characterRefMap.keys()].join(', ')}`)
+    }
+  } catch (e) {
+    console.error('[worker]   Character library build failed (non-fatal):', e.message)
+  }
+
   const clipUrls = []
   const rejectedScenes = []
   const characterLineTracks = []  // { clipIndex, path } → passed to stitch for timed mixing
@@ -1175,6 +1290,34 @@ async function runPipeline(job) {
   for (const scene of scenesToGenerate) {
     try {
       console.log(`[worker]   Scene ${scene.scene_number}: generating image...`)
+
+      // Resolve character reference images for this scene's characters_present
+      const sceneCharRefs = []
+      const charactersPresent = scene.characters_present || []
+      for (const charName of charactersPresent) {
+        const ref = characterRefMap.get(charName)
+        if (ref) sceneCharRefs.push(ref)
+      }
+      if (sceneCharRefs.length > 0) {
+        console.log(`[worker]   Scene ${scene.scene_number}: using refs for ${sceneCharRefs.map(c => c.name).join(', ')}`)
+      }
+
+      // Ask Claude to pick the best camera movement for this scene (non-fatal)
+      let cameraMovement = scene.screenplay_text || null
+      try {
+        cameraMovement = await selectCameraMovement(
+          scene.description,
+          scene.screenplay_text,
+          book.genre || 'dramatic',
+          scene.duration_seconds || sceneLength,
+          ledger
+        )
+        if (cameraMovement && cameraMovement !== scene.screenplay_text) {
+          console.log(`[worker]   Scene ${scene.scene_number}: camera movement → "${cameraMovement}"`)
+        }
+      } catch (camErr) {
+        console.error(`[worker]   Scene ${scene.scene_number}: camera selection failed (non-fatal):`, camErr.message)
+      }
 
       // If this scene will be lip-synced, generate a proper character portrait:
       // full face, front-facing, clear defined features — essentially a character
@@ -1187,7 +1330,7 @@ async function runPipeline(job) {
         : scene.description
 
       // Generate image and upload to Supabase (so URL doesn't expire)
-      let imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger)
+      let imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger, sceneCharRefs)
 
       // Save first scene image as book cover if no cover is set
       if (scene.scene_number === scenesToGenerate[0].scene_number && !book.cover_image_url) {
@@ -1206,14 +1349,14 @@ async function runPipeline(job) {
         : scene.description
       let clipUrl
       try {
-        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, scene.screenplay_text, ledger, !willLipSync, i2vEndpoint, resolution, perSec)
+        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, cameraMovement, ledger, !willLipSync, i2vEndpoint, resolution, perSec)
       } catch (clipErr) {
         // Non-retryable: moderation, internal bad-output, or daily-cap. Don't waste generations.
         if (clipErr.isModeration || clipErr.isBadOutput || clipErr.isRateLimit) throw clipErr
         console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying once in 15s...`)
         await new Promise(r => setTimeout(r, 15000))
-        imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger)
-        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, scene.screenplay_text, ledger, !willLipSync, i2vEndpoint, resolution, perSec)
+        imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger, sceneCharRefs)
+        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, cameraMovement, ledger, !willLipSync, i2vEndpoint, resolution, perSec)
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
