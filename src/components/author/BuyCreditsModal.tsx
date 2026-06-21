@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 interface CreditPack {
-  pack: 'starter' | 'author' | 'pro'
+  pack: 'starter' | 'author' | 'pro' | 'audiobook'
   credits: number
   price: string
   perCredit: string
@@ -25,7 +25,7 @@ const PACKS: CreditPack[] = [
     price: '$66',
     perCredit: '$0.22 / credit',
     badge: 'Most popular',
-    description: '3–4 trailers — great for active authors',
+    description: '2 premium or 5 standard trailers',
   },
   {
     pack: 'pro',
@@ -33,7 +33,15 @@ const PACKS: CreditPack[] = [
     price: '$154',
     perCredit: '$0.22 / credit',
     badge: 'Best value',
-    description: '8+ trailers — most credits for your dollar',
+    description: '4 premium or 12 standard trailers',
+  },
+  {
+    pack: 'audiobook',
+    credits: 900,
+    price: '$198',
+    perCredit: '$0.22 / credit',
+    badge: '🎙 Audiobook',
+    description: '1 full-cast audiobook or 4 premium trailers',
   },
 ]
 

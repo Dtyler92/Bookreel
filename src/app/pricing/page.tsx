@@ -73,9 +73,10 @@ const PLANS = [
 ]
 
 const CREDIT_PACKS = [
-  { credits: 100, price: 22, perCredit: '0.22', label: 'Starter Pack',  badge: null,          trailers: '1 premium or 1 standard + extras' },
-  { credits: 300, price: 66, perCredit: '0.22', label: 'Author Pack',   badge: 'Most Popular', trailers: '2 premium or 3–4 standard trailers' },
-  { credits: 700, price: 154, perCredit: '0.22', label: 'Pro Pack',     badge: 'Best Value',   trailers: '4 premium or 8+ standard trailers' },
+  { credits: 100, price: 22,  perCredit: '0.22', label: 'Starter Pack',   badge: null,           trailers: '1 premium or 1 standard + extras' },
+  { credits: 300, price: 66,  perCredit: '0.22', label: 'Author Pack',    badge: 'Most Popular',  trailers: '2 premium or 5 standard trailers' },
+  { credits: 700, price: 154, perCredit: '0.22', label: 'Pro Pack',       badge: 'Best Value',    trailers: '4 premium or 12 standard trailers' },
+  { credits: 900, price: 198, perCredit: '0.22', label: 'Audiobook Pack', badge: 'Full-Cast Audio', trailers: '1 full-cast audiobook or 4 premium trailers' },
 ]
 
 const QUALITY_TIERS = [
