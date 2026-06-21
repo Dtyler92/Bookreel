@@ -137,7 +137,7 @@ function softenForModeration(text) {
 
 console.log('[worker] App URL:', APP_URL)
 console.log('[worker] Anthropic key available:', !isPlaceholder(ANTHROPIC_API_KEY))
-console.log(`[worker] Video engine: Seedance 2.0 ${SEEDANCE_TIER.toUpperCase()} via ${USE_EVOLINK ? `EvoLink.ai ($0.14/s 720p · $0.28/s 1080p)` : `fal.ai ($${SEEDANCE_PER_SEC}/s)`}`)
+console.log(`[worker] Video engine: ${USE_EVOLINK ? 'Kling 3.0 Turbo via EvoLink.ai (720p=$0.119/s w/audio · 1080p=$0.159/s w/audio)' : `Seedance 2.0 via fal.ai ($${SEEDANCE_PER_SEC}/s)`}`)
 if (!USE_EVOLINK) console.log('[worker] ⚠ USE_EVOLINK=false — running on fal.ai (set USE_EVOLINK=true to enable EvoLink)')
 if (TEST_MAX_CLIPS > 0) console.log(`[worker] ⚠ TEST MODE active: TEST_MAX_CLIPS=${TEST_MAX_CLIPS} (short renders to save credits)`)
 
@@ -178,9 +178,13 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
 const PRICING = {
   flux_image_ultra: 0.06,   // flux-pro/v1.1-ultra — per image (scene gen + char refs)
   // ── Video per-second rates ────────────────────────────────────────────────
-  // EvoLink.ai Seedance 2.0 (USE_EVOLINK=true, default — 54-59% cheaper than fal.ai)
-  evolink_seedance_720p:  0.14,   // seedance-2.0-fast-image-to-video (720p)
-  evolink_seedance_1080p: 0.28,   // seedance-2.0-image-to-video (1080p)
+  // EvoLink.ai Kling 3.0 Turbo (USE_EVOLINK=true, default)
+  // 720p = $0.079/s (no audio) / $0.119/s (with audio)
+  // 1080p = $0.106/s (no audio) / $0.159/s (with audio)
+  evolink_kling_720p:       0.079,   // kling-v3-turbo-image-to-video 720p, no audio
+  evolink_kling_720p_audio: 0.119,   // kling-v3-turbo-image-to-video 720p, native audio
+  evolink_kling_1080p:      0.106,   // kling-v3-turbo-image-to-video 1080p, no audio
+  evolink_kling_1080p_audio:0.159,   // kling-v3-turbo-image-to-video 1080p, native audio
   // fal.ai Seedance 2.0 (USE_EVOLINK=false fallback)
   fal_seedance_fast: 0.2419,  // seedance-2.0/fast (720p)
   fal_seedance_std:  0.3024,  // seedance-2.0 standard (1080p)
@@ -444,12 +448,12 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
     + (suppressTalking ? ', subject is silent and still, mouth closed, no talking' : '')
 
   if (USE_EVOLINK) {
-    // EvoLink path — model name encodes tier: fast=720p, standard=1080p
-    const evolinkModel = resolution === '1080p'
-      ? 'seedance-2.0-image-to-video'
-      : 'seedance-2.0-fast-image-to-video'
-    const evolinkPerSec = resolution === '1080p' ? PRICING.evolink_seedance_1080p : PRICING.evolink_seedance_720p
-    console.log(`[worker]   Submitting to EvoLink (${evolinkModel}, ${resolution}, ${duration}s)`)
+    // Kling 3.0 Turbo via EvoLink — image-to-video with native audio
+    const evolinkModel = 'kling-v3-turbo-image-to-video'
+    const evolinkPerSec = resolution === '1080p'
+      ? PRICING.evolink_kling_1080p_audio
+      : PRICING.evolink_kling_720p_audio
+    console.log(`[worker]   Submitting to EvoLink Kling 3.0 Turbo (${resolution}, ${duration}s, native audio)`)
     const submitRes = await fetch(`${EVOLINK_BASE}/videos/generations`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${EVOLINK_API_KEY}`, 'Content-Type': 'application/json' },
@@ -460,20 +464,19 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
         duration: parseInt(duration),
         quality: resolution,
         aspect_ratio: '16:9',
-        generate_audio: false,
+        generate_audio: true,   // Kling 3.0 native audio — SFX + ambient synced to scene
       })
     })
     if (!submitRes.ok) {
       const errText = await submitRes.text()
-      const err = new Error(`EvoLink i2v submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
+      const err = new Error(`EvoLink Kling i2v submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
       if (submitRes.status === 429) err.isRateLimit = true
       throw err
     }
     const submitData = await submitRes.json()
     const taskId = submitData.id
-    const tier = resolution === '1080p' ? 'standard' : 'fast'
-    console.log(`[worker]   EvoLink i2v task: ${taskId}`)
-    return pollEvolinkTask(taskId, Number(duration), `video clip ${duration}s (EvoLink Seedance 2.0 ${tier} ${resolution})`, ledger, evolinkPerSec)
+    console.log(`[worker]   EvoLink Kling 3.0 task: ${taskId}`)
+    return pollEvolinkTask(taskId, Number(duration), `video clip ${duration}s (Kling 3.0 Turbo ${resolution} + audio)`, ledger, evolinkPerSec)
   }
 
   // fal.ai path (USE_EVOLINK=false)
@@ -1243,18 +1246,18 @@ async function runPipeline(job) {
   const { bookId, tier, quality = 'standard' } = job
   console.log(`\n[worker] ▶ Starting pipeline: bookId=${bookId} tier=${tier} quality=${quality}`)
 
-  // Select Seedance endpoints + pricing based on quality requested by the user
-  //   standard → Seedance Fast (720p, $0.2419/s fal / $0.14/s EvoLink)
-  //   premium  → Seedance Standard (1080p, $0.3024/s fal / $0.28/s EvoLink)
+  // Select video endpoints + pricing based on quality requested by the user
+  //   standard → 720p (Kling 3.0 Turbo via EvoLink / Seedance Fast via fal fallback)
+  //   premium  → 1080p (Kling 3.0 Turbo via EvoLink / Seedance Standard via fal fallback)
   const isPremiun = quality === 'premium'
   const i2vEndpoint  = isPremiun ? 'https://queue.fal.run/bytedance/seedance-2.0/image-to-video'      : 'https://queue.fal.run/bytedance/seedance-2.0/fast/image-to-video'
   const refEndpoint  = isPremiun ? 'https://queue.fal.run/bytedance/seedance-2.0/reference-to-video'  : 'https://queue.fal.run/bytedance/seedance-2.0/fast/reference-to-video'
   const perSec       = USE_EVOLINK
-    ? (isPremiun ? PRICING.evolink_seedance_1080p : PRICING.evolink_seedance_720p)
-    : (isPremiun ? PRICING.fal_seedance_std        : PRICING.fal_seedance_fast)
+    ? (isPremiun ? PRICING.evolink_kling_1080p_audio : PRICING.evolink_kling_720p_audio)
+    : (isPremiun ? PRICING.fal_seedance_std : PRICING.fal_seedance_fast)
   const resolution   = isPremiun ? '1080p' : '720p'
-  const engineLabel  = USE_EVOLINK ? 'EvoLink.ai' : 'fal.ai'
-  console.log(`[worker]   Video: Seedance 2.0 ${quality.toUpperCase()} via ${engineLabel} — ${resolution} @ $${perSec}/s`)
+  const engineLabel  = USE_EVOLINK ? 'EvoLink Kling 3.0 Turbo' : 'fal.ai Seedance 2.0'
+  console.log(`[worker]   Video: ${engineLabel} ${quality.toUpperCase()} — ${resolution} @ $${perSec}/s${USE_EVOLINK ? ' (native audio included)' : ''}`)
 
   await updateTrailerStatus(bookId, 'processing')
 
