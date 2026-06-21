@@ -757,6 +757,35 @@ function BookCard({
 
             {/* Trailer status / progress */}
             {renderStatusSection()}
+
+            {/* Audiobook button — only show when trailer is complete */}
+            {isComplete && (
+              <Link
+                href={`/audiobook/${book.id}`}
+                onClick={e => e.stopPropagation()}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                  marginTop: '10px', padding: '8px 12px',
+                  background: '#F7F4EF', border: '1.5px solid #E8E2D5',
+                  borderRadius: '8px', textDecoration: 'none',
+                  fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px',
+                  fontWeight: 600, color: '#5C5751',
+                  transition: 'all 150ms ease',
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLAnchorElement).style.background = '#EDE9E0'
+                  ;(e.currentTarget as HTMLAnchorElement).style.borderColor = '#C8402F'
+                  ;(e.currentTarget as HTMLAnchorElement).style.color = '#C8402F'
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLAnchorElement).style.background = '#F7F4EF'
+                  ;(e.currentTarget as HTMLAnchorElement).style.borderColor = '#E8E2D5'
+                  ;(e.currentTarget as HTMLAnchorElement).style.color = '#5C5751'
+                }}
+              >
+                🎙️ Create Audiobook <span style={{ fontSize: '10px', color: '#B0A89E' }}>900 cr</span>
+              </Link>
+            )}
           </div>
         </div>
       </Link>
