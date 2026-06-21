@@ -15,8 +15,8 @@ const PLANS = [
   {
     id: 'hobbyist',
     name: 'Hobbyist',
-    monthly: 9,
-    yearly: 81,   // 3 months free — pay 9 months ($6.75/mo effective)
+    monthly: 12,
+    yearly: 108,  // $9/mo billed annually — save 27% vs monthly
     creditsPerMonth: 55,
     description: 'For authors publishing occasionally.',
     features: [
@@ -33,8 +33,8 @@ const PLANS = [
   {
     id: 'author',
     name: 'Author',
-    monthly: 24,
-    yearly: 216,  // 3 months free — pay 9 months ($18/mo effective)
+    monthly: 30,
+    yearly: 288,  // $24/mo billed annually — save 27% vs monthly
     creditsPerMonth: 150,
     description: 'For actively publishing indie authors.',
     features: [
@@ -53,8 +53,8 @@ const PLANS = [
   {
     id: 'publisher',
     name: 'Publisher',
-    monthly: 69,
-    yearly: 621,  // 3 months free — pay 9 months ($51.75/mo effective)
+    monthly: 88,
+    yearly: 828,  // $69/mo billed annually — save 27% vs monthly
     creditsPerMonth: 425,
     description: 'For high-volume authors and small presses.',
     features: [
@@ -195,7 +195,7 @@ export default function PricingPage() {
                   transition: 'all 150ms ease',
                 }}
               >
-                {p === 'monthly' ? 'Monthly' : 'Annual — 3 months free'}
+                {p === 'monthly' ? 'Monthly' : 'Annual — save 27%'}
               </button>
             ))}
           </div>
@@ -211,7 +211,7 @@ export default function PricingPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '80px' }}>
           {PLANS.map((plan) => {
             const price = billing === 'yearly' ? Math.round(plan.yearly / 12) : plan.monthly
-            const billed = billing === 'yearly' ? `$${plan.yearly}/yr · 3 months free` : null
+            const billed = billing === 'yearly' ? `$${plan.yearly}/yr · save 27%` : `$${plan.yearly}/yr if billed annually`
             return (
               <div key={plan.id} style={{
                 background: plan.highlight ? dark : '#fff',
