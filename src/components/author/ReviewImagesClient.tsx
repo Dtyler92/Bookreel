@@ -419,31 +419,47 @@ function CharacterCard({
 
   return (
     <div className={`rounded-xl border bg-white overflow-hidden shadow-sm transition-all ${approved ? 'border-green-400' : 'border-[#E8E2D5]'}`}>
-      {/* Image area */}
-      <div className="relative" style={{ aspectRatio: '3/4' }}>
-        {character.image_url ? (
-          <>
-            <Image
-              src={character.image_url}
-              alt={character.name}
-              fill
-              className="object-cover"
-              unoptimized
-            />
-            {approved && (
-              <div className="absolute inset-0 bg-green-500/20 flex items-end justify-center pb-3">
-                <span className="bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-                  Approved ✓
-                </span>
-              </div>
-            )}
-            {/* Per-image regeneration overlay */}
-            <RegenerationOverlay visible={regenerating} done={regenDone} />
-          </>
-        ) : (
+      {/* 4-angle character sheet */}
+      {(character.image_url_front || character.image_url) ? (
+        <div className="relative">
+          {/* 2×2 grid of angles */}
+          <div className="grid grid-cols-2 gap-0.5 bg-gray-200">
+            {[
+              { key: 'image_url_front', label: 'Front' },
+              { key: 'image_url_back',  label: 'Back'  },
+              { key: 'image_url_left',  label: 'Left'  },
+              { key: 'image_url_right', label: 'Right' },
+            ].map(({ key, label }) => {
+              const src = character[key as keyof Character] as string | null
+                ?? (key === 'image_url_front' ? character.image_url : null)
+              return (
+                <div key={key} className="relative bg-gray-100" style={{ aspectRatio: '3/4' }}>
+                  {src ? (
+                    <>
+                      <Image src={src} alt={`${character.name} — ${label}`} fill className="object-cover" unoptimized />
+                      <span className="absolute bottom-1 left-1 bg-black/50 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">
+                        {label}
+                      </span>
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-xs">{label}</div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {approved && (
+            <div className="absolute inset-0 bg-green-500/20 flex items-end justify-center pb-3 pointer-events-none">
+              <span className="bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full">Approved ✓</span>
+            </div>
+          )}
+          <RegenerationOverlay visible={regenerating} done={regenDone} />
+        </div>
+      ) : (
+        <div style={{ aspectRatio: '3/4' }}>
           <GeneratingPlaceholder name={character.name} />
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Card body */}
       <div className="p-4 space-y-3">

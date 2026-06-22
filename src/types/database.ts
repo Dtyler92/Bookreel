@@ -37,6 +37,10 @@ export interface Character {
   description: string | null
   appearance_notes: string | null
   image_url: string | null
+  image_url_front: string | null
+  image_url_back: string | null
+  image_url_left: string | null
+  image_url_right: string | null
   image_prompt: string | null
   author_approved: boolean
   author_feedback: string | null

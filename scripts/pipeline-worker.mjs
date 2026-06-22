@@ -261,50 +261,64 @@ Examples: slow push-in, pull back to reveal, handheld orbit, static wide shot, g
 }
 
 // ── Character reference image generation ─────────────────────────────────────
-// Generates a clean portrait per character once, stored in Supabase characters table.
-// Reused across every scene that character appears in — OpenArt "character library" pattern.
+// Generates a 4-angle character sheet per character: front, back, left, right.
+// All angles use identical description so outfit/face stay locked across views.
+// Returns { front, back, left, right } URLs stored in Supabase.
 async function generateCharacterReferenceImage(character, ledger = null) {
   const safeAppearance = softenForModeration(character.appearance || character.description || character.name)
-  const prompt = `${safeAppearance}, professional character portrait, front-facing headshot, both eyes clearly visible, symmetrical face, neutral expression, sharp facial detail, clean studio lighting, neutral background, ultra-realistic photorealistic portrait, no text, no watermarks`
+  const baseDesc = `${safeAppearance}, full body character sheet, same outfit and face across all views, ultra-realistic photorealistic, clean studio lighting, neutral background, no text, no watermarks`
 
-  const res = await fetch('https://fal.run/fal-ai/flux-pro/v1.1-ultra', {
-    method: 'POST',
-    headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, aspect_ratio: '3:4', num_images: 1, output_format: 'jpeg', raw: true, safety_tolerance: '6' })
-  })
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Character ref image failed ${res.status}: ${err.substring(0, 200)}`)
+  const angles = [
+    { key: 'front', prompt: `${baseDesc}, front view, facing camera directly, symmetrical pose, arms at sides` },
+    { key: 'back',  prompt: `${baseDesc}, back view, seen from behind, same outfit` },
+    { key: 'left',  prompt: `${baseDesc}, left side profile view, facing left` },
+    { key: 'right', prompt: `${baseDesc}, right side profile view, facing right` },
+  ]
+
+  const urls = {}
+  for (const angle of angles) {
+    const res = await fetch('https://fal.run/fal-ai/flux-pro/v1.1-ultra', {
+      method: 'POST',
+      headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: angle.prompt, aspect_ratio: '3:4', num_images: 1, output_format: 'jpeg', raw: true, safety_tolerance: '6' })
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      throw new Error(`Character ref image (${angle.key}) failed ${res.status}: ${err.substring(0, 200)}`)
+    }
+    const data = await res.json()
+    const falUrl = data.images?.[0]?.url
+    if (!falUrl) throw new Error(`No character ref image URL returned for ${angle.key}`)
+
+    // Download + re-upload to Supabase for stable permanent URL
+    const imgRes = await fetch(falUrl)
+    if (!imgRes.ok) throw new Error(`Failed to download character ref (${angle.key}): ${imgRes.status}`)
+    const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
+    const safeName = (character.name || 'character').replace(/\s+/g, '-').toLowerCase()
+    const storagePath = `character-refs/${safeName}-${angle.key}-${Date.now()}.jpg`
+
+    const { error: uploadErr } = await supabase.storage
+      .from('media')
+      .upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: true })
+    if (uploadErr) throw new Error(`Supabase char ref upload failed (${angle.key}): ${uploadErr.message}`)
+
+    const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
+    if (ledger) ledger.add(`char ref ${angle.key}: ${character.name}`, 'fal', PRICING.flux_image_ultra)
+    urls[angle.key] = urlData.publicUrl
+    console.log(`[worker]   Character ref "${character.name}" ${angle.key}: ${urlData.publicUrl.substring(0, 80)}`)
   }
-  const data = await res.json()
-  const falUrl = data.images?.[0]?.url
-  if (!falUrl) throw new Error('No character ref image URL returned')
-
-  // Download + re-upload to Supabase for a stable permanent URL
-  const imgRes = await fetch(falUrl)
-  if (!imgRes.ok) throw new Error(`Failed to download character ref: ${imgRes.status}`)
-  const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
-  const safeName = (character.name || 'character').replace(/\s+/g, '-').toLowerCase()
-  const storagePath = `character-refs/${safeName}-${Date.now()}.jpg`
-
-  const { error: uploadErr } = await supabase.storage
-    .from('media')
-    .upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: true })
-  if (uploadErr) throw new Error(`Supabase char ref upload failed: ${uploadErr.message}`)
-
-  const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
-  if (ledger) ledger.add(`char ref: ${character.name}`, 'fal', PRICING.flux_image_ultra)
-  console.log(`[worker]   Character ref "${character.name}": ${urlData.publicUrl.substring(0, 80)}`)
-  return urlData.publicUrl
+  return urls // { front, back, left, right }
 }
 
 // ── Image generation (fal.ai) ────────────────────────────────────────────────
-// characterRefs: [{ name, imageUrl }] — reference portraits for characters in this scene.
-// When provided, injected as @Image tags so Flux anchors on their established look.
+// characterRefs: [{ name, imageUrl, imageUrls[] }] — 4-angle character refs for this scene.
+// When provided, all angles injected as image_urls so Flux gets full body context.
 async function generateSceneImage(sceneDescription, genre, ledger = null, characterRefs = []) {
   const safeDescription = softenForModeration(sceneDescription)
 
-  // Build @tag annotations — "Image2 is CharacterName" tells Flux to use that reference
+  // Build @tag annotations — "Image2 is CharacterName" tells Flux to use that reference.
+  // We pass front view first (index 0 = primary), remaining angles follow.
+  const allRefUrls = characterRefs.flatMap(c => c.imageUrls || [c.imageUrl]).filter(Boolean)
   const charTags = characterRefs.length > 0
     ? characterRefs.map((c, i) => `@Image${i + 2} is ${c.name}`).join(', ') + '. '
     : ''
@@ -329,7 +343,7 @@ async function generateSceneImage(sceneDescription, genre, ledger = null, charac
       safety_tolerance: '6', // most permissive; we enforce content policy at prompt level
       // Pass character reference images as image_urls so Flux anchors on their look.
       // Index 0 = primary reference (first character); subsequent refs are @Image2, @Image3, etc.
-      ...(characterRefs.length > 0 && { image_urls: characterRefs.map(c => c.imageUrl) })
+      ...(allRefUrls.length > 0 && { image_urls: allRefUrls })
     })
   })
 
@@ -1386,15 +1400,32 @@ async function runPipeline(job) {
       console.log(`[worker]   Building character reference library for ${allCharacters.length} character(s)...`)
       for (const char of allCharacters) {
         try {
-          let refUrl = char.reference_image_url || null
-          if (!refUrl) {
-            refUrl = await generateCharacterReferenceImage(char, ledger)
-            // Persist so future re-renders skip this step
-            await supabase.from('characters').update({ reference_image_url: refUrl }).eq('id', char.id)
+          // Check if all 4 angles already exist
+          const hasFull = char.image_url_front && char.image_url_back && char.image_url_left && char.image_url_right
+          let angles = hasFull
+            ? { front: char.image_url_front, back: char.image_url_back, left: char.image_url_left, right: char.image_url_right }
+            : null
+
+          if (!angles) {
+            angles = await generateCharacterReferenceImage(char, ledger)
+            // Persist all 4 angles so future re-renders skip this step
+            await supabase.from('characters').update({
+              image_url_front: angles.front,
+              image_url_back:  angles.back,
+              image_url_left:  angles.left,
+              image_url_right: angles.right,
+              // Keep legacy reference_image_url pointing to front for backward compat
+              reference_image_url: angles.front
+            }).eq('id', char.id)
           } else {
-            console.log(`[worker]   Using cached ref for "${char.name}"`)
+            console.log(`[worker]   Using cached 4-angle refs for "${char.name}"`)
           }
-          characterRefMap.set(char.name, { name: char.name, imageUrl: refUrl })
+          // Pass all 4 angles as refs — more context = better consistency
+          characterRefMap.set(char.name, {
+            name: char.name,
+            imageUrl: angles.front, // primary (front) for lip-sync
+            imageUrls: [angles.front, angles.back, angles.left, angles.right].filter(Boolean)
+          })
         } catch (refErr) {
           console.error(`[worker]   Character ref for "${char.name}" failed (non-fatal, continuing without ref):`, refErr.message)
         }
