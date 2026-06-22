@@ -380,7 +380,6 @@ function CharacterCard({
   }
 
   const handleRegenerate = async () => {
-    if (!feedback.trim()) return
     setLoading(true)
     setRegenerating(true)
     setRegenDone(false)
@@ -392,7 +391,8 @@ function CharacterCard({
           type: 'character',
           id: character.id,
           approved: false,
-          feedback: feedback.trim(),
+          feedback: feedback.trim() || undefined,
+          regenerate: true,
         }),
       })
       if (res.ok) {
@@ -519,15 +519,13 @@ function CharacterCard({
                   '✓ Approve'
                 )}
               </button>
-              {feedback.trim() && (
-                <button
+              <button
                   onClick={handleRegenerate}
                   disabled={loading}
                   className="flex-1 rounded-lg border border-[#E8E2D5] hover:border-[#2B2B2B] disabled:opacity-50 px-4 py-2 text-sm font-semibold text-[#2B2B2B] transition-colors"
                 >
-                  ↺ Regenerate with changes
+                  {feedback.trim() ? '↺ Regenerate with changes' : '↺ Regenerate'}
                 </button>
-              )}
             </div>
           </div>
         )}
@@ -580,7 +578,6 @@ function ItemCard({
   }
 
   const handleRegenerate = async () => {
-    if (!feedback.trim()) return
     setLoading(true)
     setRegenerating(true)
     setRegenDone(false)
@@ -592,7 +589,8 @@ function ItemCard({
           type: 'item',
           id: item.id,
           approved: false,
-          feedback: feedback.trim(),
+          feedback: feedback.trim() || undefined,
+          regenerate: true,
         }),
       })
       if (res.ok) {
@@ -683,15 +681,13 @@ function ItemCard({
                   '✓ Approve'
                 )}
               </button>
-              {feedback.trim() && (
-                <button
+              <button
                   onClick={handleRegenerate}
                   disabled={loading}
                   className="flex-1 rounded-lg border border-[#E8E2D5] hover:border-[#2B2B2B] disabled:opacity-50 px-4 py-2 text-sm font-semibold text-[#2B2B2B] transition-colors"
                 >
-                  ↺ Regenerate with changes
+                  {feedback.trim() ? '↺ Regenerate with changes' : '↺ Regenerate'}
                 </button>
-              )}
             </div>
           </div>
         )}
