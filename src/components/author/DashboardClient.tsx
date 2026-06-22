@@ -1080,25 +1080,6 @@ export function DashboardClient({
           }}>
             Here&apos;s what&apos;s happening with your books.
           </p>
-          <button
-            onClick={() => setShowBuyCredits(true)}
-            style={{
-              marginTop: '16px',
-              display: 'inline-flex', alignItems: 'center', gap: '7px',
-              background: credits > 0 ? 'rgba(200,64,47,0.06)' : '#C8402F',
-              border: credits > 0 ? '1px solid rgba(200,64,47,0.25)' : 'none',
-              borderRadius: '999px', padding: '8px 16px',
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '13px', fontWeight: 600,
-              color: credits > 0 ? '#C8402F' : '#FFFFFF',
-              cursor: 'pointer',
-            }}
-          >
-            <span style={{ fontSize: '14px', lineHeight: 1 }}>🎬</span>
-            {credits > 0
-              ? `${credits} credit${credits === 1 ? '' : 's'} · Buy more`
-              : 'Out of credits · Buy credits'}
-          </button>
         </div>
 
         {/* Stats Row */}
