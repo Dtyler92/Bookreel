@@ -137,7 +137,7 @@ function softenForModeration(text) {
 
 console.log('[worker] App URL:', APP_URL)
 console.log('[worker] Anthropic key available:', !isPlaceholder(ANTHROPIC_API_KEY))
-console.log(`[worker] Video engine: ${USE_EVOLINK ? 'Kling 3.0 Turbo via EvoLink.ai (720p=$0.119/s w/audio · 1080p=$0.159/s w/audio)' : `Seedance 2.0 via fal.ai ($${SEEDANCE_PER_SEC}/s)`}`)
+console.log(`[worker] Video engine: ${USE_EVOLINK ? 'EvoLink.ai — Kling 3.0 Turbo ($0.106/s standard) / Motion ($0.121/s premium) — native audio included' : `Seedance 2.0 via fal.ai ($${PRICING.fal_seedance}/s)`}`)
 if (!USE_EVOLINK) console.log('[worker] ⚠ USE_EVOLINK=false — running on fal.ai (set USE_EVOLINK=true to enable EvoLink)')
 if (TEST_MAX_CLIPS > 0) console.log(`[worker] ⚠ TEST MODE active: TEST_MAX_CLIPS=${TEST_MAX_CLIPS} (short renders to save credits)`)
 
@@ -178,16 +178,13 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
 const PRICING = {
   flux_image_ultra: 0.06,   // flux-pro/v1.1-ultra — per image (scene gen + char refs)
   // ── Video per-second rates ────────────────────────────────────────────────
-  // EvoLink.ai Kling 3.0 Turbo (USE_EVOLINK=true, default)
-  // 720p = $0.079/s (no audio) / $0.119/s (with audio)
-  // 1080p = $0.106/s (no audio) / $0.159/s (with audio)
-  evolink_kling_720p:       0.079,   // kling-v3-turbo-image-to-video 720p, no audio
-  evolink_kling_720p_audio: 0.119,   // kling-v3-turbo-image-to-video 720p, native audio
-  evolink_kling_1080p:      0.106,   // kling-v3-turbo-image-to-video 1080p, no audio
-  evolink_kling_1080p_audio:0.159,   // kling-v3-turbo-image-to-video 1080p, native audio
+  // EvoLink.ai Kling 3.0 (USE_EVOLINK=true, default)
+  // Standard tier  → Kling 3.0 Turbo  @ $0.106/s (native audio included)
+  // Premium tier   → Kling 3.0 Motion @ $0.121/s (native audio included, higher quality)
+  evolink_kling_turbo:  0.106,   // kling-v3-turbo-image-to-video  — standard (720p)
+  evolink_kling_motion: 0.121,   // kling-v3-motion-image-to-video — premium  (1080p)
   // fal.ai Seedance 2.0 (USE_EVOLINK=false fallback)
-  fal_seedance_fast: 0.2419,  // seedance-2.0/fast (720p)
-  fal_seedance_std:  0.3024,  // seedance-2.0 standard (1080p)
+  fal_seedance: 0.093,   // seedance-2.0 per-second (both tiers)
   // Seedance per-second price is also resolved at runtime in SEEDANCE_PER_SEC above
   tts_per_1k_char: 0.10,    // elevenlabs eleven-v3 — per 1000 chars
   music_bed: 0.015,         // stable-audio — approx (open model, compute-second)
@@ -1253,8 +1250,8 @@ async function runPipeline(job) {
   const i2vEndpoint  = isPremiun ? 'https://queue.fal.run/bytedance/seedance-2.0/image-to-video'      : 'https://queue.fal.run/bytedance/seedance-2.0/fast/image-to-video'
   const refEndpoint  = isPremiun ? 'https://queue.fal.run/bytedance/seedance-2.0/reference-to-video'  : 'https://queue.fal.run/bytedance/seedance-2.0/fast/reference-to-video'
   const perSec       = USE_EVOLINK
-    ? (isPremiun ? PRICING.evolink_kling_1080p_audio : PRICING.evolink_kling_720p_audio)
-    : (isPremiun ? PRICING.fal_seedance_std : PRICING.fal_seedance_fast)
+    ? (isPremiun ? PRICING.evolink_kling_motion : PRICING.evolink_kling_turbo)
+    : PRICING.fal_seedance
   const resolution   = isPremiun ? '1080p' : '720p'
   const engineLabel  = USE_EVOLINK ? 'EvoLink Kling 3.0 Turbo' : 'fal.ai Seedance 2.0'
   console.log(`[worker]   Video: ${engineLabel} ${quality.toUpperCase()} — ${resolution} @ $${perSec}/s${USE_EVOLINK ? ' (native audio included)' : ''}`)
