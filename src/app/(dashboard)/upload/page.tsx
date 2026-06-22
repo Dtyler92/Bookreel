@@ -190,17 +190,22 @@ export default function UploadPage() {
       dropped.type === 'application/pdf' ||
       dropped.type === 'application/epub+zip' ||
       dropped.type === 'application/epub' ||
+      dropped.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      dropped.type === 'application/rtf' ||
+      dropped.type === 'text/rtf' ||
       dropped.type === 'text/plain' ||
       dropped.type === 'text/txt' ||
       droppedName?.endsWith('.pdf') ||
       droppedName?.endsWith('.epub') ||
+      droppedName?.endsWith('.docx') ||
+      droppedName?.endsWith('.rtf') ||
       droppedName?.endsWith('.txt')
     )
     if (isAccepted) {
       setFile(dropped)
       setUploadError(null)
     } else {
-      setUploadError('Please upload a PDF, EPUB, or plain text (.txt) file.')
+      setUploadError('Please upload a PDF, EPUB, DOCX, RTF, or plain text (.txt) file.')
     }
   }
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -210,17 +215,22 @@ export default function UploadPage() {
       selected.type === 'application/pdf' ||
       selected.type === 'application/epub+zip' ||
       selected.type === 'application/epub' ||
+      selected.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      selected.type === 'application/rtf' ||
+      selected.type === 'text/rtf' ||
       selected.type === 'text/plain' ||
       selected.type === 'text/txt' ||
       selectedName?.endsWith('.pdf') ||
       selectedName?.endsWith('.epub') ||
+      selectedName?.endsWith('.docx') ||
+      selectedName?.endsWith('.rtf') ||
       selectedName?.endsWith('.txt')
     )
     if (isAccepted) {
       setFile(selected)
       setUploadError(null)
     } else if (selected) {
-      setUploadError('Please upload a PDF, EPUB, or plain text (.txt) file.')
+      setUploadError('Please upload a PDF, EPUB, DOCX, RTF, or plain text (.txt) file.')
     }
   }
 
@@ -659,7 +669,7 @@ export default function UploadPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.txt,.epub,application/pdf,text/plain,application/epub+zip"
+                accept=".pdf,.epub,.docx,.rtf,.txt,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/rtf,text/rtf,text/plain"
                 style={{ display: 'none' }}
                 onChange={handleFileChange}
               />

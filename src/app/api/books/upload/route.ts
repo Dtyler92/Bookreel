@@ -124,8 +124,10 @@ export async function POST(request: Request) {
     const isTextFile = fileType === 'text/plain' || fileType === 'text/txt' || fileName.endsWith('.txt')
     const isPdfFile = fileType === 'application/pdf' || fileName.endsWith('.pdf')
     const isEpubFile = fileType === 'application/epub+zip' || fileType === 'application/epub' || fileName.endsWith('.epub')
-    if (!isTextFile && !isPdfFile && !isEpubFile) {
-      return Response.json({ error: 'File must be a PDF, EPUB, or plain text (.txt) file' }, { status: 400 })
+    const isDocxFile = fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileName.endsWith('.docx')
+    const isRtfFile  = fileType === 'application/rtf' || fileType === 'text/rtf' || fileName.endsWith('.rtf')
+    if (!isTextFile && !isPdfFile && !isEpubFile && !isDocxFile && !isRtfFile) {
+      return Response.json({ error: 'File must be a PDF, EPUB, DOCX, RTF, or plain text (.txt) file' }, { status: 400 })
     }
     // Validate file size (50MB)
     const MAX_SIZE = 50 * 1024 * 1024
@@ -175,7 +177,11 @@ export async function POST(request: Request) {
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('books')
         .upload(fileName, fileBytes, {
-          contentType: isTextFile ? 'text/plain' : isEpubFile ? 'application/epub+zip' : 'application/pdf',
+          contentType: isTextFile ? 'text/plain'
+            : isEpubFile  ? 'application/epub+zip'
+            : isDocxFile  ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            : isRtfFile   ? 'application/rtf'
+            : 'application/pdf',
           upsert: false
         })
 
@@ -216,7 +222,6 @@ export async function POST(request: Request) {
           if (!chapter.id) continue
           try {
             const [chapterText] = await epub.getChapterRawAsync(chapter.id)
-            // Strip HTML tags
             const plain = chapterText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
             if (plain.length > 50) textParts.push(plain)
           } catch { /* skip unreadable chapter */ }
@@ -225,6 +230,30 @@ export async function POST(request: Request) {
         console.log('[upload] EPUB text extracted, length:', extractedText.length, 'chapters:', chapters.length)
       } catch (epubError) {
         console.error('[upload] EPUB parse error:', epubError)
+        extractedText = ''
+      }
+    } else if (isDocxFile) {
+      // Parse DOCX via mammoth
+      try {
+        const docxBuffer = Buffer.from(await file.arrayBuffer())
+        const mammoth = await import('mammoth')
+        const result = await mammoth.extractRawText({ buffer: docxBuffer })
+        extractedText = result.value || ''
+        console.log('[upload] DOCX text extracted, length:', extractedText.length)
+      } catch (docxError) {
+        console.error('[upload] DOCX parse error:', docxError)
+        extractedText = ''
+      }
+    } else if (isRtfFile) {
+      // Parse RTF via mammoth
+      try {
+        const rtfBuffer = Buffer.from(await file.arrayBuffer())
+        const mammoth = await import('mammoth')
+        const result = await mammoth.extractRawText({ buffer: rtfBuffer })
+        extractedText = result.value || ''
+        console.log('[upload] RTF text extracted, length:', extractedText.length)
+      } catch (rtfError) {
+        console.error('[upload] RTF parse error:', rtfError)
         extractedText = ''
       }
     } else {
