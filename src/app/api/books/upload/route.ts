@@ -123,8 +123,9 @@ export async function POST(request: Request) {
     const fileName = file.name.toLowerCase()
     const isTextFile = fileType === 'text/plain' || fileType === 'text/txt' || fileName.endsWith('.txt')
     const isPdfFile = fileType === 'application/pdf' || fileName.endsWith('.pdf')
-    if (!isTextFile && !isPdfFile) {
-      return Response.json({ error: 'File must be a PDF or plain text (.txt) file' }, { status: 400 })
+    const isEpubFile = fileType === 'application/epub+zip' || fileType === 'application/epub' || fileName.endsWith('.epub')
+    if (!isTextFile && !isPdfFile && !isEpubFile) {
+      return Response.json({ error: 'File must be a PDF, EPUB, or plain text (.txt) file' }, { status: 400 })
     }
     // Validate file size (50MB)
     const MAX_SIZE = 50 * 1024 * 1024
@@ -174,7 +175,7 @@ export async function POST(request: Request) {
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('books')
         .upload(fileName, fileBytes, {
-          contentType: isTextFile ? 'text/plain' : 'application/pdf',
+          contentType: isTextFile ? 'text/plain' : isEpubFile ? 'application/epub+zip' : 'application/pdf',
           upsert: false
         })
 
@@ -203,6 +204,29 @@ export async function POST(request: Request) {
       // Read TXT directly
       extractedText = await file.text()
       console.log('[upload] TXT file read directly, length:', extractedText.length)
+    } else if (isEpubFile) {
+      // Parse EPUB — extract all chapter text
+      try {
+        const epubBuffer = Buffer.from(await file.arrayBuffer())
+        const { EPub } = await import('epub2')
+        const epub = await EPub.createAsync(epubBuffer as unknown as string)
+        const chapters = epub.flow ?? []
+        const textParts: string[] = []
+        for (const chapter of chapters) {
+          if (!chapter.id) continue
+          try {
+            const [chapterText] = await epub.getChapterRawAsync(chapter.id)
+            // Strip HTML tags
+            const plain = chapterText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+            if (plain.length > 50) textParts.push(plain)
+          } catch { /* skip unreadable chapter */ }
+        }
+        extractedText = textParts.join('\n\n')
+        console.log('[upload] EPUB text extracted, length:', extractedText.length, 'chapters:', chapters.length)
+      } catch (epubError) {
+        console.error('[upload] EPUB parse error:', epubError)
+        extractedText = ''
+      }
     } else {
       // Try PDF parsing
       try {
