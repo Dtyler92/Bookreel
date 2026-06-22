@@ -214,42 +214,61 @@ export async function POST(request: Request) {
       // Parse EPUB2 + EPUB3 via JSZip — reads the OPF spine and extracts all chapter HTML
       try {
         const epubBuffer = Buffer.from(await file.arrayBuffer())
+        console.log('[upload] EPUB buffer size:', epubBuffer.length)
         const JSZip = (await import('jszip')).default
         const zip = await JSZip.loadAsync(epubBuffer)
 
+        // List all files in zip for debugging
+        const zipFiles = Object.keys(zip.files)
+        console.log('[upload] EPUB zip files:', zipFiles.slice(0, 20).join(', '))
+
         // 1. Find the OPF file path from META-INF/container.xml
-        const containerXml = await zip.file('META-INF/container.xml')?.async('text') ?? ''
-        const opfPathMatch = containerXml.match(/full-path="([^"]+\.opf)"/)
+        const containerFile = zip.file('META-INF/container.xml')
+        if (!containerFile) throw new Error('No META-INF/container.xml found in EPUB')
+        const containerXml = await containerFile.async('text')
+        console.log('[upload] container.xml:', containerXml.substring(0, 300))
+
+        // Handle both single and double quotes around full-path attribute
+        const opfPathMatch = containerXml.match(/full-path=["']([^"']+\.opf)["']/)
         const opfPath = opfPathMatch?.[1] ?? ''
+        console.log('[upload] OPF path found:', opfPath)
         if (!opfPath) throw new Error('Could not find OPF path in container.xml')
 
         // 2. Parse the OPF to get spine item hrefs in reading order
         const opfDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : ''
         const opfXml = await zip.file(opfPath)?.async('text') ?? ''
+        console.log('[upload] OPF length:', opfXml.length, 'opfDir:', opfDir)
 
-        // Build id→href map from manifest
+        // Build id→href map from manifest (handle both quote styles)
         const manifestItems: Record<string, string> = {}
-        const manifestRe = /<item[^>]+id="([^"]+)"[^>]+href="([^"]+)"[^>]*>/g
+        const manifestRe = /<item[^>]+id=["']([^"']+)["'][^>]+href=["']([^"']+)["'][^>]*>/g
         let m: RegExpExecArray | null
         while ((m = manifestRe.exec(opfXml)) !== null) {
           manifestItems[m[1]] = m[2]
         }
+        // Also try href before id ordering
+        const manifestRe2 = /<item[^>]+href=["']([^"']+)["'][^>]+id=["']([^"']+)["'][^>]*>/g
+        while ((m = manifestRe2.exec(opfXml)) !== null) {
+          if (!manifestItems[m[2]]) manifestItems[m[2]] = m[1]
+        }
+        console.log('[upload] Manifest items found:', Object.keys(manifestItems).length)
 
         // Get spine order (idref list)
-        const spineRe = /<itemref[^>]+idref="([^"]+)"/g
+        const spineRe = /<itemref[^>]+idref=["']([^"']+)["']/g
         const spineIds: string[] = []
         while ((m = spineRe.exec(opfXml)) !== null) spineIds.push(m[1])
+        console.log('[upload] Spine IDs:', spineIds.length, spineIds.slice(0, 5).join(', '))
 
         // 3. Extract text from each spine item in order
         const textParts: string[] = []
         for (const id of spineIds) {
           const href = manifestItems[id]
-          if (!href) continue
+          if (!href) { console.log('[upload] No href for spine id:', id); continue }
           const fullPath = opfDir + href.split('#')[0]
           const html = await zip.file(fullPath)?.async('text')
             ?? await zip.file(decodeURIComponent(fullPath))?.async('text')
             ?? ''
-          if (!html) continue
+          if (!html) { console.log('[upload] No html found at path:', fullPath); continue }
           // Strip all tags, decode entities, collapse whitespace
           const plain = html
             .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -263,7 +282,7 @@ export async function POST(request: Request) {
         }
 
         extractedText = textParts.join('\n\n')
-        console.log('[upload] EPUB text extracted via JSZip, length:', extractedText.length, 'spine items:', spineIds.length)
+        console.log('[upload] EPUB text extracted via JSZip, length:', extractedText.length, 'spine items:', spineIds.length, 'text parts:', textParts.length)
       } catch (epubError) {
         console.error('[upload] EPUB parse error:', epubError)
         extractedText = ''
