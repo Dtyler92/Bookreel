@@ -261,52 +261,87 @@ Examples: slow push-in, pull back to reveal, handheld orbit, static wide shot, g
 }
 
 // ── Character reference image generation ─────────────────────────────────────
-// Generates a 3-angle character sheet per character: front full body, back full body, face close-up.
-// All angles use identical description so outfit/face stay locked across views.
+// Generates a 3-angle character sheet per character: face close-up first, then
+// front full body + back full body using the face as a reference image so
+// identity stays consistent across all 3 shots.
 // Returns { front, back, face } URLs stored in Supabase.
 async function generateCharacterReferenceImage(character, ledger = null) {
   const safeAppearance = softenForModeration(character.appearance || character.description || character.name)
-  const baseDesc = `${safeAppearance}, same outfit and face across all views, ultra-realistic photorealistic, clean studio lighting, neutral grey background, no text, no watermarks`
+  const baseDesc = `${safeAppearance}, ultra-realistic photorealistic, clean studio lighting, neutral grey background, no text, no watermarks`
+  const safeName = (character.name || 'character').replace(/\s+/g, '-').toLowerCase()
 
-  const angles = [
-    { key: 'front', aspect: '3:4', prompt: `${baseDesc}, full body front view, facing camera directly, symmetrical pose, arms relaxed at sides, head to toe, face clearly visible` },
-    { key: 'back',  aspect: '3:4', prompt: `${baseDesc}, full body back view, seen from behind, same outfit, head to toe` },
-    { key: 'face',  aspect: '1:1', prompt: `${baseDesc}, straight-on headshot portrait, face looking directly into camera, eye level, shoulders visible, neutral expression, sharp facial features, studio portrait lighting` },
-  ]
-
-  const urls = {}
-  for (const angle of angles) {
+  // Helper: call Flux, download, reupload to Supabase, return public URL
+  async function falFlux(prompt, aspect, refImageUrls = []) {
+    const body = {
+      prompt,
+      aspect_ratio: aspect,
+      num_images: 1,
+      output_format: 'jpeg',
+      raw: true,
+      safety_tolerance: '6',
+      ...(refImageUrls.length > 0 && { image_urls: refImageUrls }),
+    }
     const res = await fetch('https://fal.run/fal-ai/flux-pro/v1.1-ultra', {
       method: 'POST',
       headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: angle.prompt, aspect_ratio: angle.aspect, num_images: 1, output_format: 'jpeg', raw: true, safety_tolerance: '6' })
+      body: JSON.stringify(body),
     })
     if (!res.ok) {
       const err = await res.text()
-      throw new Error(`Character ref image (${angle.key}) failed ${res.status}: ${err.substring(0, 200)}`)
+      throw new Error(`Flux request failed ${res.status}: ${err.substring(0, 200)}`)
     }
     const data = await res.json()
     const falUrl = data.images?.[0]?.url
-    if (!falUrl) throw new Error(`No character ref image URL returned for ${angle.key}`)
+    if (!falUrl) throw new Error('No image URL returned from Flux')
+    return falUrl
+  }
 
-    // Download + re-upload to Supabase for stable permanent URL
+  async function uploadToSupabase(falUrl, key) {
     const imgRes = await fetch(falUrl)
-    if (!imgRes.ok) throw new Error(`Failed to download character ref (${angle.key}): ${imgRes.status}`)
+    if (!imgRes.ok) throw new Error(`Failed to download image (${key}): ${imgRes.status}`)
     const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
-    const safeName = (character.name || 'character').replace(/\s+/g, '-').toLowerCase()
-    const storagePath = `character-refs/${safeName}-${angle.key}-${Date.now()}.jpg`
-
+    const storagePath = `character-refs/${safeName}-${key}-${Date.now()}.jpg`
     const { error: uploadErr } = await supabase.storage
       .from('media')
       .upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: true })
-    if (uploadErr) throw new Error(`Supabase char ref upload failed (${angle.key}): ${uploadErr.message}`)
-
+    if (uploadErr) throw new Error(`Supabase upload failed (${key}): ${uploadErr.message}`)
     const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
-    if (ledger) ledger.add(`char ref ${angle.key}: ${character.name}`, 'fal', PRICING.flux_image_ultra)
-    urls[angle.key] = urlData.publicUrl
-    console.log(`[worker]   Character ref "${character.name}" ${angle.key}: ${urlData.publicUrl.substring(0, 80)}`)
+    return urlData.publicUrl
   }
-  return urls // { front, back, left, right }
+
+  // Step 1 — Face close-up (no reference, pure prompt)
+  console.log(`[worker]   Character ref "${character.name}" face: generating...`)
+  const faceUrl = await falFlux(
+    `${baseDesc}, straight-on headshot portrait, face looking directly into camera, eye level, shoulders visible, neutral expression, sharp facial features, studio portrait lighting`,
+    '1:1'
+  )
+  const facePubUrl = await uploadToSupabase(faceUrl, 'face')
+  if (ledger) ledger.add(`char ref face: ${character.name}`, 'fal', PRICING.flux_image_ultra)
+  console.log(`[worker]   Character ref "${character.name}" face: ${facePubUrl.substring(0, 80)}`)
+
+  // Step 2 — Front full body, using face as reference to lock identity
+  console.log(`[worker]   Character ref "${character.name}" front: generating with face ref...`)
+  const frontUrl = await falFlux(
+    `${baseDesc}, same person as reference image, full body front view, facing camera directly, symmetrical pose, arms relaxed at sides, head to toe, same face and outfit`,
+    '3:4',
+    [faceUrl]  // use original fal URL (not re-uploaded) for faster reference
+  )
+  const frontPubUrl = await uploadToSupabase(frontUrl, 'front')
+  if (ledger) ledger.add(`char ref front: ${character.name}`, 'fal', PRICING.flux_image_ultra)
+  console.log(`[worker]   Character ref "${character.name}" front: ${frontPubUrl.substring(0, 80)}`)
+
+  // Step 3 — Back full body, using face as reference to lock outfit/identity
+  console.log(`[worker]   Character ref "${character.name}" back: generating with face ref...`)
+  const backUrl = await falFlux(
+    `${baseDesc}, same person as reference image, full body back view, seen from behind, same outfit and hair, head to toe`,
+    '3:4',
+    [faceUrl]
+  )
+  const backPubUrl = await uploadToSupabase(backUrl, 'back')
+  if (ledger) ledger.add(`char ref back: ${character.name}`, 'fal', PRICING.flux_image_ultra)
+  console.log(`[worker]   Character ref "${character.name}" back: ${backPubUrl.substring(0, 80)}`)
+
+  return { front: frontPubUrl, back: backPubUrl, face: facePubUrl }
 }
 
 // ── Image generation (fal.ai) ────────────────────────────────────────────────
