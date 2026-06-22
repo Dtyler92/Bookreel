@@ -25,7 +25,9 @@ export async function signupAction(
   _prevState: { error: string; email?: string } | null,
   formData: FormData
 ): Promise<{ error: string; email?: string }> {
-  const fullName = formData.get('full_name') as string
+  const firstName = (formData.get('first_name') as string ?? '').trim()
+  const lastName  = (formData.get('last_name')  as string ?? '').trim()
+  const fullName  = `${firstName} ${lastName}`.trim()
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 

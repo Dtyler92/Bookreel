@@ -198,19 +198,37 @@ export default function SignupPage() {
 
         {/* Form */}
         <form action={formAction} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div>
-            <label htmlFor="full_name" style={labelStyle}>Full Name</label>
-            <input
-              id="full_name"
-              name="full_name"
-              type="text"
-              required
-              autoComplete="name"
-              placeholder="Jane Austen"
-              style={inputStyle}
-              onFocus={e => { e.target.style.borderColor = '#C8402F'; e.target.style.boxShadow = '0 0 0 3px rgba(200,64,47,0.12)' }}
-              onBlur={e => { e.target.style.borderColor = '#E8E2D5'; e.target.style.boxShadow = 'none' }}
-            />
+
+          {/* First + Last name side by side */}
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <label htmlFor="first_name" style={labelStyle}>First Name <span style={{ color: '#C8402F' }}>*</span></label>
+              <input
+                id="first_name"
+                name="first_name"
+                type="text"
+                required
+                autoComplete="given-name"
+                placeholder="Jane"
+                style={inputStyle}
+                onFocus={e => { e.target.style.borderColor = '#C8402F'; e.target.style.boxShadow = '0 0 0 3px rgba(200,64,47,0.12)' }}
+                onBlur={e => { e.target.style.borderColor = '#E8E2D5'; e.target.style.boxShadow = 'none' }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label htmlFor="last_name" style={labelStyle}>Last Name <span style={{ color: '#C8402F' }}>*</span></label>
+              <input
+                id="last_name"
+                name="last_name"
+                type="text"
+                required
+                autoComplete="family-name"
+                placeholder="Austen"
+                style={inputStyle}
+                onFocus={e => { e.target.style.borderColor = '#C8402F'; e.target.style.boxShadow = '0 0 0 3px rgba(200,64,47,0.12)' }}
+                onBlur={e => { e.target.style.borderColor = '#E8E2D5'; e.target.style.boxShadow = 'none' }}
+              />
+            </div>
           </div>
 
           <div>
