@@ -87,9 +87,9 @@ export async function PATCH(request: Request) {
           const baseDesc = `${appearance}, same outfit and face across all views, ultra-realistic photorealistic, clean studio lighting, neutral grey background, no text, no watermarks`
 
           const angles = [
-            { key: 'front', col: 'image_url_front', prompt: `${baseDesc}, full body front view, facing camera directly, symmetrical pose, arms relaxed at sides, head to toe. Adjust: ${sanitizeAppearanceDescription(feedback)}` },
-            { key: 'back',  col: 'image_url_back',  prompt: `${baseDesc}, full body back view, seen from behind, same outfit, head to toe. Adjust: ${sanitizeAppearanceDescription(feedback)}` },
-            { key: 'face',  col: 'image_url_left',  prompt: `${baseDesc}, extreme close-up portrait of face only, sharp eyes, detailed skin, cinematic lighting, chest up. Adjust: ${sanitizeAppearanceDescription(feedback)}` },
+            { key: 'front', col: 'image_url_front', aspect: '3:4', prompt: `${baseDesc}, full body front view, facing camera directly, symmetrical pose, arms relaxed at sides, head to toe, face clearly visible. Adjust: ${sanitizeAppearanceDescription(feedback)}` },
+            { key: 'back',  col: 'image_url_back',  aspect: '3:4', prompt: `${baseDesc}, full body back view, seen from behind, same outfit, head to toe. Adjust: ${sanitizeAppearanceDescription(feedback)}` },
+            { key: 'face',  col: 'image_url_left',  aspect: '1:1', prompt: `${baseDesc}, straight-on headshot portrait, face looking directly into camera, eye level, shoulders visible, neutral expression, sharp facial features, studio portrait lighting. Adjust: ${sanitizeAppearanceDescription(feedback)}` },
           ]
 
           console.log('[approve-image] Regenerating 3-angle character sheet for', id)
@@ -98,7 +98,7 @@ export async function PATCH(request: Request) {
               input: {
                 prompt: angle.prompt.substring(0, 500),
                 negative_prompt: IMAGE_NEGATIVE_PROMPT,
-                aspect_ratio: '3:4',
+                aspect_ratio: angle.aspect,
                 num_images: 1,
                 output_format: 'jpeg',
                 raw: true,

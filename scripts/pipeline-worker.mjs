@@ -269,9 +269,9 @@ async function generateCharacterReferenceImage(character, ledger = null) {
   const baseDesc = `${safeAppearance}, same outfit and face across all views, ultra-realistic photorealistic, clean studio lighting, neutral grey background, no text, no watermarks`
 
   const angles = [
-    { key: 'front', prompt: `${baseDesc}, full body front view, facing camera directly, symmetrical pose, arms relaxed at sides, head to toe` },
-    { key: 'back',  prompt: `${baseDesc}, full body back view, seen from behind, same outfit, head to toe` },
-    { key: 'face',  prompt: `${baseDesc}, extreme close-up portrait of face only, sharp eyes, detailed skin, cinematic lighting, chest up` },
+    { key: 'front', aspect: '3:4', prompt: `${baseDesc}, full body front view, facing camera directly, symmetrical pose, arms relaxed at sides, head to toe, face clearly visible` },
+    { key: 'back',  aspect: '3:4', prompt: `${baseDesc}, full body back view, seen from behind, same outfit, head to toe` },
+    { key: 'face',  aspect: '1:1', prompt: `${baseDesc}, straight-on headshot portrait, face looking directly into camera, eye level, shoulders visible, neutral expression, sharp facial features, studio portrait lighting` },
   ]
 
   const urls = {}
@@ -279,7 +279,7 @@ async function generateCharacterReferenceImage(character, ledger = null) {
     const res = await fetch('https://fal.run/fal-ai/flux-pro/v1.1-ultra', {
       method: 'POST',
       headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: angle.prompt, aspect_ratio: '3:4', num_images: 1, output_format: 'jpeg', raw: true, safety_tolerance: '6' })
+      body: JSON.stringify({ prompt: angle.prompt, aspect_ratio: angle.aspect, num_images: 1, output_format: 'jpeg', raw: true, safety_tolerance: '6' })
     })
     if (!res.ok) {
       const err = await res.text()
