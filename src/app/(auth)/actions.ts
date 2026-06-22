@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 export async function loginAction(
   _prevState: { error: string } | null,
@@ -29,7 +30,7 @@ export async function signupAction(
   const password = formData.get('password') as string
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.signUp({
+  const { data: signUpData, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -40,6 +41,19 @@ export async function signupAction(
 
   if (error) {
     return { error: error.message }
+  }
+
+  // Also upsert into profiles table so dashboard can read it immediately
+  if (signUpData.user) {
+    const serviceClient = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+    await serviceClient.from('profiles').upsert({
+      id: signUpData.user.id,
+      full_name: fullName,
+      email,
+    }, { onConflict: 'id' })
   }
 
   return { error: '', email }

@@ -38,7 +38,7 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  const fullName = profile?.full_name ?? user.email ?? 'there'
+  const fullName = profile?.full_name ?? (user.user_metadata?.full_name as string | undefined) ?? user.email ?? 'there'
   const firstName = fullName.split(' ')[0]
   const rawTier = profile?.subscription_tier ?? 'free'
   // Map subscription tiers to GlobalNav-compatible tier values
