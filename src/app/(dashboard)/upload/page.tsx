@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 import { GlobalNav } from '@/components/shared/GlobalNav'
 import { BrandLogo } from '@/components/shared/BrandLogo'
 import { PrimaryButton } from '@/components/shared/PrimaryButton'
@@ -98,6 +99,50 @@ export default function UploadPage() {
   const [generatingCover, setGeneratingCover] = useState(false)
   const [coverError, setCoverError] = useState<string | null>(null)
   const coverFileInputRef = useRef<HTMLInputElement>(null)
+
+  // Author name + pen names
+  const [authorName, setAuthorName] = useState('')
+  const [penNames, setPenNames] = useState<string[]>([])
+  const [showAddPenName, setShowAddPenName] = useState(false)
+  const [newPenName, setNewPenName] = useState('')
+  const [savingPenName, setSavingPenName] = useState(false)
+
+  // Fetch user's real name + pen names on mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, pen_names')
+        .eq('id', user.id)
+        .single()
+      const fullName = profile?.full_name ?? (user.user_metadata?.full_name as string) ?? ''
+      setAuthorName(fullName)
+      setPenNames(profile?.pen_names ?? [])
+    }
+    fetchProfile()
+  }, [])
+
+  const handleAddPenName = async () => {
+    const trimmed = newPenName.trim()
+    if (!trimmed) return
+    setSavingPenName(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const updated = [...penNames, trimmed]
+      await supabase.from('profiles').update({ pen_names: updated }).eq('id', user.id)
+      setPenNames(updated)
+      setAuthorName(trimmed)
+      setNewPenName('')
+      setShowAddPenName(false)
+    } finally {
+      setSavingPenName(false)
+    }
+  }
 
   // Step 2 fields
   const [file, setFile] = useState<File | null>(null)
@@ -452,6 +497,75 @@ export default function UploadPage() {
                 style={inputStyle}
                 {...focusHandlers}
               />
+            </div>
+
+            {/* Author Name */}
+            <div style={fieldStyle}>
+              <label htmlFor="author_name" style={labelStyle}>
+                Author Name <span style={{ color: '#C8402F' }}>*</span>
+              </label>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <select
+                  id="author_name"
+                  value={authorName}
+                  onChange={(e) => {
+                    if (e.target.value === '__add__') { setShowAddPenName(true) }
+                    else { setAuthorName(e.target.value); setShowAddPenName(false) }
+                  }}
+                  style={{ ...inputStyle, appearance: 'auto', flex: 1 }}
+                  {...focusHandlers}
+                >
+                  {authorName && <option value={authorName}>{authorName}</option>}
+                  {penNames.filter(p => p !== authorName).map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                  <option value="__add__">+ Add a pen name…</option>
+                </select>
+              </div>
+              {/* Inline pen name input */}
+              {showAddPenName && (
+                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  <input
+                    type="text"
+                    value={newPenName}
+                    onChange={(e) => setNewPenName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddPenName() } }}
+                    placeholder="e.g. J.K. Rowling"
+                    style={{ ...inputStyle, flex: 1 }}
+                    autoFocus
+                    {...focusHandlers}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddPenName}
+                    disabled={savingPenName || !newPenName.trim()}
+                    style={{
+                      background: '#C8402F', color: '#fff', border: 'none',
+                      borderRadius: '8px', padding: '0 18px',
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                      opacity: savingPenName || !newPenName.trim() ? 0.5 : 1,
+                    }}
+                  >
+                    {savingPenName ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowAddPenName(false); setNewPenName('') }}
+                    style={{
+                      background: 'none', border: '1.5px solid #E8E2D5',
+                      borderRadius: '8px', padding: '0 14px',
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      fontSize: '14px', color: '#8A8278', cursor: 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', color: '#8A8278', marginTop: '6px' }}>
+                This will appear on your book cover and trailer.
+              </p>
             </div>
 
             {/* Genre */}
