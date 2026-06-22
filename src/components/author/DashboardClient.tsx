@@ -109,6 +109,7 @@ function CoverModal({
   bookTitle,
   bookGenre,
   bookDescription,
+  authorName,
   onClose,
   onCoverUpdated,
 }: {
