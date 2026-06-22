@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import { BrandLogo } from './BrandLogo'
@@ -9,9 +10,10 @@ interface GlobalNavProps {
   userName?: string
   userTier?: 'free' | 'hobbyist' | 'author' | 'publisher' | 'pro'
   credits?: number
+  authorPhotoUrl?: string
 }
 
-export function GlobalNav({ userName, userTier = 'free', credits }: GlobalNavProps) {
+export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl }: GlobalNavProps) {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -192,7 +194,7 @@ export function GlobalNav({ userName, userTier = 'free', credits }: GlobalNavPro
               </Link>
             )}
 
-            {/* Embossed Initial Seal */}
+            {/* Embossed Initial Seal / Author Photo */}
             {userName ? (
               <div ref={dropdownRef} style={{ position: 'relative' }}>
                 <div
@@ -201,42 +203,59 @@ export function GlobalNav({ userName, userTier = 'free', credits }: GlobalNavPro
                   style={{
                     width: '36px', height: '36px',
                     borderRadius: '50%',
-                    background: `radial-gradient(circle at 35% 35%, rgba(255,255,255,0.07) 0%, transparent 60%), ${ink}`,
-                    border: `1.5px solid #3A3835`,
+                    overflow: 'hidden',
+                    border: `1.5px solid ${dropdownOpen ? '#C8402F' : '#3A3835'}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     cursor: 'pointer',
                     flexShrink: 0,
+                    background: authorPhotoUrl ? 'transparent' : `radial-gradient(circle at 35% 35%, rgba(255,255,255,0.07) 0%, transparent 60%), ${ink}`,
+                    transition: 'border-color 200ms ease',
                   }}
                 >
-                  <span style={{
-                    fontFamily: 'var(--font-playfair), serif',
-                    fontSize: '16px', fontWeight: 700,
-                    color: paper,
-                    letterSpacing: '0.02em',
-                    textShadow: '0 1px 2px rgba(0,0,0,0.4)',
-                    userSelect: 'none',
-                    lineHeight: 1,
-                  }}>
-                    {initial}
-                  </span>
+                  {authorPhotoUrl ? (
+                    <Image
+                      src={authorPhotoUrl}
+                      alt={userName}
+                      width={36}
+                      height={36}
+                      className="object-cover w-full h-full"
+                      unoptimized
+                    />
+                  ) : (
+                    <span style={{
+                      fontFamily: 'var(--font-playfair), serif',
+                      fontSize: '16px', fontWeight: 700,
+                      color: paper,
+                      letterSpacing: '0.02em',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.4)',
+                      userSelect: 'none',
+                      lineHeight: 1,
+                    }}>
+                      {initial}
+                    </span>
+                  )}
                 </div>
 
                 {/* Dropdown */}
                 {dropdownOpen && (
                   <div style={{
                     position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-                    minWidth: '180px',
+                    minWidth: '200px',
                     background: paper,
                     border: `1px solid ${border}`,
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 20px rgba(13,13,11,0.10)',
+                    borderRadius: '10px',
+                    boxShadow: '0 4px 24px rgba(13,13,11,0.12)',
                     overflow: 'hidden',
                     zIndex: 200,
                   }}>
+                    {/* User info header */}
+                    <div style={{ padding: '12px 16px', borderBottom: `1px solid #EDE9E0` }}>
+                      <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', fontWeight: 600, color: ink, margin: 0 }}>{userName}</p>
+                    </div>
                     {[
-                      { href: '/dashboard', label: 'Dashboard' },
-                      { href: '/dashboard', label: 'My Books' },
-                      { href: '/pricing#packs', label: 'Buy Credits' },
+                      { href: '/dashboard', label: '📚  My Books' },
+                      { href: '/account',   label: '⚙️  Account Settings' },
+                      { href: '/pricing#packs', label: '🪙  Buy Credits' },
                     ].map(item => (
                       <Link key={item.label} href={item.href}
                         onClick={() => setDropdownOpen(false)}
