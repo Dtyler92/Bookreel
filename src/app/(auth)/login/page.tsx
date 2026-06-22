@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { loginAction } from '../actions'
 import { BrandLogo } from '@/components/shared/BrandLogo'
+import { OAuthButtons, Divider } from '@/components/auth/OAuthButtons'
 
 const inputStyle = {
   width: '100%',
@@ -133,7 +134,13 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Form */}
+        {/* Social OAuth buttons */}
+        <OAuthButtons />
+
+        {/* Divider */}
+        <Divider />
+
+        {/* Email + Password Form */}
         <form action={formAction} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
             <label htmlFor="email" style={labelStyle}>Email</label>
@@ -151,7 +158,17 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label htmlFor="password" style={labelStyle}>Password</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+              <label htmlFor="password" style={{ ...labelStyle, marginBottom: 0 }}>Password</label>
+              <Link href="/forgot-password" style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '12px',
+                color: '#8A8278',
+                textDecoration: 'none',
+              }}>
+                Forgot password?
+              </Link>
+            </div>
             <input
               id="password"
               name="password"
@@ -185,7 +202,7 @@ export default function LoginPage() {
               marginTop: '4px',
             }}
           >
-            {pending ? 'Signing in…' : 'Sign In'}
+            {pending ? 'Signing in…' : 'Sign In with Email'}
           </button>
         </form>
 

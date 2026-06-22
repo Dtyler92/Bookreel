@@ -60,3 +60,23 @@ export async function signupAction(
 
   return { error: '', email }
 }
+
+export async function oauthAction(
+  _prevState: { error: string } | null,
+  formData: FormData
+): Promise<{ error: string } | null> {
+  const provider = formData.get('provider') as 'google' | 'facebook' | 'apple'
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm`,
+      scopes: provider === 'facebook' ? 'email,public_profile' : undefined,
+    },
+  })
+
+  if (error) return { error: error.message }
+  if (data.url) redirect(data.url)
+  return null
+}

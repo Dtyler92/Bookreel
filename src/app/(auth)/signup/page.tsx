@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react'
 import Link from 'next/link'
 import { signupAction } from '../actions'
 import { BrandLogo } from '@/components/shared/BrandLogo'
+import { OAuthButtons, Divider } from '@/components/auth/OAuthButtons'
 
 const inputStyle = {
   width: '100%',
@@ -195,6 +196,12 @@ export default function SignupPage() {
             {state.error}
           </div>
         )}
+
+        {/* Social OAuth buttons */}
+        <OAuthButtons />
+
+        {/* Divider */}
+        <Divider />
 
         {/* Form */}
         <form action={formAction} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
