@@ -3,7 +3,7 @@ import { fal } from '@fal-ai/client'
 import { sanitizeAppearanceDescription, IMAGE_NEGATIVE_PROMPT } from '@/lib/contentPolicy'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+export const maxDuration = 300
 
 fal.config({ credentials: process.env.FAL_API_KEY || process.env.FAL_KEY || '' })
 
@@ -42,6 +42,12 @@ export async function PATCH(request: Request) {
 
     let newImageUrl: string | undefined
 
+    // Build update payload — declared early so image generation can populate it
+    const updatePayload: Record<string, unknown> = {
+      author_approved: approved,
+      author_feedback: feedback ?? null,
+    }
+
     // If feedback is provided and not approved, regenerate the image
     if (feedback && !approved) {
       // Fetch current record to build updated prompt
@@ -74,33 +80,69 @@ export async function PATCH(request: Request) {
 
       const updatedPrompt = `${basePrompt}. Adjust: ${sanitizeAppearanceDescription(feedback)}`.substring(0, 500)
 
-      try {
-        const falModel = 'fal-ai/flux/schnell'
-        const imageSize = type === 'character' ? 'portrait_4_3' : 'square_hd'
+      if (type === 'character') {
+        // Generate full 3-angle character sheet
+        try {
+          const appearance = sanitizeAppearanceDescription(record.appearance_notes ?? record.description ?? record.name)
+          const baseDesc = `${appearance}, same outfit and face across all views, ultra-realistic photorealistic, clean studio lighting, neutral grey background, no text, no watermarks`
 
-        console.log('[approve-image] Regenerating image for', type, id)
-        const result = await fal.subscribe(falModel, {
-          input: {
-            prompt: updatedPrompt,
-            negative_prompt: IMAGE_NEGATIVE_PROMPT,
-            image_size: imageSize,
-            num_images: 1,
-            safety_tolerance: '2',
-          } as any,
-        }) as { data: FalImageResult; requestId: string }
+          const angles = [
+            { key: 'front', col: 'image_url_front', prompt: `${baseDesc}, full body front view, facing camera directly, symmetrical pose, arms relaxed at sides, head to toe. Adjust: ${sanitizeAppearanceDescription(feedback)}` },
+            { key: 'back',  col: 'image_url_back',  prompt: `${baseDesc}, full body back view, seen from behind, same outfit, head to toe. Adjust: ${sanitizeAppearanceDescription(feedback)}` },
+            { key: 'face',  col: 'image_url_left',  prompt: `${baseDesc}, extreme close-up portrait of face only, sharp eyes, detailed skin, cinematic lighting, chest up. Adjust: ${sanitizeAppearanceDescription(feedback)}` },
+          ]
 
-        newImageUrl = result.data.images[0]?.url
-      } catch (falErr) {
-        console.error('[approve-image] Image regeneration failed:', falErr)
-        // Don't fail the whole request — just save feedback without new image
+          console.log('[approve-image] Regenerating 3-angle character sheet for', id)
+          for (const angle of angles) {
+            const result = await fal.subscribe('fal-ai/flux-pro/v1.1-ultra', {
+              input: {
+                prompt: angle.prompt.substring(0, 500),
+                negative_prompt: IMAGE_NEGATIVE_PROMPT,
+                aspect_ratio: '3:4',
+                num_images: 1,
+                output_format: 'jpeg',
+                raw: true,
+                safety_tolerance: '6',
+              } as any,
+            }) as { data: FalImageResult; requestId: string }
+
+            const url = result.data.images[0]?.url
+            if (url) {
+              updatePayload[angle.col] = url
+              if (angle.key === 'front') {
+                newImageUrl = url
+                updatePayload.image_url = url
+                updatePayload.reference_image_url = url
+              }
+            }
+          }
+        } catch (falErr) {
+          console.error('[approve-image] 3-angle regeneration failed:', falErr)
+        }
+      } else {
+        // Items: single image regeneration
+        try {
+          console.log('[approve-image] Regenerating item image for', id)
+          const result = await fal.subscribe('fal-ai/flux-pro/v1.1-ultra', {
+            input: {
+              prompt: updatedPrompt.substring(0, 500),
+              negative_prompt: IMAGE_NEGATIVE_PROMPT,
+              aspect_ratio: '1:1',
+              num_images: 1,
+              output_format: 'jpeg',
+              safety_tolerance: '6',
+            } as any,
+          }) as { data: FalImageResult; requestId: string }
+
+          newImageUrl = result.data.images[0]?.url
+          if (newImageUrl) updatePayload.image_url = newImageUrl
+        } catch (falErr) {
+          console.error('[approve-image] Item image regeneration failed:', falErr)
+        }
       }
     }
 
-    // Build update payload
-    const updatePayload: Record<string, unknown> = {
-      author_approved: approved,
-      author_feedback: feedback ?? null,
-    }
+    // Save everything to Supabase
     if (newImageUrl) {
       updatePayload.image_url = newImageUrl
     }
