@@ -56,14 +56,14 @@ export async function POST(request: Request) {
     // ── Ideogram v3 via fal.ai ─────────────────────────────────────────────────
     // Best-in-class for text rendering on images — renders title + author legibly.
     // Prompt strategy: scene/mood first, then explicit typography placement.
-    const titleText = `"${title}"`
-    const authorText = authorName ? `"${authorName}"` : null
+    const titleText = title.toUpperCase()
+    const authorText = authorName || null
 
     const typographyInstructions = authorText
-      ? `The cover has the book title text ${titleText} in large bold elegant typography near the top, and the author name text ${authorText} in smaller refined typography near the bottom`
-      : `The cover has the book title text ${titleText} in large bold elegant typography prominently displayed`
+      ? `Book title "${titleText}" in large bold embossed typography at the top of the cover. Author name "${authorText}" in elegant smaller text at the bottom of the cover.`
+      : `Book title "${titleText}" in large bold embossed typography prominently at the top of the cover.`
 
-    const prompt = `Professional ${genre} book cover. ${description ? description.substring(0, 180) + '. ' : ''}${typographyInstructions}. The text is clearly legible, perfectly spelled, beautifully styled. Cinematic dramatic composition, rich atmospheric lighting, publisher-quality artwork.`
+    const prompt = `Professional ${genre} book cover artwork. ${description ? description.substring(0, 160) + '. ' : ''}${typographyInstructions} Text is perfectly spelled, sharp, clearly legible, beautifully integrated into the design. Cinematic dramatic composition, rich atmospheric lighting, publisher-quality artwork. No extra text or words beyond the title and author name.`
 
     const negativePrompt = 'blurry, low quality, amateur, watermark, misspelled text, garbled letters, distorted words, wrong words, missing text, nudity, gore'
 

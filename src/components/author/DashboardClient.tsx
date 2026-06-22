@@ -688,7 +688,7 @@ function BookCard({
     <>
       {/* Inject keyframes once per card mount — React dedupes style tags */}
       <style>{CARD_KEYFRAMES}</style>
-      <Link key={book.id} href={`/review/${book.id}`} style={{ textDecoration: 'none' }}>
+      <Link key={book.id} href={`/book/${book.id}`} style={{ textDecoration: 'none' }}>
         <div style={{
           background: '#FFFFFF',
           border: `1px solid ${isGenerating ? 'rgba(200,64,47,0.3)' : '#E8E2D5'}`,
