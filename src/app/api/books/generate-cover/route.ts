@@ -55,14 +55,17 @@ export async function POST(request: Request) {
 
     // ── Ideogram v3 via fal.ai ─────────────────────────────────────────────────
     // Best-in-class for text rendering on images — renders title + author legibly.
-    // Prompt strategy: describe scene/mood first, then explicitly place typography.
-    const textInstructions = authorName
-      ? `The exact text "${title}" displayed as the book title in large elegant typography, and the exact text "${authorName}" as the author name in smaller text near the bottom of the cover`
-      : `The exact text "${title}" displayed as the book title in large elegant typography`
+    // Prompt strategy: scene/mood first, then explicit typography placement.
+    const titleText = `"${title}"`
+    const authorText = authorName ? `"${authorName}"` : null
 
-    const prompt = `Professional ${genre} book cover design. ${description ? description.substring(0, 200) + '. ' : ''}${textInstructions}. Cinematic dramatic composition, rich atmospheric lighting, publisher-quality artwork, visually striking.`
+    const typographyInstructions = authorText
+      ? `The cover has the book title text ${titleText} in large bold elegant typography near the top, and the author name text ${authorText} in smaller refined typography near the bottom`
+      : `The cover has the book title text ${titleText} in large bold elegant typography prominently displayed`
 
-    const negativePrompt = 'blurry, low quality, amateur, watermark, misspelled text, garbled letters, distorted words, ugly typography, nudity, gore'
+    const prompt = `Professional ${genre} book cover. ${description ? description.substring(0, 180) + '. ' : ''}${typographyInstructions}. The text is clearly legible, perfectly spelled, beautifully styled. Cinematic dramatic composition, rich atmospheric lighting, publisher-quality artwork.`
+
+    const negativePrompt = 'blurry, low quality, amateur, watermark, misspelled text, garbled letters, distorted words, wrong words, missing text, nudity, gore'
 
     console.log('[generate-cover] Model: ideogram v3 | Title:', title, '| Author:', authorName)
     console.log('[generate-cover] Prompt:', prompt.substring(0, 200))
@@ -73,7 +76,7 @@ export async function POST(request: Request) {
         prompt,
         negative_prompt: negativePrompt,
         image_size: 'portrait_4_3',   // standard book cover portrait
-        style: 'REALISTIC',           // photorealistic blend — best for covers
+        style: 'DESIGN',              // best style for legible text rendering
         expand_prompt: true,          // Ideogram's built-in prompt enhancer
         num_images: 1,
       },
