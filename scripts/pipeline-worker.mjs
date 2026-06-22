@@ -261,18 +261,17 @@ Examples: slow push-in, pull back to reveal, handheld orbit, static wide shot, g
 }
 
 // ── Character reference image generation ─────────────────────────────────────
-// Generates a 4-angle character sheet per character: front, back, left, right.
+// Generates a 3-angle character sheet per character: front full body, back full body, face close-up.
 // All angles use identical description so outfit/face stay locked across views.
-// Returns { front, back, left, right } URLs stored in Supabase.
+// Returns { front, back, face } URLs stored in Supabase.
 async function generateCharacterReferenceImage(character, ledger = null) {
   const safeAppearance = softenForModeration(character.appearance || character.description || character.name)
-  const baseDesc = `${safeAppearance}, full body character sheet, same outfit and face across all views, ultra-realistic photorealistic, clean studio lighting, neutral background, no text, no watermarks`
+  const baseDesc = `${safeAppearance}, same outfit and face across all views, ultra-realistic photorealistic, clean studio lighting, neutral grey background, no text, no watermarks`
 
   const angles = [
-    { key: 'front', prompt: `${baseDesc}, front view, facing camera directly, symmetrical pose, arms at sides` },
-    { key: 'back',  prompt: `${baseDesc}, back view, seen from behind, same outfit` },
-    { key: 'left',  prompt: `${baseDesc}, left side profile view, facing left` },
-    { key: 'right', prompt: `${baseDesc}, right side profile view, facing right` },
+    { key: 'front', prompt: `${baseDesc}, full body front view, facing camera directly, symmetrical pose, arms relaxed at sides, head to toe` },
+    { key: 'back',  prompt: `${baseDesc}, full body back view, seen from behind, same outfit, head to toe` },
+    { key: 'face',  prompt: `${baseDesc}, extreme close-up portrait of face only, sharp eyes, detailed skin, cinematic lighting, chest up` },
   ]
 
   const urls = {}
@@ -1400,31 +1399,31 @@ async function runPipeline(job) {
       console.log(`[worker]   Building character reference library for ${allCharacters.length} character(s)...`)
       for (const char of allCharacters) {
         try {
-          // Check if all 4 angles already exist
-          const hasFull = char.image_url_front && char.image_url_back && char.image_url_left && char.image_url_right
+          // Check if all 3 angles already exist
+          const hasFull = char.image_url_front && char.image_url_back && char.image_url_left
           let angles = hasFull
-            ? { front: char.image_url_front, back: char.image_url_back, left: char.image_url_left, right: char.image_url_right }
+            ? { front: char.image_url_front, back: char.image_url_back, face: char.image_url_left }
             : null
 
           if (!angles) {
             angles = await generateCharacterReferenceImage(char, ledger)
-            // Persist all 4 angles so future re-renders skip this step
+            // Persist all 3 angles so future re-renders skip this step
+            // image_url_left stores the face close-up (reusing existing column)
             await supabase.from('characters').update({
               image_url_front: angles.front,
               image_url_back:  angles.back,
-              image_url_left:  angles.left,
-              image_url_right: angles.right,
+              image_url_left:  angles.face,
               // Keep legacy reference_image_url pointing to front for backward compat
               reference_image_url: angles.front
             }).eq('id', char.id)
           } else {
-            console.log(`[worker]   Using cached 4-angle refs for "${char.name}"`)
+            console.log(`[worker]   Using cached 3-angle refs for "${char.name}"`)
           }
-          // Pass all 4 angles as refs — more context = better consistency
+          // Pass all 3 angles as refs — more context = better consistency
           characterRefMap.set(char.name, {
             name: char.name,
             imageUrl: angles.front, // primary (front) for lip-sync
-            imageUrls: [angles.front, angles.back, angles.left, angles.right].filter(Boolean)
+            imageUrls: [angles.front, angles.back, angles.face].filter(Boolean)
           })
         } catch (refErr) {
           console.error(`[worker]   Character ref for "${char.name}" failed (non-fatal, continuing without ref):`, refErr.message)

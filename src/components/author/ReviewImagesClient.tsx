@@ -419,16 +419,14 @@ function CharacterCard({
 
   return (
     <div className={`rounded-xl border bg-white overflow-hidden shadow-sm transition-all ${approved ? 'border-green-400' : 'border-[#E8E2D5]'}`}>
-      {/* 4-angle character sheet */}
+      {/* 3-angle character sheet */}
       {(character.image_url_front || character.image_url) ? (
         <div className="relative">
-          {/* 2×2 grid of angles */}
+          {/* Front + Back full body side by side, face close-up below */}
           <div className="grid grid-cols-2 gap-0.5 bg-gray-200">
             {[
               { key: 'image_url_front', label: 'Front' },
               { key: 'image_url_back',  label: 'Back'  },
-              { key: 'image_url_left',  label: 'Left'  },
-              { key: 'image_url_right', label: 'Right' },
             ].map(({ key, label }) => {
               const src = character[key as keyof Character] as string | null
                 ?? (key === 'image_url_front' ? character.image_url : null)
@@ -448,6 +446,24 @@ function CharacterCard({
               )
             })}
           </div>
+          {/* Face close-up — full width, shorter aspect ratio */}
+          {(() => {
+            const faceSrc = character.image_url_left as string | null
+            return (
+              <div className="relative bg-gray-100 border-t border-gray-200" style={{ aspectRatio: '16/9' }}>
+                {faceSrc ? (
+                  <>
+                    <Image src={faceSrc} alt={`${character.name} — Face`} fill className="object-cover object-top" unoptimized />
+                    <span className="absolute bottom-1 left-1 bg-black/50 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">
+                      Face
+                    </span>
+                  </>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-xs">Face</div>
+                )}
+              </div>
+            )
+          })()}
           {approved && (
             <div className="absolute inset-0 bg-green-500/20 flex items-end justify-center pb-3 pointer-events-none">
               <span className="bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full">Approved ✓</span>
