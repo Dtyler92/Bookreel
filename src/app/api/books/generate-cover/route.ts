@@ -73,7 +73,7 @@ export async function POST(request: Request) {
         prompt,
         negative_prompt: negativePrompt,
         aspect_ratio: '2:3',          // standard book cover portrait
-        style: 'realistic',           // photorealistic blend — best for covers
+        style: 'REALISTIC',           // photorealistic blend — best for covers
         magic_prompt_option: 'AUTO',  // Ideogram's built-in prompt enhancer
         num_images: 1,
       },
