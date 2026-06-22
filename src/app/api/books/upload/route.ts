@@ -188,13 +188,13 @@ export async function POST(request: Request) {
       if (uploadError) {
         console.error('[upload] Storage upload error:', uploadError)
         return Response.json(
-          { error: 'Failed to upload PDF to storage', detail: uploadError.message },
+          { error: 'Failed to upload file to storage', detail: uploadError.message },
           { status: 500 }
         )
       }
 
       pdfUrl = uploadData.path
-      console.log('[upload] PDF uploaded:', pdfUrl)
+      console.log('[upload] File uploaded to storage:', pdfUrl)
     } catch (storageErr) {
       console.error('[upload] Storage step threw:', storageErr)
       return Response.json(
