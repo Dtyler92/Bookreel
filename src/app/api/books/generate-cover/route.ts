@@ -1,11 +1,7 @@
-import { fal } from '@fal-ai/client'
 import { createClient } from '@supabase/supabase-js'
-import { IMAGE_NEGATIVE_PROMPT } from '@/lib/contentPolicy'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
-
-fal.config({ credentials: process.env.FAL_API_KEY || process.env.FAL_KEY || '' })
 
 function getServiceClient() {
   return createClient(
@@ -14,23 +10,21 @@ function getServiceClient() {
   )
 }
 
-interface FalImageResult {
-  images: Array<{ url: string }>
-}
-
 export async function POST(request: Request) {
   try {
     const body = await request.json() as {
       bookId?: string
       title?: string
+      authorName?: string
       genre?: string
       description?: string
     }
-    const { bookId, title: bodyTitle, genre: bodyGenre, description: bodyDescription } = body
+    const { bookId, title: bodyTitle, authorName: bodyAuthorName, genre: bodyGenre, description: bodyDescription } = body
 
     let title = bodyTitle ?? 'Untitled'
     let genre = bodyGenre ?? 'Fiction'
     let description = bodyDescription ?? ''
+    let authorName = bodyAuthorName ?? ''
 
     // If bookId is provided, fetch book details from Supabase
     if (bookId) {
@@ -52,27 +46,52 @@ export async function POST(request: Request) {
       return Response.json({ error: 'title is required' }, { status: 400 })
     }
 
-    const prompt = `Book cover for '${title}', ${genre} genre, professional book cover design, dramatic lighting, ${description}, no text on cover, cinematic quality`
+    // ── Ideogram v3 — best-in-class for text rendering on images ──────────────
+    // Prompt strategy: describe the scene/mood first, then explicitly place text.
+    // Ideogram natively renders "title" and "author name" as styled typography.
+    const textInstructions = authorName
+      ? `The book title "${title}" displayed prominently on the cover in elegant typography, and the author name "${authorName}" in smaller text near the bottom`
+      : `The book title "${title}" displayed prominently on the cover in elegant typography`
 
-    console.log('[generate-cover] Generating cover for:', title, '- prompt:', prompt.substring(0, 120))
+    const prompt = `Professional book cover design. ${genre} genre. ${description ? description + '. ' : ''}${textInstructions}. Cinematic lighting, dramatic composition, high contrast, visually striking. Publisher-quality artwork.`
 
-    const result = await fal.subscribe('fal-ai/flux/schnell', {
-      input: {
+    const negativePrompt = 'blurry, low quality, amateur, watermark, misspelled text, garbled letters, distorted words, ugly typography, bad fonts'
+
+    console.log('[generate-cover] Generating cover for:', title, 'author:', authorName, '- model: ideogram-v3')
+    console.log('[generate-cover] Prompt:', prompt.substring(0, 200))
+
+    const FAL_API_KEY = process.env.FAL_API_KEY || process.env.FAL_KEY || ''
+
+    // Ideogram v3 via fal.ai — superior text rendering vs Flux
+    const res = await fetch('https://fal.run/fal-ai/ideogram/v3', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Key ${FAL_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         prompt,
-        negative_prompt: IMAGE_NEGATIVE_PROMPT,
-        image_size: 'portrait_4_3',
+        negative_prompt: negativePrompt,
+        aspect_ratio: '2:3',   // standard book cover portrait ratio
+        style: 'realistic',    // photorealistic / painterly blend — best for covers
+        magic_prompt_option: 'AUTO', // Ideogram's built-in prompt enhancer
         num_images: 1,
-        safety_tolerance: '2',
-      } as any,
-    }) as { data: FalImageResult; requestId: string }
+      }),
+    })
 
-    const falImageUrl = result.data.images[0]?.url
+    if (!res.ok) {
+      const errText = await res.text()
+      console.error('[generate-cover] Ideogram error:', res.status, errText.substring(0, 300))
+      return Response.json({ error: `Image generation failed: ${res.status}` }, { status: 500 })
+    }
+
+    const result = await res.json() as { images?: Array<{ url: string }> }
+    const falImageUrl = result.images?.[0]?.url
     if (!falImageUrl) {
       return Response.json({ error: 'No image generated' }, { status: 500 })
     }
 
     // Download from fal.ai and re-upload to Supabase so the cover URL doesn't expire.
-    // (fal.ai URLs are temporary; uploaded/generated covers must persist permanently.)
     let imageUrl = falImageUrl
     try {
       const supabase = getServiceClient()
@@ -91,7 +110,6 @@ export async function POST(request: Request) {
       imageUrl = urlData.publicUrl
       console.log('[generate-cover] Cover persisted to Supabase:', imageUrl.substring(0, 80))
     } catch (persistErr) {
-      // Non-fatal: fall back to the temporary fal.ai URL so the user still sees a cover
       console.error('[generate-cover] Failed to persist cover, using temporary URL:', persistErr)
     }
 
@@ -105,16 +123,14 @@ export async function POST(request: Request) {
 
       if (updateError) {
         console.error('[generate-cover] Failed to save cover URL:', updateError)
-        // Non-fatal — still return the image URL
       } else {
         console.log('[generate-cover] Cover saved to book:', bookId)
       }
     }
 
-    console.log('[generate-cover] Generated cover URL:', imageUrl)
-    return Response.json({ imageUrl, coverUrl: imageUrl })
-  } catch (err) {
-    console.error('[generate-cover] Error:', err)
-    return Response.json({ error: 'Failed to generate cover', detail: String(err) }, { status: 500 })
+    return Response.json({ imageUrl })
+  } catch (error) {
+    console.error('[generate-cover] Unhandled error:', error)
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

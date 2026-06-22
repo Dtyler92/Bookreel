@@ -116,9 +116,12 @@ function CoverModal({
   bookTitle: string
   bookGenre?: string | null
   bookDescription?: string | null
+  authorName?: string
   onClose: () => void
   onCoverUpdated: (bookId: string, coverUrl: string) => void
 }) {
+  const [coverTitle, setCoverTitle] = useState(bookTitle)
+  const [coverAuthor, setCoverAuthor] = useState(authorName ?? '')
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -148,8 +151,9 @@ function CoverModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookId,          // pass bookId so the API saves directly to DB
-          title: bookTitle,
+          bookId,
+          title: coverTitle,
+          authorName: coverAuthor,
           genre: bookGenre ?? 'Fiction',
           description: bookDescription ?? '',
         }),
@@ -238,7 +242,7 @@ function CoverModal({
           Book Cover
         </h2>
         <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: '#8A8278', margin: '0 0 24px' }}>
-          Upload your own cover or let us generate one using AI.
+          Upload your own cover or generate one — title and author name will appear on the cover.
         </p>
 
         {error && (
@@ -246,6 +250,34 @@ function CoverModal({
             {error}
           </div>
         )}
+
+        {/* Title + Author fields */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', fontWeight: 600, color: '#2B2B2B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Book Title
+            </label>
+            <input
+              type="text"
+              value={coverTitle}
+              onChange={(e) => setCoverTitle(e.target.value)}
+              placeholder="Enter book title"
+              style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E8E2D5', borderRadius: '8px', fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: '#0D0D0B', background: '#FAFAF8', boxSizing: 'border-box', outline: 'none' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', fontWeight: 600, color: '#2B2B2B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Author Name
+            </label>
+            <input
+              type="text"
+              value={coverAuthor}
+              onChange={(e) => setCoverAuthor(e.target.value)}
+              placeholder="Enter author name"
+              style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E8E2D5', borderRadius: '8px', fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: '#0D0D0B', background: '#FAFAF8', boxSizing: 'border-box', outline: 'none' }}
+            />
+          </div>
+        </div>
 
         {/* Preview */}
         {coverPreview && (
@@ -1234,6 +1266,7 @@ export function DashboardClient({
           bookId={coverModalBook.id}
           bookTitle={coverModalBook.title}
           bookGenre={coverModalBook.genre}
+          authorName={userName}
           onClose={() => setCoverModalBook(null)}
           onCoverUpdated={handleCoverUpdated}
         />
