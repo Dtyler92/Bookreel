@@ -211,23 +211,59 @@ export async function POST(request: Request) {
       extractedText = await file.text()
       console.log('[upload] TXT file read directly, length:', extractedText.length)
     } else if (isEpubFile) {
-      // Parse EPUB — extract all chapter text
+      // Parse EPUB2 + EPUB3 via JSZip — reads the OPF spine and extracts all chapter HTML
       try {
         const epubBuffer = Buffer.from(await file.arrayBuffer())
-        const { EPub } = await import('epub2')
-        const epub = await EPub.createAsync(epubBuffer as unknown as string)
-        const chapters = epub.flow ?? []
-        const textParts: string[] = []
-        for (const chapter of chapters) {
-          if (!chapter.id) continue
-          try {
-            const [chapterText] = await epub.getChapterRawAsync(chapter.id)
-            const plain = chapterText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-            if (plain.length > 50) textParts.push(plain)
-          } catch { /* skip unreadable chapter */ }
+        const JSZip = (await import('jszip')).default
+        const zip = await JSZip.loadAsync(epubBuffer)
+
+        // 1. Find the OPF file path from META-INF/container.xml
+        const containerXml = await zip.file('META-INF/container.xml')?.async('text') ?? ''
+        const opfPathMatch = containerXml.match(/full-path="([^"]+\.opf)"/)
+        const opfPath = opfPathMatch?.[1] ?? ''
+        if (!opfPath) throw new Error('Could not find OPF path in container.xml')
+
+        // 2. Parse the OPF to get spine item hrefs in reading order
+        const opfDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : ''
+        const opfXml = await zip.file(opfPath)?.async('text') ?? ''
+
+        // Build id→href map from manifest
+        const manifestItems: Record<string, string> = {}
+        const manifestRe = /<item[^>]+id="([^"]+)"[^>]+href="([^"]+)"[^>]*>/g
+        let m: RegExpExecArray | null
+        while ((m = manifestRe.exec(opfXml)) !== null) {
+          manifestItems[m[1]] = m[2]
         }
+
+        // Get spine order (idref list)
+        const spineRe = /<itemref[^>]+idref="([^"]+)"/g
+        const spineIds: string[] = []
+        while ((m = spineRe.exec(opfXml)) !== null) spineIds.push(m[1])
+
+        // 3. Extract text from each spine item in order
+        const textParts: string[] = []
+        for (const id of spineIds) {
+          const href = manifestItems[id]
+          if (!href) continue
+          const fullPath = opfDir + href.split('#')[0]
+          const html = await zip.file(fullPath)?.async('text')
+            ?? await zip.file(decodeURIComponent(fullPath))?.async('text')
+            ?? ''
+          if (!html) continue
+          // Strip all tags, decode entities, collapse whitespace
+          const plain = html
+            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"').replace(/&#\d+;/g, ' ')
+            .replace(/\s+/g, ' ').trim()
+          if (plain.length > 50) textParts.push(plain)
+        }
+
         extractedText = textParts.join('\n\n')
-        console.log('[upload] EPUB text extracted, length:', extractedText.length, 'chapters:', chapters.length)
+        console.log('[upload] EPUB text extracted via JSZip, length:', extractedText.length, 'spine items:', spineIds.length)
       } catch (epubError) {
         console.error('[upload] EPUB parse error:', epubError)
         extractedText = ''
@@ -273,7 +309,7 @@ export async function POST(request: Request) {
 
     if (extractedText.length < 500) {
       return Response.json({
-        error: 'We could not extract readable text from your manuscript. Please make sure your file contains actual text (not scanned images). Try exporting directly from Word, Google Docs, or Scrivener as a PDF or plain text (.txt) file.'
+      error: 'We could not extract readable text from your manuscript. Please make sure your file contains actual text (not scanned images). Supported formats: PDF, EPUB, DOCX, RTF, or plain text (.txt).'
       }, { status: 400 })
     }
 
