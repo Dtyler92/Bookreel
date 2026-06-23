@@ -52,7 +52,7 @@ interface Props {
   userName: string
 }
 
-// ─── Shimmer bar (matches dashboard) ─────────────────────────────────────────
+// ─── Shimmer bar ──────────────────────────────────────────────────────────────
 
 function ShimmerBar() {
   return (
@@ -68,11 +68,11 @@ function ShimmerBar() {
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
-function IconTrailer() {
+function IconTrailer({ color = '#C8402F' }: { color?: string }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="4" width="20" height="16" rx="2" />
-      <path d="M10 9l5 3-5 3V9z" fill="#C8402F" stroke="none" />
+      <path d="M10 9l5 3-5 3V9z" fill={color} stroke="none" />
     </svg>
   )
 }
@@ -142,10 +142,10 @@ function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, 
   const locked = state === 'locked'
 
   const stateColors = {
-    complete:    { dot: '#16A34A', badge: '#F0FDF4', badgeBorder: '#BBF7D0', badgeText: '#15803D', label: 'Complete' },
+    complete:      { dot: '#16A34A', badge: '#F0FDF4', badgeBorder: '#BBF7D0', badgeText: '#15803D', label: 'Complete' },
     'in-progress': { dot: '#D97706', badge: '#FDF3DC', badgeBorder: '#FDE68A', badgeText: '#A16207', label: 'In Progress' },
-    empty:       { dot: '#D4CDC1', badge: '#F4F1EB', badgeBorder: '#E8E2D5', badgeText: '#8A8278', label: 'Not started' },
-    locked:      { dot: '#D4CDC1', badge: '#F4F1EB', badgeBorder: '#E8E2D5', badgeText: '#8A8278', label: 'Coming soon' },
+    empty:         { dot: '#D4CDC1', badge: '#F4F1EB', badgeBorder: '#E8E2D5', badgeText: '#8A8278', label: 'Not started' },
+    locked:        { dot: '#D4CDC1', badge: '#F4F1EB', badgeBorder: '#E8E2D5', badgeText: '#8A8278', label: 'Coming soon' },
   }
 
   const c = stateColors[state]
@@ -168,7 +168,7 @@ function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, 
       }}
       onClick={cardHref ? () => window.open(cardHref, '_blank') : undefined}
     >
-      {/* Top accent strip — red when complete, amber when in-progress */}
+      {/* Top accent strip */}
       <div style={{
         height: 3,
         background: state === 'complete' ? '#16A34A'
@@ -281,54 +281,165 @@ function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, 
   )
 }
 
+// ─── Trailer row (one per trailer) ───────────────────────────────────────────
+
+function TrailerRow({ trailer, index, total }: { trailer: Trailer; index: number; total: number }) {
+  const [hov, setHov] = useState(false)
+  const isComplete = trailer.status === 'complete' || !!trailer.final_video_url
+  const isInProgress = trailer.status === 'pending' || trailer.status === 'processing' || trailer.status === 'generating'
+  const isFailed = trailer.status === 'failed'
+
+  const label = isComplete ? 'Complete' : isInProgress ? 'In Progress' : isFailed ? 'Failed' : 'Queued'
+  const dot = isComplete ? '#16A34A' : isInProgress ? '#D97706' : isFailed ? '#DC2626' : '#D4CDC1'
+  const badge = isComplete ? '#F0FDF4' : isInProgress ? '#FDF3DC' : isFailed ? '#FEF2F2' : '#F4F1EB'
+  const badgeBorder = isComplete ? '#BBF7D0' : isInProgress ? '#FDE68A' : isFailed ? '#FECACA' : '#E8E2D5'
+  const badgeText = isComplete ? '#15803D' : isInProgress ? '#A16207' : isFailed ? '#B91C1C' : '#8A8278'
+
+  const versionLabel = total === 1 ? 'Trailer' : index === 0 ? `Trailer v${total} (Latest)` : `Trailer v${total - index}`
+  const dateLabel = trailer.created_at
+    ? new Date(trailer.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : ''
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 14,
+      padding: '14px 16px',
+      background: '#FFFFFF',
+      border: `1px solid ${isInProgress ? '#FDE68A' : '#E8E2D5'}`,
+      borderRadius: 10,
+      overflow: 'hidden',
+      position: 'relative',
+    }}>
+      {/* Left accent */}
+      <div style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
+        background: isComplete ? '#16A34A' : isInProgress ? '#D97706' : isFailed ? '#DC2626' : '#E8E2D5',
+        borderRadius: '10px 0 0 10px',
+      }} />
+
+      {/* Icon */}
+      <div style={{
+        width: 36, height: 36, borderRadius: 8, flexShrink: 0, marginLeft: 8,
+        background: '#F4F1EB', border: '1px solid #E8E2D5',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <IconTrailer color={isComplete ? '#C8402F' : isInProgress ? '#D97706' : '#D4CDC1'} />
+      </div>
+
+      {/* Version + date */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: 'var(--font-playfair), serif', fontSize: 15, fontWeight: 700, color: '#0D0D0B', lineHeight: 1.2 }}>
+          {versionLabel}
+        </div>
+        {dateLabel && (
+          <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278', marginTop: 2 }}>
+            {dateLabel}
+          </div>
+        )}
+        {isInProgress && (
+          <div style={{ marginTop: 8 }}>
+            <ShimmerBar />
+          </div>
+        )}
+      </div>
+
+      {/* Badge */}
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '3px 10px', borderRadius: 100,
+        background: badge, border: `1px solid ${badgeBorder}`,
+        flexShrink: 0,
+      }}>
+        <span style={{
+          width: 6, height: 6, borderRadius: '50%', background: dot, display: 'inline-block', flexShrink: 0,
+          animation: isInProgress ? 'dotPulse 1.4s ease-in-out infinite' : undefined,
+        }} />
+        <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 600, color: badgeText, letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+          {label}
+        </span>
+      </div>
+
+      {/* Watch button */}
+      {isComplete && trailer.final_video_url && (
+        <a
+          href={trailer.final_video_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onMouseEnter={() => setHov(true)}
+          onMouseLeave={() => setHov(false)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
+            padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+            fontFamily: 'var(--font-inter), sans-serif', letterSpacing: '0.01em',
+            textDecoration: 'none', transition: 'all 150ms ease',
+            background: hov ? '#C8402F' : '#F7F4EF',
+            color: hov ? '#FFFFFF' : '#0D0D0B',
+            border: `1.5px solid ${hov ? '#C8402F' : '#E8E2D5'}`,
+          }}
+        >
+          Watch
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+          </svg>
+        </a>
+      )}
+      {isInProgress && (
+        <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#A16207', flexShrink: 0, fontStyle: 'italic' }}>
+          ~15–20 min
+        </span>
+      )}
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function BookHubClient({ book, trailers, characters, scenes, audiobook, userName }: Props) {
+export default function BookHubClient({ book, trailers: initialTrailers, characters, scenes, audiobook, userName }: Props) {
   const router = useRouter()
 
-  // Derive latest trailer for backward-compat with existing status logic
-  const latestTrailer = trailers[0] ?? null
+  // Live trailers array — we update statuses in place as polling fires
+  const [liveTrailers, setLiveTrailers] = useState<Trailer[]>(initialTrailers)
 
-  // Live trailer state — polls until complete so the card updates without a refresh.
-  // Also polls on 'failed' so if the author triggers a new generation it catches
-  // the failed→pending transition without requiring a page refresh.
-  const [liveTrailer, setLiveTrailer] = useState(latestTrailer)
+  // The in-progress trailer (if any) — newest first
+  const inProgressTrailer = liveTrailers.find(t =>
+    t.status === 'pending' || t.status === 'processing' || t.status === 'generating' ||
+    t.status === 'failed' || t.status === null
+  ) ?? null
 
   useEffect(() => {
-    const shouldPoll = liveTrailer && (
-      liveTrailer.status === 'pending' ||
-      liveTrailer.status === 'processing' ||
-      liveTrailer.status === 'generating' ||
-      liveTrailer.status === 'failed' ||
-      liveTrailer.status === null
-    )
-    if (!shouldPoll) return
+    if (!inProgressTrailer) return
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/books/status/${book.id}`)
         if (!res.ok) return
         const data = await res.json()
         if (!data.status) return
+
+        setLiveTrailers(prev => prev.map(t => {
+          if (t.id !== inProgressTrailer.id) return t
+          if (data.status === 'complete') {
+            return { ...t, status: 'complete', final_video_url: data.videoUrl }
+          }
+          return { ...t, status: data.status }
+        }))
+
         if (data.status === 'complete') {
-          setLiveTrailer(prev => prev ? { ...prev, status: 'complete', final_video_url: data.videoUrl } : prev)
           clearInterval(interval)
-          router.refresh() // re-run server component to pull fresh trailer data + video URL
-        } else if (data.status === 'pending' || data.status === 'processing' || data.status === 'generating') {
-          // Update to in-progress so the card shows the shimmer immediately
-          setLiveTrailer(prev => prev ? { ...prev, status: data.status } : prev)
-        } else if (data.status === 'failed') {
-          setLiveTrailer(prev => prev ? { ...prev, status: 'failed' } : prev)
-          // Keep polling — author may trigger a new generation
+          router.refresh()
         }
       } catch { /* swallow */ }
     }, 8000)
     return () => clearInterval(interval)
-  }, [book.id, liveTrailer?.status])
+  }, [book.id, inProgressTrailer?.id, inProgressTrailer?.status])
 
-  const hasTrailer = !!(liveTrailer && (liveTrailer.status === 'complete' || !!liveTrailer.final_video_url))
-  const trailerVideoUrl = liveTrailer?.final_video_url ?? null
-  const trailerInProgress = !!(liveTrailer && (liveTrailer.status === 'pending' || liveTrailer.status === 'processing' || liveTrailer.status === 'generating'))
-  const completedTrailers = trailers.filter(t => t.status === 'complete' || !!t.final_video_url)
+  const completedTrailers = liveTrailers.filter(t => t.status === 'complete' || !!t.final_video_url)
+  const hasTrailer = completedTrailers.length > 0
+  const trailerInProgress = !!inProgressTrailer && (
+    inProgressTrailer.status === 'pending' ||
+    inProgressTrailer.status === 'processing' ||
+    inProgressTrailer.status === 'generating'
+  )
+
   const hasCharacters = characters.length > 0
   const approvedChars = characters.filter(c => c.author_approved)
   const hasApproved = approvedChars.length > 0
@@ -338,24 +449,8 @@ export default function BookHubClient({ book, trailers, characters, scenes, audi
 
   const completedCount = [hasTrailer, hasApproved, hasScreenplay, hasAudiobook].filter(Boolean).length
 
+  // Non-trailer modules
   const modules: ModuleCardProps[] = [
-    {
-      icon: <IconTrailer />,
-      title: 'Book Trailer',
-      description: hasTrailer
-        ? `${completedTrailers.length > 1 ? `${completedTrailers.length} trailers ready` : 'Your cinematic trailer is ready'}${liveTrailer?.quality_tier ? ` — ${liveTrailer.quality_tier}` : ''}.`
-        : trailerInProgress
-        ? 'Your trailer is being crafted. Usually ready in 15–20 min.'
-        : liveTrailer?.status === 'failed'
-        ? 'Previous generation failed. You can try again.'
-        : 'Transform your manuscript into a cinematic video trailer.',
-      state: hasTrailer ? 'complete' : trailerInProgress ? 'in-progress' : 'empty',
-      meta: liveTrailer?.quality_tier ?? undefined,
-      ctaLabel: hasTrailer ? 'Watch Trailer' : trailerInProgress ? undefined : liveTrailer?.status === 'failed' ? 'Try Again' : 'Create Trailer',
-      ctaHref: hasTrailer && trailerVideoUrl ? trailerVideoUrl : hasTrailer ? `/review/${book.id}` : undefined,
-      onCtaClick: !hasTrailer && !trailerInProgress ? () => router.push(`/trailer-wizard/${book.id}`) : undefined,
-      cardHref: hasTrailer ? (trailerVideoUrl ?? `/review/${book.id}`) : undefined,
-    },
     {
       icon: <IconCharacters />,
       title: 'Character Images',
@@ -512,7 +607,62 @@ export default function BookHubClient({ book, trailers, characters, scenes, audi
           </div>
         </div>
 
-        {/* Section label */}
+        {/* ── Trailers section ── */}
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+              <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8278', whiteSpace: 'nowrap' }}>
+                Book Trailers {liveTrailers.length > 0 && `(${liveTrailers.length})`}
+              </span>
+              <div style={{ flex: 1, height: 1, background: '#E8E2D5' }} />
+            </div>
+            <Link
+              href={`/trailer-wizard/${book.id}`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0,
+                padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                fontFamily: 'var(--font-inter), sans-serif',
+                textDecoration: 'none', transition: 'all 150ms ease',
+                background: '#F7F4EF', color: '#0D0D0B',
+                border: '1.5px solid #E8E2D5',
+              }}
+            >
+              + Generate New
+            </Link>
+          </div>
+
+          {liveTrailers.length === 0 ? (
+            // Empty state
+            <div style={{
+              padding: '28px 24px', background: '#FFFFFF', border: '1px solid #E8E2D5',
+              borderRadius: 10, textAlign: 'center',
+            }}>
+              <p style={{ margin: '0 0 14px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, color: '#8A8278' }}>
+                No trailers yet. Transform your manuscript into a cinematic video trailer.
+              </p>
+              <Link
+                href={`/trailer-wizard/${book.id}`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  textDecoration: 'none', background: '#C8402F', color: '#FFFFFF',
+                  border: '1.5px solid #C8402F',
+                }}
+              >
+                Create Trailer
+              </Link>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {liveTrailers.map((trailer, index) => (
+                <TrailerRow key={trailer.id} trailer={trailer} index={index} total={liveTrailers.length} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Production Modules ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
           <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8278', whiteSpace: 'nowrap' }}>
             Production Modules
@@ -520,48 +670,9 @@ export default function BookHubClient({ book, trailers, characters, scenes, audi
           <div style={{ flex: 1, height: 1, background: '#E8E2D5' }} />
         </div>
 
-        {/* Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
           {modules.map((m, i) => <ModuleCard key={i} {...m} />)}
         </div>
-
-        {/* Generate New Trailer — shown whenever at least one trailer exists */}
-        {trailers.length > 0 && (
-          <div style={{
-            marginTop: 24,
-            padding: '14px 20px',
-            background: '#FFFFFF',
-            border: '1px solid #E8E2D5',
-            borderRadius: 10,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-            flexWrap: 'wrap',
-          }}>
-            <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#8A8278' }}>
-              {completedTrailers.length > 0
-                ? `You have ${completedTrailers.length} completed trailer${completedTrailers.length !== 1 ? 's' : ''}. Want a new version?`
-                : 'Want to generate another trailer?'}
-            </span>
-            <Link
-              href={`/trailer-wizard/${book.id}`}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                fontFamily: 'var(--font-inter), sans-serif', letterSpacing: '0.01em',
-                textDecoration: 'none', transition: 'all 150ms ease',
-                background: '#F7F4EF', color: '#0D0D0B',
-                border: '1.5px solid #E8E2D5',
-              }}
-            >
-              Generate New Trailer
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-              </svg>
-            </Link>
-          </div>
-        )}
 
       </main>
     </div>
