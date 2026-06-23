@@ -5,17 +5,6 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 
-// ─── Design tokens (matches site-wide palette) ────────────────────────────────
-const ink    = '#0D0D0B'
-const muted  = '#8A8278'
-const border = '#E8E2D5'
-const red    = '#C8402F'
-const redHov = '#A8321F'
-const paper  = '#FDFCF9'
-const bg     = '#FAFAF7'
-const surface = '#F4F1EB'
-const inset  = '#EDE9E0'
-
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
 interface Book {
@@ -63,145 +52,172 @@ interface Props {
   userName: string
 }
 
-// ─── Status dot ───────────────────────────────────────────────────────────────
+// ─── Shimmer bar (matches dashboard) ─────────────────────────────────────────
 
-function StatusDot({ status }: { status: 'complete' | 'in-progress' | 'empty' }) {
-  if (status === 'complete') return (
-    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#16A34A', display: 'inline-block', flexShrink: 0 }} />
-  )
-  if (status === 'in-progress') return (
-    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#D97706', display: 'inline-block', flexShrink: 0, animation: 'dotPulse 1.4s ease-in-out infinite' }} />
-  )
+function ShimmerBar() {
   return (
-    <span style={{ width: 8, height: 8, borderRadius: '50%', background: inset, border: `1.5px solid ${border}`, display: 'inline-block', flexShrink: 0 }} />
+    <div style={{ width: '100%', height: 3, background: '#EDE9E0', borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'linear-gradient(90deg, transparent 0%, #C8402F 40%, #E8735F 60%, transparent 100%)',
+        animation: 'shimmer 1.6s ease-in-out infinite',
+      }} />
+    </div>
   )
 }
 
-// ─── Hub Card ─────────────────────────────────────────────────────────────────
+// ─── Module card ─────────────────────────────────────────────────────────────
 
-interface CardProps {
+interface ModuleCardProps {
   icon: string
   title: string
   description: string
-  status: 'complete' | 'in-progress' | 'empty'
-  statusLabel: string
+  state: 'complete' | 'in-progress' | 'empty' | 'locked'
+  meta?: string
   ctaLabel?: string
   ctaHref?: string
   onCtaClick?: () => void
-  comingSoon?: boolean
-  meta?: string
 }
 
-function HubCard({ icon, title, description, status, statusLabel, ctaLabel, ctaHref, onCtaClick, comingSoon, meta }: CardProps) {
+function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, onCtaClick }: ModuleCardProps) {
   const [hovered, setHovered] = useState(false)
-  const [ctaHovered, setCtaHovered] = useState(false)
+  const [ctaHov, setCtaHov] = useState(false)
+  const locked = state === 'locked'
+
+  const stateColors = {
+    complete:    { dot: '#16A34A', badge: '#F0FDF4', badgeBorder: '#BBF7D0', badgeText: '#15803D', label: 'Complete' },
+    'in-progress': { dot: '#D97706', badge: '#FDF3DC', badgeBorder: '#FDE68A', badgeText: '#A16207', label: 'In Progress' },
+    empty:       { dot: '#D4CDC1', badge: '#F4F1EB', badgeBorder: '#E8E2D5', badgeText: '#8A8278', label: 'Not started' },
+    locked:      { dot: '#D4CDC1', badge: '#F4F1EB', badgeBorder: '#E8E2D5', badgeText: '#8A8278', label: 'Coming soon' },
+  }
+
+  const c = stateColors[state]
 
   return (
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: paper,
-        border: `1px solid ${hovered && !comingSoon ? '#D4CDC1' : border}`,
-        borderRadius: 12,
-        padding: '24px',
+        background: '#FFFFFF',
+        border: `1px solid ${hovered && !locked ? '#C8402F' : '#E8E2D5'}`,
+        borderRadius: 10,
+        overflow: 'hidden',
+        transition: 'box-shadow 150ms ease, border-color 150ms ease',
+        boxShadow: hovered && !locked ? '0 4px 20px rgba(13,13,11,0.08)' : 'none',
+        opacity: locked ? 0.55 : 1,
         display: 'flex',
         flexDirection: 'column',
-        gap: 16,
-        transition: 'border-color 150ms ease, box-shadow 150ms ease',
-        boxShadow: hovered && !comingSoon ? '0 4px 20px rgba(13,13,11,0.07)' : '0 1px 4px rgba(13,13,11,0.04)',
-        opacity: comingSoon ? 0.6 : 1,
-        cursor: comingSoon ? 'default' : 'auto',
       }}
     >
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        {/* Icon */}
-        <div style={{
-          width: 44, height: 44, borderRadius: 10, flexShrink: 0,
-          background: status === 'complete' ? '#F0FDF4' : status === 'in-progress' ? '#FFFBEB' : surface,
-          border: `1px solid ${status === 'complete' ? '#BBF7D0' : status === 'in-progress' ? '#FDE68A' : border}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
-        }}>
-          {icon}
-        </div>
-        {/* Status pill */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 100, background: surface, border: `1px solid ${border}`, flexShrink: 0 }}>
-          <StatusDot status={status} />
-          <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 600, color: muted, letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-            {statusLabel}
-          </span>
-        </div>
-      </div>
+      {/* Top accent strip — red when complete, amber when in-progress */}
+      <div style={{
+        height: 3,
+        background: state === 'complete' ? '#16A34A'
+          : state === 'in-progress' ? '#D97706'
+          : 'transparent',
+      }} />
 
-      {/* Body */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h3 style={{ margin: 0, fontFamily: 'var(--font-inter), sans-serif', fontSize: 15, fontWeight: 600, color: comingSoon ? muted : ink, letterSpacing: '-0.01em' }}>
-            {title}
-          </h3>
-          {comingSoon && (
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4, background: inset, color: muted }}>
-              Soon
-            </span>
-          )}
-          {meta && !comingSoon && (
-            <span style={{ fontSize: 11, fontWeight: 500, color: muted, background: surface, border: `1px solid ${border}`, padding: '1px 7px', borderRadius: 100 }}>
-              {meta}
-            </span>
-          )}
-        </div>
-        <p style={{ margin: 0, fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.6, color: muted }}>
-          {description}
-        </p>
-      </div>
+      <div style={{ padding: '20px 20px 22px', display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
 
-      {/* CTA */}
-      {ctaLabel && !comingSoon && (
-        <>
-          {ctaHref ? (
-            <Link
-              href={ctaHref}
-              onMouseEnter={() => setCtaHovered(true)}
-              onMouseLeave={() => setCtaHovered(false)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-                padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                fontFamily: 'var(--font-inter), sans-serif', letterSpacing: '0.01em',
-                textDecoration: 'none', transition: 'background 150ms ease, color 150ms ease',
-                background: ctaHovered ? red : surface,
-                color: ctaHovered ? '#FFFFFF' : ink,
-                border: `1px solid ${ctaHovered ? red : border}`,
-              }}
-            >
-              {ctaLabel}
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-              </svg>
-            </Link>
-          ) : onCtaClick ? (
-            <button
-              onClick={onCtaClick}
-              onMouseEnter={() => setCtaHovered(true)}
-              onMouseLeave={() => setCtaHovered(false)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-                padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                fontFamily: 'var(--font-inter), sans-serif', letterSpacing: '0.01em',
-                cursor: 'pointer', transition: 'background 150ms ease, color 150ms ease',
-                background: ctaHovered ? red : surface,
-                color: ctaHovered ? '#FFFFFF' : ink,
-                border: `1px solid ${ctaHovered ? red : border}`,
-              }}
-            >
-              {ctaLabel}
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-              </svg>
-            </button>
-          ) : null}
-        </>
-      )}
+        {/* Header row */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+            background: '#F4F1EB', border: '1px solid #E8E2D5',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+          }}>
+            {icon}
+          </div>
+
+          {/* State badge */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '3px 10px', borderRadius: 100,
+            background: c.badge, border: `1px solid ${c.badgeBorder}`,
+            flexShrink: 0,
+          }}>
+            <span style={{
+              width: 6, height: 6, borderRadius: '50%', background: c.dot, display: 'inline-block', flexShrink: 0,
+              animation: state === 'in-progress' ? 'dotPulse 1.4s ease-in-out infinite' : undefined,
+            }} />
+            <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 600, color: c.badgeText, letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+              {c.label}
+            </span>
+          </div>
+        </div>
+
+        {/* Title + meta */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0, fontFamily: 'var(--font-playfair), serif', fontSize: 17, fontWeight: 700, color: locked ? '#8A8278' : '#0D0D0B', letterSpacing: '-0.01em', lineHeight: 1.3 }}>
+              {title}
+            </h3>
+            {meta && !locked && (
+              <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 100, background: '#EDE9E0', color: '#8A8278' }}>
+                {meta}
+              </span>
+            )}
+            {locked && (
+              <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 4, background: '#EDE9E0', color: '#8A8278' }}>
+                Soon
+              </span>
+            )}
+          </div>
+          <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.6, color: '#8A8278' }}>
+            {description}
+          </p>
+        </div>
+
+        {/* In-progress shimmer */}
+        {state === 'in-progress' && <ShimmerBar />}
+
+        {/* CTA */}
+        {ctaLabel && !locked && (
+          <div style={{ marginTop: 'auto', paddingTop: 4 }}>
+            {ctaHref ? (
+              <Link
+                href={ctaHref}
+                onMouseEnter={() => setCtaHov(true)}
+                onMouseLeave={() => setCtaHov(false)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  fontFamily: 'var(--font-inter), sans-serif', letterSpacing: '0.01em',
+                  textDecoration: 'none', transition: 'all 150ms ease',
+                  background: ctaHov ? '#C8402F' : '#F7F4EF',
+                  color: ctaHov ? '#FFFFFF' : '#0D0D0B',
+                  border: `1.5px solid ${ctaHov ? '#C8402F' : '#E8E2D5'}`,
+                }}
+              >
+                {ctaLabel}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+                </svg>
+              </Link>
+            ) : onCtaClick ? (
+              <button
+                onClick={onCtaClick}
+                onMouseEnter={() => setCtaHov(true)}
+                onMouseLeave={() => setCtaHov(false)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  fontFamily: 'var(--font-inter), sans-serif', letterSpacing: '0.01em',
+                  cursor: 'pointer', transition: 'all 150ms ease',
+                  background: ctaHov ? '#C8402F' : '#F7F4EF',
+                  color: ctaHov ? '#FFFFFF' : '#0D0D0B',
+                  border: `1.5px solid ${ctaHov ? '#C8402F' : '#E8E2D5'}`,
+                }}
+              >
+                {ctaLabel}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+                </svg>
+              </button>
+            ) : null}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -215,65 +231,66 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
   const trailerVideoUrl = trailer?.final_video_url ?? trailer?.video_url ?? null
   const trailerInProgress = !!(trailer && (trailer.status === 'pending' || trailer.status === 'processing' || trailer.status === 'generating'))
   const hasCharacters = characters.length > 0
-  const approvedCharacters = characters.filter(c => c.author_approved)
-  const hasApprovedCharacters = approvedCharacters.length > 0
+  const approvedChars = characters.filter(c => c.author_approved)
+  const hasApproved = approvedChars.length > 0
   const hasScreenplay = scenes.length > 0 && scenes.some(s => s.screenplay_text)
   const hasAudiobook = !!(audiobook && (audiobook.status === 'complete' || !!audiobook.audio_url))
   const audiobookInProgress = !!(audiobook && (audiobook.status === 'pending' || audiobook.status === 'processing'))
 
-  const completedCount = [hasTrailer, hasApprovedCharacters, hasScreenplay, hasAudiobook].filter(Boolean).length
+  const completedCount = [hasTrailer, hasApproved, hasScreenplay, hasAudiobook].filter(Boolean).length
 
-  const cards: CardProps[] = [
+  const modules: ModuleCardProps[] = [
     {
       icon: '🎬',
       title: 'Book Trailer',
       description: hasTrailer
         ? `Your cinematic trailer is ready${trailer?.quality_tier ? ` — ${trailer.quality_tier}` : ''}.`
-        : trailerInProgress ? 'Your trailer is being crafted. Usually ready in 15–20 min.'
-        : 'Transform your manuscript into a cinematic trailer.',
-      status: hasTrailer ? 'complete' : trailerInProgress ? 'in-progress' : 'empty',
-      statusLabel: hasTrailer ? 'Ready' : trailerInProgress ? 'Generating' : 'Not started',
+        : trailerInProgress
+        ? 'Your trailer is being crafted. Usually ready in 15–20 min.'
+        : 'Transform your manuscript into a cinematic video trailer.',
+      state: hasTrailer ? 'complete' : trailerInProgress ? 'in-progress' : 'empty',
+      meta: trailer?.quality_tier ?? undefined,
       ctaLabel: hasTrailer ? 'Watch Trailer' : trailerInProgress ? undefined : 'Create Trailer',
       ctaHref: hasTrailer && trailerVideoUrl ? trailerVideoUrl : hasTrailer ? `/review/${book.id}` : undefined,
       onCtaClick: !trailer ? () => router.push(`/trailer-wizard/${book.id}`) : undefined,
-      meta: trailer?.quality_tier ?? undefined,
     },
     {
       icon: '👥',
       title: 'Character Images',
-      description: hasApprovedCharacters
-        ? `${approvedCharacters.length} character${approvedCharacters.length !== 1 ? 's' : ''} approved.`
-        : hasCharacters ? `${characters.length} image${characters.length !== 1 ? 's' : ''} awaiting your review.`
+      description: hasApproved
+        ? `${approvedChars.length} character${approvedChars.length !== 1 ? 's' : ''} approved and ready.`
+        : hasCharacters
+        ? `${characters.length} image${characters.length !== 1 ? 's' : ''} awaiting your review.`
         : 'Generate 3-angle character portraits for your cast.',
-      status: hasApprovedCharacters ? 'complete' : hasCharacters ? 'in-progress' : 'empty',
-      statusLabel: hasApprovedCharacters ? 'Approved' : hasCharacters ? 'Review needed' : 'Not started',
-      ctaLabel: hasCharacters ? 'Review Images' : 'Generate Images',
+      state: hasApproved ? 'complete' : hasCharacters ? 'in-progress' : 'empty',
+      meta: hasCharacters ? `${characters.length} characters` : undefined,
+      ctaLabel: hasCharacters ? 'Review Images' : 'Generate Characters',
       ctaHref: hasCharacters ? `/review-images/${book.id}` : undefined,
       onCtaClick: !hasCharacters ? () => router.push(`/upload?book=${book.id}`) : undefined,
-      meta: hasCharacters ? `${characters.length}` : undefined,
     },
     {
       icon: '📝',
       title: 'Screenplay',
       description: hasScreenplay
-        ? `${scenes.length} scene${scenes.length !== 1 ? 's' : ''} ready for production.`
-        : scenes.length > 0 ? 'Scenes ready — screenplay pending.'
+        ? `${scenes.length} scene${scenes.length !== 1 ? 's' : ''} scripted and ready.`
+        : scenes.length > 0
+        ? 'Scenes ready — screenplay generation pending.'
         : 'Auto-generate a scene-by-scene cinematic screenplay.',
-      status: hasScreenplay ? 'complete' : scenes.length > 0 ? 'in-progress' : 'empty',
-      statusLabel: hasScreenplay ? `${scenes.length} scenes` : scenes.length > 0 ? 'In progress' : 'Not started',
+      state: hasScreenplay ? 'complete' : scenes.length > 0 ? 'in-progress' : 'empty',
+      meta: scenes.length > 0 ? `${scenes.length} scenes` : undefined,
       ctaLabel: hasScreenplay || scenes.length > 0 ? 'View Screenplay' : 'Generate Screenplay',
       ctaHref: hasScreenplay || scenes.length > 0 ? `/review/${book.id}` : undefined,
       onCtaClick: !hasScreenplay && scenes.length === 0 ? () => router.push(`/upload?book=${book.id}`) : undefined,
-      meta: scenes.length > 0 ? `${scenes.length} scenes` : undefined,
     },
     {
       icon: '🎧',
       title: 'Audiobook',
-      description: hasAudiobook ? 'Your audiobook is complete and ready to listen.'
-        : audiobookInProgress ? 'Recording your audiobook — check back soon.'
+      description: hasAudiobook
+        ? 'Your audiobook is complete and ready to listen.'
+        : audiobookInProgress
+        ? 'Recording your audiobook — check back soon.'
         : 'Create a full-cast AI-narrated audiobook.',
-      status: hasAudiobook ? 'complete' : audiobookInProgress ? 'in-progress' : 'empty',
-      statusLabel: hasAudiobook ? 'Complete' : audiobookInProgress ? 'Recording' : 'Not started',
+      state: hasAudiobook ? 'complete' : audiobookInProgress ? 'in-progress' : 'empty',
       ctaLabel: hasAudiobook ? 'Listen' : audiobookInProgress ? undefined : 'Create Audiobook',
       ctaHref: hasAudiobook || audiobookInProgress ? `/audiobook/${book.id}` : undefined,
       onCtaClick: !hasAudiobook && !audiobookInProgress ? () => router.push(`/audiobook/${book.id}`) : undefined,
@@ -281,33 +298,37 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
     {
       icon: '📱',
       title: 'Social Media Clips',
-      description: 'Short-form clips for TikTok, Instagram Reels & more.',
-      status: 'empty',
-      statusLabel: 'Coming soon',
-      comingSoon: true,
+      description: 'Short-form clips for TikTok, Instagram Reels & more — auto-cut from your trailer.',
+      state: 'locked',
     },
     {
       icon: '✉️',
       title: 'Email Templates',
-      description: 'Launch emails, ARC requests & newsletters.',
-      status: 'empty',
-      statusLabel: 'Coming soon',
-      comingSoon: true,
+      description: 'Launch emails, ARC requests & newsletters — personalized to your book.',
+      state: 'locked',
     },
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, paddingTop: 64 }}>
-      <style>{`@keyframes dotPulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.3);opacity:0.7} }`}</style>
+    <div style={{ minHeight: '100vh', background: '#FAFAF7', paddingTop: 64 }}>
+      <style>{`
+        @keyframes shimmer { 0% { left: -100%; } 100% { left: 100%; } }
+        @keyframes dotPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.35)} }
+      `}</style>
 
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 24px 80px' }}>
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 24px 96px' }}>
 
-        {/* Back */}
+        {/* Back link */}
         <button
           onClick={() => router.push('/dashboard')}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: muted, fontSize: 13, fontFamily: 'var(--font-inter), sans-serif', fontWeight: 500, padding: '0 0 32px', transition: 'color 150ms ease' }}
-          onMouseEnter={e => (e.currentTarget.style.color = ink)}
-          onMouseLeave={e => (e.currentTarget.style.color = muted)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, fontWeight: 500,
+            color: '#8A8278', padding: 0, marginBottom: 36, transition: 'color 150ms ease',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#0D0D0B')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#8A8278')}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
@@ -315,27 +336,38 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
           My Books
         </button>
 
-        {/* Book header */}
-        <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', marginBottom: 48, paddingBottom: 40, borderBottom: `1px solid ${border}` }}>
+        {/* Book header card */}
+        <div style={{
+          background: '#FFFFFF', border: '1px solid #E8E2D5', borderRadius: 12,
+          padding: '32px', marginBottom: 48,
+          display: 'flex', gap: 28, alignItems: 'flex-start',
+          boxShadow: '0 1px 4px rgba(13,13,11,0.05)',
+        }}>
           {/* Cover */}
-          <div style={{ flexShrink: 0, width: 96, height: 136, borderRadius: 8, overflow: 'hidden', border: `1px solid ${border}`, boxShadow: '0 4px 16px rgba(13,13,11,0.1)', position: 'relative' }}>
+          <div style={{
+            flexShrink: 0, width: 100, height: 142, borderRadius: 8,
+            overflow: 'hidden', border: '1px solid #E8E2D5',
+            boxShadow: '0 4px 16px rgba(13,13,11,0.12)', position: 'relative',
+          }}>
             {book.cover_image_url ? (
-              <Image src={book.cover_image_url} alt={book.title} fill style={{ objectFit: 'cover' }} sizes="96px" unoptimized />
+              <Image src={book.cover_image_url} alt={book.title} fill style={{ objectFit: 'cover' }} sizes="100px" unoptimized />
             ) : (
-              <div style={{ width: '100%', height: '100%', background: surface, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>📖</div>
+              <div style={{ width: '100%', height: '100%', background: '#F4F1EB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36 }}>📖</div>
             )}
           </div>
 
           {/* Info */}
           <div style={{ flex: 1, minWidth: 0 }}>
             {book.genre && (
-              <p style={{ margin: '0 0 8px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: red }}>{book.genre}</p>
+              <p style={{ margin: '0 0 8px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#C8402F' }}>
+                {book.genre}
+              </p>
             )}
-            <h1 style={{ margin: '0 0 10px', fontFamily: 'var(--font-playfair), serif', fontSize: 'clamp(22px, 3vw, 32px)', fontWeight: 700, color: ink, lineHeight: 1.15, letterSpacing: '-0.01em' }}>
+            <h1 style={{ margin: '0 0 10px', fontFamily: 'var(--font-playfair), serif', fontSize: 'clamp(22px, 3vw, 30px)', fontWeight: 700, color: '#0D0D0B', lineHeight: 1.2, letterSpacing: '-0.01em' }}>
               {book.title}
             </h1>
             {book.description && (
-              <p style={{ margin: '0 0 16px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, lineHeight: 1.65, color: muted, maxWidth: 560 }}>
+              <p style={{ margin: '0 0 18px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, lineHeight: 1.65, color: '#8A8278', maxWidth: 560 }}>
                 {book.description}
               </p>
             )}
@@ -343,25 +375,36 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
             {/* Progress chips */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {[
-                { label: 'Trailer', done: hasTrailer },
-                { label: 'Characters', done: hasApprovedCharacters },
+                { label: 'Trailer',    done: hasTrailer },
+                { label: 'Characters', done: hasApproved },
                 { label: 'Screenplay', done: hasScreenplay },
-                { label: 'Audiobook', done: hasAudiobook },
+                { label: 'Audiobook',  done: hasAudiobook },
               ].map(({ label, done }) => (
-                <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 100, background: done ? '#F0FDF4' : surface, border: `1px solid ${done ? '#BBF7D0' : border}` }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: done ? '#16A34A' : inset, display: 'inline-block', flexShrink: 0 }} />
-                  <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 500, color: done ? '#15803D' : muted }}>{label}</span>
-                </div>
+                <span key={label} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '3px 10px', borderRadius: 100,
+                  background: done ? '#F0FDF4' : '#F4F1EB',
+                  border: `1px solid ${done ? '#BBF7D0' : '#E8E2D5'}`,
+                  fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 500,
+                  color: done ? '#15803D' : '#8A8278',
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: done ? '#16A34A' : '#D4CDC1', display: 'inline-block', flexShrink: 0 }} />
+                  {label}
+                </span>
               ))}
             </div>
           </div>
 
-          {/* Completion badge */}
-          <div style={{ flexShrink: 0, textAlign: 'center', background: surface, border: `1px solid ${border}`, borderRadius: 12, padding: '16px 20px' }}>
-            <div style={{ fontFamily: 'var(--font-playfair), serif', fontSize: 28, fontWeight: 700, color: completedCount === 4 ? '#16A34A' : ink, lineHeight: 1 }}>
-              {completedCount}/4
+          {/* Completion counter */}
+          <div style={{
+            flexShrink: 0, textAlign: 'center',
+            background: '#F4F1EB', border: '1px solid #E8E2D5',
+            borderRadius: 10, padding: '16px 22px',
+          }}>
+            <div style={{ fontFamily: 'var(--font-playfair), serif', fontSize: 30, fontWeight: 700, color: completedCount === 4 ? '#16A34A' : '#0D0D0B', lineHeight: 1 }}>
+              {completedCount}<span style={{ fontSize: 16, color: '#8A8278', fontWeight: 400 }}>/4</span>
             </div>
-            <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 500, color: muted, marginTop: 4, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 600, color: '#8A8278', marginTop: 5, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
               Complete
             </div>
           </div>
@@ -369,15 +412,15 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
 
         {/* Section label */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-          <p style={{ margin: 0, fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: muted }}>
+          <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#8A8278', whiteSpace: 'nowrap' }}>
             Production Modules
-          </p>
-          <div style={{ flex: 1, height: 1, background: border }} />
+          </span>
+          <div style={{ flex: 1, height: 1, background: '#E8E2D5' }} />
         </div>
 
-        {/* Cards grid */}
+        {/* Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-          {cards.map((card, i) => <HubCard key={i} {...card} />)}
+          {modules.map((m, i) => <ModuleCard key={i} {...m} />)}
         </div>
 
       </main>
