@@ -87,7 +87,7 @@ export default function TrailerWizardClient({
           bookId={book.id}
           bookTitle={book.title}
           initialScenes={initialScenes}
-          initialCharacters={[]}
+          initialCharacters={initialCharacters}
           wizardMode
           onWizardComplete={() => setStep('images')}
         />
