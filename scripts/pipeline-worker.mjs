@@ -1683,21 +1683,24 @@ async function runPipeline(job) {
       //    fresh image fails identically. Bail at once.
       //  - TRANSIENT (network blip, timeout): worth one fresh-image retry.
       console.log(`[worker]   Scene ${scene.scene_number}: generating video clip (lip-sync: ${willLipSync})...`)
-      // Lip-sync scenes: keep head steady + facing camera so sync model can track well.
-      // Non-lip-sync: suppress talking (flapping lips with no audio looks broken).
+      // Lip-sync scenes: keep head steady + facing camera, AND suppress talking in the
+      // base Kling clip. HeyGen replaces the clip entirely so suppression doesn't matter
+      // there. For sync-lipsync/v2 fallback, a neutral still face is required — if Kling
+      // already animates the mouth naturally, sync-lipsync fights it and produces a glitch.
+      // Non-lip-sync scenes: suppress talking anyway (flapping lips with no audio looks broken).
       const videoDescription = willLipSync
-        ? `${scene.description}, character looking directly at camera, minimal head movement, steady close-up`
+        ? `${scene.description}, character looking directly at camera, minimal head movement, steady close-up, mouth closed, neutral expression`
         : scene.description
       let clipUrl
       try {
-        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, cameraMovement, ledger, !willLipSync, i2vEndpoint, resolution, perSec)
+        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, cameraMovement, ledger, true, i2vEndpoint, resolution, perSec)
       } catch (clipErr) {
         // Non-retryable: moderation, internal bad-output, or daily-cap. Don't waste generations.
         if (clipErr.isModeration || clipErr.isBadOutput || clipErr.isRateLimit) throw clipErr
         console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying once in 15s...`)
         await new Promise(r => setTimeout(r, 15000))
         imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger, sceneCharRefs)
-        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, cameraMovement, ledger, !willLipSync, i2vEndpoint, resolution, perSec)
+        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, cameraMovement, ledger, true, i2vEndpoint, resolution, perSec)
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
