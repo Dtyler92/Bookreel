@@ -105,6 +105,15 @@ function FilmFrames() {
 
 // ─── Cover Modal ──────────────────────────────────────────────────────────────
 
+const COVER_STYLES = [
+  { value: 'DESIGN', label: 'Design' },
+  { value: 'REALISTIC', label: 'Realistic' },
+  { value: 'ILLUSTRATION', label: 'Illustrated' },
+  { value: 'PAINTING', label: 'Painted' },
+] as const
+
+const COVER_COUNTS = [1, 2, 4] as const
+
 function CoverModal({
   bookId,
   bookTitle,
@@ -124,10 +133,15 @@ function CoverModal({
 }) {
   const [coverTitle, setCoverTitle] = useState(bookTitle)
   const [coverAuthor, setCoverAuthor] = useState(authorName ?? '')
+  const [coverPrompt, setCoverPrompt] = useState('')
+  const [coverStyle, setCoverStyle] = useState<string>('DESIGN')
+  const [coverCount, setCoverCount] = useState<number>(1)
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [coverUrls, setCoverUrls] = useState<string[]>([])
   const [generating, setGenerating] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,7 +153,9 @@ function CoverModal({
     }
     const reader = new FileReader()
     reader.onload = () => {
-      setCoverPreview(reader.result as string)
+      const url = reader.result as string
+      setCoverPreview(url)
+      setCoverUrls([url])
       setError(null)
     }
     reader.readAsDataURL(file)
@@ -158,6 +174,9 @@ function CoverModal({
           authorName: coverAuthor,
           genre: bookGenre ?? 'Fiction',
           description: bookDescription ?? '',
+          coverPrompt: coverPrompt.trim() || undefined,
+          style: coverStyle,
+          count: coverCount,
         }),
       })
       if (!res.ok) {
@@ -165,15 +184,16 @@ function CoverModal({
         throw new Error(d.error ?? 'Failed to generate cover')
       }
       const data = await res.json()
-      setCoverPreview(data.imageUrl)
+      const urls: string[] = data.imageUrls ?? (data.imageUrl ? [data.imageUrl] : [])
+      if (urls.length === 0) throw new Error('No images returned')
+      setCoverUrls(urls)
+      setCoverPreview(urls[0])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate cover')
     } finally {
       setGenerating(false)
     }
   }
-
-  const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
     if (!coverPreview) return
@@ -219,6 +239,26 @@ function CoverModal({
     }
   }
 
+  const pillBase: React.CSSProperties = {
+    padding: '6px 14px',
+    borderRadius: '20px',
+    fontSize: '13px',
+    fontFamily: 'var(--font-inter), sans-serif',
+    fontWeight: 500,
+    cursor: 'pointer',
+    border: '1.5px solid #E8E2D5',
+    background: '#F4F1EB',
+    color: '#2B2B2B',
+    transition: 'all 0.15s',
+  }
+
+  const pillActive: React.CSSProperties = {
+    ...pillBase,
+    background: '#C8402F',
+    border: '1.5px solid #C8402F',
+    color: '#FFFFFF',
+  }
+
   return (
     <div style={{
       position: 'fixed',
@@ -229,6 +269,7 @@ function CoverModal({
       alignItems: 'center',
       justifyContent: 'center',
       padding: '24px',
+      overflowY: 'auto',
     }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
@@ -237,7 +278,7 @@ function CoverModal({
         borderRadius: '16px',
         padding: '32px',
         width: '100%',
-        maxWidth: '480px',
+        maxWidth: '560px',
         boxShadow: '0 20px 60px rgba(13,13,11,0.15)',
       }}>
         <h2 style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: '22px', color: '#0D0D0B', margin: '0 0 8px' }}>
@@ -279,15 +320,97 @@ function CoverModal({
               style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E8E2D5', borderRadius: '8px', fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: '#0D0D0B', background: '#FAFAF8', boxSizing: 'border-box', outline: 'none' }}
             />
           </div>
+
+          {/* Cover description */}
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', fontWeight: 600, color: '#2B2B2B', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Describe your cover (optional)
+            </label>
+            <textarea
+              value={coverPrompt}
+              onChange={(e) => setCoverPrompt(e.target.value)}
+              placeholder="e.g. A lone detective stands in a rain-soaked city alley at night, neon reflections on wet cobblestones..."
+              rows={3}
+              style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #E8E2D5', borderRadius: '8px', fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: '#0D0D0B', background: '#FAFAF8', boxSizing: 'border-box', outline: 'none', resize: 'vertical', lineHeight: '1.5' }}
+            />
+          </div>
         </div>
 
-        {/* Preview */}
-        {coverPreview && (
+        {/* Style selector */}
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', fontWeight: 600, color: '#2B2B2B', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Style
+          </label>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {COVER_STYLES.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => setCoverStyle(value)}
+                style={coverStyle === value ? pillActive : pillBase}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Count selector */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', fontWeight: 600, color: '#2B2B2B', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Generate Options
+          </label>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', color: '#8A8278', marginRight: '4px' }}>Generate</span>
+            {COVER_COUNTS.map((n) => (
+              <button
+                key={n}
+                onClick={() => setCoverCount(n)}
+                style={coverCount === n ? pillActive : pillBase}
+              >
+                {n}
+              </button>
+            ))}
+            <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', color: '#8A8278', marginLeft: '4px' }}>options</span>
+          </div>
+        </div>
+
+        {/* Preview — single or multi-image row */}
+        {coverUrls.length > 1 ? (
+          <div style={{ marginBottom: '20px' }}>
+            <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', color: '#8A8278', margin: '0 0 8px' }}>
+              Select a cover:
+            </p>
+            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
+              {coverUrls.map((url, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCoverPreview(url)}
+                  style={{ flexShrink: 0, padding: 0, background: 'none', border: 'none', cursor: 'pointer', borderRadius: '6px' }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt={`Cover option ${i + 1}`}
+                    style={{
+                      width: 100,
+                      height: 150,
+                      objectFit: 'cover',
+                      borderRadius: '6px',
+                      border: coverPreview === url ? '3px solid #C8402F' : '2px solid #E8E2D5',
+                      boxShadow: coverPreview === url ? '0 4px 16px rgba(200,64,47,0.3)' : '0 2px 8px rgba(13,13,11,0.08)',
+                      transition: 'border 0.15s, box-shadow 0.15s',
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : coverPreview ? (
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={coverPreview} alt="Cover preview" style={{ width: 100, height: 150, objectFit: 'cover', borderRadius: '6px', border: '1px solid #E8E2D5', boxShadow: '0 4px 12px rgba(13,13,11,0.1)' }} />
           </div>
-        )}
+        ) : null}
 
         {/* Buttons */}
         <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>

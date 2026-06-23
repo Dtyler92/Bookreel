@@ -25,6 +25,9 @@ export async function POST(request: Request) {
       authorName?: string
       genre?: string
       description?: string
+      coverPrompt?: string
+      style?: string
+      count?: number
     }
     const { bookId, title: bodyTitle, authorName: bodyAuthorName, genre: bodyGenre, description: bodyDescription } = body
 
@@ -63,11 +66,19 @@ export async function POST(request: Request) {
       ? `Book title "${titleText}" in large bold embossed typography at the top of the cover. Author name "${authorText}" in elegant smaller text at the bottom of the cover.`
       : `Book title "${titleText}" in large bold embossed typography prominently at the top of the cover.`
 
-    const prompt = `Professional ${genre} book cover artwork. ${description ? description.substring(0, 160) + '. ' : ''}${typographyInstructions} Text is perfectly spelled, sharp, clearly legible, beautifully integrated into the design. Cinematic dramatic composition, rich atmospheric lighting, publisher-quality artwork. No extra text or words beyond the title and author name.`
+    const coverPrompt = body.coverPrompt
+
+    const baseDescription = coverPrompt?.trim()
+      ? coverPrompt.trim()
+      : description ? description.substring(0, 160) : ''
+
+    const prompt = `Professional ${genre} book cover artwork. ${baseDescription ? baseDescription + '. ' : ''}${typographyInstructions} Text is perfectly spelled, sharp, clearly legible, beautifully integrated into the design. Cinematic dramatic composition, rich atmospheric lighting, publisher-quality artwork. No extra text or words beyond the title and author name.`
 
     const negativePrompt = 'blurry, low quality, amateur, watermark, misspelled text, garbled letters, distorted words, wrong words, missing text, nudity, gore'
 
-    console.log('[generate-cover] Model: ideogram v3 | Title:', title, '| Author:', authorName)
+    const numImages = Math.min(4, Math.max(1, body.count ?? 1))
+
+    console.log('[generate-cover] Model: ideogram v3 | Title:', title, '| Author:', authorName, '| Count:', numImages)
     console.log('[generate-cover] Prompt:', prompt.substring(0, 200))
 
     // Use fal.subscribe for synchronous result (handles queue internally)
@@ -76,46 +87,51 @@ export async function POST(request: Request) {
         prompt,
         negative_prompt: negativePrompt,
         image_size: 'portrait_4_3',   // standard book cover portrait
-        style: 'DESIGN',              // best style for legible text rendering
+        style: (body.style as any) || 'DESIGN',
         expand_prompt: true,          // Ideogram's built-in prompt enhancer
-        num_images: 1,
+        num_images: numImages,
       },
     }) as { data: IdeogramResult; requestId: string }
 
-    const falImageUrl = result.data?.images?.[0]?.url
-    if (!falImageUrl) {
+    const falImages = result.data?.images
+    if (!falImages || falImages.length === 0) {
       console.error('[generate-cover] No image URL in result:', JSON.stringify(result).substring(0, 300))
       return Response.json({ error: 'No image generated' }, { status: 500 })
     }
 
-    // Download from fal.ai and re-upload to Supabase so the URL doesn't expire
-    let imageUrl = falImageUrl
-    try {
-      const supabase = getServiceClient()
-      const imgRes = await fetch(falImageUrl)
-      if (!imgRes.ok) throw new Error(`download failed ${imgRes.status}`)
-      const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
+    // Download all images from fal.ai and re-upload to Supabase so URLs don't expire
+    const supabase = getServiceClient()
+    const urls: string[] = []
 
-      const storagePath = `covers/${bookId ?? 'preview'}-${Date.now()}.jpg`
-      const { error: uploadErr } = await supabase.storage
-        .from('media')
-        .upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: true })
+    for (let i = 0; i < falImages.length; i++) {
+      const falImageUrl = falImages[i].url
+      let imageUrl = falImageUrl
+      try {
+        const imgRes = await fetch(falImageUrl)
+        if (!imgRes.ok) throw new Error(`download failed ${imgRes.status}`)
+        const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
 
-      if (uploadErr) throw new Error(uploadErr.message)
+        const storagePath = `covers/${bookId ?? 'preview'}-${Date.now()}-${i}.jpg`
+        const { error: uploadErr } = await supabase.storage
+          .from('media')
+          .upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: true })
 
-      const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
-      imageUrl = urlData.publicUrl
-      console.log('[generate-cover] Cover persisted to Supabase:', imageUrl.substring(0, 80))
-    } catch (persistErr) {
-      console.error('[generate-cover] Failed to persist cover, using temporary URL:', persistErr)
+        if (uploadErr) throw new Error(uploadErr.message)
+
+        const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
+        imageUrl = urlData.publicUrl
+        console.log(`[generate-cover] Cover ${i} persisted to Supabase:`, imageUrl.substring(0, 80))
+      } catch (persistErr) {
+        console.error(`[generate-cover] Failed to persist cover ${i}, using temporary URL:`, persistErr)
+      }
+      urls.push(imageUrl)
     }
 
-    // Save cover URL to books table
+    // Save first cover URL to books table
     if (bookId) {
-      const supabase = getServiceClient()
       const { error: updateError } = await supabase
         .from('books')
-        .update({ cover_image_url: imageUrl })
+        .update({ cover_image_url: urls[0] })
         .eq('id', bookId)
 
       if (updateError) {
@@ -125,7 +141,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return Response.json({ imageUrl })
+    return Response.json({ imageUrl: urls[0], imageUrls: urls })
   } catch (error) {
     console.error('[generate-cover] Unhandled error:', error)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
