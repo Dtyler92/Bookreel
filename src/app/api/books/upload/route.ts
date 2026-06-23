@@ -110,7 +110,7 @@ Scene field guidance (IMPORTANT for video quality):
     • Pace the action to the clip length. For a ~5-second clip: one quick, simple gesture or a slow drift — nothing that needs steps in sequence. For a ~10-second clip: one slow, continuous, deliberate beat — a gradual push-in as a single expression changes, fog slowly filling a room. NEVER chain multiple actions ("he stands, walks to the window, then turns") — that cannot fit and the model will speed it up unnaturally. ONE beat per clip.
     • Describe motion as continuous and gradual ("slowly", "gradually", "drifts", "creeps") rather than fast cuts. Each scene is ONE continuous shot — no cuts.
     • Keep it to 1-2 sentences.
-- "duration_seconds": 5 or 10. Use 10 for establishing/emotional beats that breathe, 5 for tense quick hits. Match the action density in screenplay_text to this number.
+- "duration_seconds": 5. All clips are 5 seconds — one sharp decisive beat per scene. Keep motion simple: one continuous movement that reads well in 5 seconds (slow push-in, subtle head turn, fog drifting). Nothing that needs more time to land.
 
 For each character extract:
 - appearance: Be as specific as possible about physical traits drawn directly from the book text. Include height, build, hair, eyes, age, skin tone, distinguishing features, and typical clothing.
@@ -694,7 +694,7 @@ export async function POST(request: Request) {
           title: s.title || null,
           description: s.description,
           screenplay_text: s.screenplay_text || null,
-          duration_seconds: s.duration_seconds || 10,
+          duration_seconds: s.duration_seconds || 5,
           author_approved: false
         }))
 

@@ -255,10 +255,10 @@ Screenplay action: ${screenplayText || 'none specified'}
 Genre: ${genre}
 Clip duration: ${durationSeconds}s
 
-Pick ONE camera movement that best serves this scene. Consider:
-- Short clips (5s): simple, subtle movements (slow push-in, gentle tilt, static)
-- Long clips (10s): can support fuller movements (slow dolly, tracking, gradual crane up)
-- Match the energy: tense scenes = handheld or fast push; emotional = slow drift or static; establishing = pull-back or wide pan
+Pick ONE camera movement that best serves this scene. All clips are 5 seconds — keep movements simple and decisive:
+- Slow push-in, gentle tilt, static wide, subtle drift, quick rack focus
+- Match the energy: tense = fast push or handheld; emotional = slow drift or static; establishing = pull-back or wide pan
+- Avoid movements that need more than 5 seconds to complete (long dollies, full crane arcs)
 
 Return ONLY the camera movement directive — no explanation, no punctuation, just the movement.
 Examples: slow push-in, pull back to reveal, handheld orbit, static wide shot, gradual tilt up, subtle drift left, slow dolly forward`
@@ -1494,12 +1494,12 @@ async function runPipeline(job) {
   try {
     // Estimate trailer length: clips × per-clip length (+ ~4s end card).
     // Respect TEST_MAX_CLIPS so short test renders get a correctly-sized music bed.
-    // Seedance 2.0: 10s clips give cinematic breathing room.
-    //   Standard: 4 clips × 10s = 40s
-    //   Premium:  4 clips × 10s = 40s (1080p upgrade, same length)
+    // Kling 3.0: 5s clips — punchy, fast-cutting trailer energy.
+    //   Standard: 4 clips × 5s = 20s
+    //   Premium:  4 clips × 5s = 20s (1080p upgrade, same length)
     const baseClips = 4
+    const estClipLen = 5
     const estClips = TEST_MAX_CLIPS > 0 ? Math.min(baseClips, TEST_MAX_CLIPS) : baseClips
-    const estClipLen = 10
     const estDuration = estClips * estClipLen + 4
     musicAudioPath = await generateMusicBed(book.genre || 'dramatic', estDuration, tmpDir, ledger)
     if (musicAudioPath) console.log('[worker]   Music bed ready')
@@ -1507,10 +1507,10 @@ async function runPipeline(job) {
     console.error('[worker]   Music bed failed (non-fatal, shipping without music):', e.message)
   }
 
-  // Determine max scenes. Both tiers = 4 clips × 10s = 40s.
+  // Determine max scenes. Both tiers = 4 clips × 5s = 20s.
   // Standard = 720p, Premium = 1080p — same length, different quality.
   // TEST_MAX_CLIPS (env) caps this for short troubleshooting renders.
-  const sceneLength = 10
+  const sceneLength = 5
   let maxScenes = 4
   if (TEST_MAX_CLIPS > 0) {
     maxScenes = Math.min(maxScenes, TEST_MAX_CLIPS)
