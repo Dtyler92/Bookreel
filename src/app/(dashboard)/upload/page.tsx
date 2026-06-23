@@ -91,7 +91,7 @@ export default function UploadPage() {
   // Step 1 fields
   const [title, setTitle] = useState('')
   const [genre, setGenre] = useState('')
-  const [description, setDescription] = useState('')
+
   const [amazonLink, setAmazonLink] = useState('')
   const [storeLink, setStoreLink] = useState('')
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
@@ -196,7 +196,7 @@ export default function UploadPage() {
       const res = await fetch('/api/books/generate-cover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, genre: genre || 'Fiction', description }),
+        body: JSON.stringify({ title, genre: genre || 'Fiction' }),
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
@@ -280,7 +280,7 @@ export default function UploadPage() {
       const formData = new FormData()
       formData.append('title', title)
       formData.append('genre', genre)
-      formData.append('description', description)
+
       formData.append('amazon_link', amazonLink)
       formData.append('store_link', storeLink)
       formData.append('pdf', file)
@@ -582,32 +582,6 @@ export default function UploadPage() {
                   <option key={g} value={g}>{g}</option>
                 ))}
               </select>
-            </div>
-
-            {/* Description */}
-            <div style={fieldStyle}>
-              <label htmlFor="description" style={labelStyle}>
-                Description
-              </label>
-              <textarea
-                id="description"
-                rows={4}
-                maxLength={500}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="A brief synopsis of your book…"
-                style={{ ...inputStyle, resize: 'none' }}
-                {...focusHandlers}
-              />
-              <p style={{
-                fontFamily: 'var(--font-inter), sans-serif',
-                fontSize: '12px',
-                color: '#8A8278',
-                textAlign: 'right',
-                marginTop: '4px',
-              }}>
-                {description.length}/500
-              </p>
             </div>
 
             {/* Amazon Link */}
