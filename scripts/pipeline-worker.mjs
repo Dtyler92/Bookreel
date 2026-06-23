@@ -194,6 +194,14 @@ const PRICING = {
 // OpenRouter — a SEPARATE balance from fal, tracked here for full per-render visibility).
 const LLM_PRICING = { in_per_1m: 3.0, out_per_1m: 15.0 }
 
+// Estimate LLM cost from an Anthropic/OpenRouter usage object.
+// usage = { input_tokens, output_tokens } (fields are optional/unknown → 0).
+function estimateLlmCost(usage = {}) {
+  const inTok = usage.input_tokens || 0
+  const outTok = usage.output_tokens || 0
+  return (inTok / 1e6) * LLM_PRICING.in_per_1m + (outTok / 1e6) * LLM_PRICING.out_per_1m
+}
+
 function makeLedger() {
   return {
     items: [],
