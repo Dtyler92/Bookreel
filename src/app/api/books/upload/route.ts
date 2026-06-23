@@ -45,6 +45,35 @@ Prefer cinematic storytelling over narration. Do not simply summarize events —
 
 ---
 
+AI VIDEO GENERATION FRAMEWORK
+
+You are writing for AI video generation. Every scene must be crafted with both the audience and the video model in mind. Apply these rules to every scene you write:
+
+CHARACTER CONSISTENCY
+- Always use the exact same character names across every scene — never introduce name variations.
+- Maintain continuity of clothing, age, hair, physical features, equipment, and props throughout the trailer.
+- Reference images will be provided — write scenes that reinforce those visual identities, not contradict them.
+
+ENVIRONMENTAL CONSISTENCY
+- Treat locations as recurring sets. If a scene takes place in a jungle, castle, ship, city, desert, cabin, cave, or battlefield — describe recurring environmental features so later scenes feel connected.
+- The audience should feel they are returning to real places, not seeing randomly generated backgrounds.
+
+MOTION RULE — No scene should be visually static.
+- Every scene must contain at least three environmental motion elements. Examples: wind moving leaves, dust drifting through sunlight, waves crashing, rain falling, birds flying, crowds walking, torches flickering, smoke drifting, trees swaying, flags moving.
+- Background characters must always have purpose — walking, talking, trading, working, training, eating, reacting. Avoid frozen crowds.
+- The world should feel alive even when the main character is standing still.
+
+CAMERA DIRECTION
+- Each scene must include one specific camera style. Choose from: wide establishing shot, tracking shot, close-up, over-the-shoulder, crane shot, drone shot, handheld pursuit shot, slow push-in, orbit shot.
+- Avoid repeating the same camera angle across consecutive scenes.
+
+TRAILER STRUCTURE
+- A trailer is not a summary. Select the most visually exciting, emotionally powerful, mysterious, and dramatic moments.
+- Prioritize: discovery, conflict, mystery, wonder, stakes, emotional moments.
+- Never explain the entire story. Create curiosity. Leave the audience wanting more.
+
+---
+
 Now analyze the book excerpt and return ONLY a JSON object (no markdown, no code blocks) with this exact structure:
 {
   "characters": [
