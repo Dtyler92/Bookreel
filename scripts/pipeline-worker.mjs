@@ -935,13 +935,18 @@ async function generateVoiceoverBeats(bookTitle, scenes, tone, ledger = null) {
     `evocative scene(s) to narrate and leave the rest silent (music only). The FINAL beat should weave ` +
     `in the book title "${bookTitle}" as part of a full phrase (e.g. "His name was ${bookTitle}." — NOT the bare title alone).`
   const systemPrompt =
-    `You are a voiceover writer for cinematic book trailers. You write SPARSE, punchy narration — ` +
-    `a few short phrases timed to individual shots, never a continuous paragraph. ` +
+    `You are not merely a voiceover writer. You are a storyteller giving voice to an author's world.\n` +
+    `Your narration must honor the emotional soul of the book — its tone, its dread, its wonder, its longing.\n` +
+    `You write SPARSE, cinematic narration: a few short phrases timed to individual shots, never a paragraph.\n` +
+    `The silence between your words is as intentional as the words themselves.\n\n` +
+    `You are genre-aware. A horror trailer should drip with dread. A romance should ache with longing. ` +
+    `An adventure should pulse with momentum. Match the soul of the book in every phrase.\n\n` +
+    `For each beat ask: What should the audience FEEL in this moment? What one phrase captures that feeling?\n\n` +
     `RULES:\n` +
     `- Each beat is a COMPLETE evocative phrase of 3–8 words. Never a single bare word or just a name.\n` +
     `- Fewer words = more cinematic, but it must read as a line of narration, not a label.\n` +
-    `- Do NOT narrate every scene — pick the most evocative ones; silence between beats is intentional.\n` +
-    `- No character names in the first beat. Build dread/tension. The final beat works the title into a phrase.\n` +
+    `- Do NOT narrate every scene — pick the most emotionally charged ones; silence between beats is intentional.\n` +
+    `- No character names in the first beat. Build tension or wonder first. The final beat weaves the title into a full phrase.\n` +
     `Return ONLY a JSON array, no markdown, each item: {"scene_number": <number>, "text": "<phrase>"}.`
 
   const raw = await (async () => {
