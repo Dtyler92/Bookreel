@@ -40,7 +40,7 @@ export default async function BookHubPage({
   // Check what assets exist
   const { data: trailer } = await supabase
     .from('trailers')
-    .select('id, status, video_url, quality_tier')
+    .select('id, status, video_url, final_video_url, quality_tier')
     .eq('book_id', bookId)
     .order('created_at', { ascending: false })
     .limit(1)

@@ -20,6 +20,7 @@ interface Trailer {
   id: string
   status: string
   video_url?: string | null
+  final_video_url?: string | null
   quality_tier?: string | null
 }
 
@@ -242,7 +243,8 @@ function IconEmail() {
 export default function BookHubClient({ book, trailer, characters, scenes, audiobook, userName }: Props) {
   const router = useRouter()
 
-  const hasTrailer = !!(trailer && (trailer.status === 'complete' || !!trailer.video_url))
+  const hasTrailer = !!(trailer && (trailer.status === 'complete' || !!trailer.video_url || !!trailer.final_video_url))
+  const trailerVideoUrl = trailer?.final_video_url ?? trailer?.video_url ?? null
   const trailerInProgress = !!(trailer && (trailer.status === 'pending' || trailer.status === 'processing' || trailer.status === 'generating'))
   const hasCharacters = characters.length > 0
   const approvedCharacters = characters.filter(c => c.author_approved)
@@ -262,8 +264,8 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
         : 'Transform your story into a cinematic trailer that captivates readers.',
       statusVariant: hasTrailer ? 'complete' : trailerInProgress ? 'in-progress' : 'empty',
       statusLabel: hasTrailer ? 'Complete' : trailerInProgress ? 'Rendering' : 'Not Started',
-      ctaLabel: hasTrailer ? 'View Trailer' : trailerInProgress ? null : 'Create Trailer',
-      ctaHref: hasTrailer ? `/review/${book.id}` : undefined,
+      ctaLabel: hasTrailer ? 'Watch Trailer' : trailerInProgress ? null : 'Create Trailer',
+      ctaHref: hasTrailer && trailerVideoUrl ? trailerVideoUrl : hasTrailer ? `/review/${book.id}` : undefined,
       onCtaClick: !trailer ? () => router.push(`/trailer-wizard/${book.id}`) : undefined,
       badge: trailer?.quality_tier ?? null,
     },

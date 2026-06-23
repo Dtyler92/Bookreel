@@ -1652,8 +1652,8 @@ async function runPipeline(job) {
   const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, narrationTracks, musicAudioPath, characterLineTracks)
   console.log('[worker]   ✅ Final video:', finalVideoUrl.substring(0, 80))
 
-  // Auto-save cover: use first scene image if book has no cover set
-  if (firstSceneImageUrl && !book.cover_image_url) {
+  // Auto-cover disabled — never replace the book cover card with a scene image
+  if (false && firstSceneImageUrl && !book.cover_image_url) {
     try {
       await supabase.from('books').update({ cover_image_url: firstSceneImageUrl }).eq('id', bookId)
       console.log('[worker]   📸 Auto-cover saved from scene 1')
