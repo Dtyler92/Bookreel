@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import ReviewClient from './ReviewClient'
 import ReviewImagesClient from './ReviewImagesClient'
 
@@ -34,6 +35,7 @@ export default function TrailerWizardClient({
     return 'screenplay'
   }
 
+  const router = useRouter()
   const [step, setStep] = useState<WizardStep>(getInitialStep)
 
   const steps = [
@@ -110,7 +112,7 @@ export default function TrailerWizardClient({
             initialItems={initialItems}
             userId={userId}
             wizardMode
-            onWizardComplete={() => setStep('generating')}
+            onWizardComplete={() => router.push('/dashboard')}
           />
         </div>
       )}
