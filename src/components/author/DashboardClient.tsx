@@ -240,7 +240,7 @@ function CoverModal({
   }
 
   const pillBase: React.CSSProperties = {
-    padding: '6px 14px',
+    padding: '10px 14px',
     borderRadius: '20px',
     fontSize: '13px',
     fontFamily: 'var(--font-inter), sans-serif',
@@ -276,7 +276,7 @@ function CoverModal({
       <div style={{
         background: '#FFFFFF',
         borderRadius: '16px',
-        padding: '32px',
+        padding: '24px 20px',
         width: '100%',
         maxWidth: '560px',
         boxShadow: '0 20px 60px rgba(13,13,11,0.15)',
@@ -413,7 +413,7 @@ function CoverModal({
         ) : null}
 
         {/* Buttons */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading || generating}
@@ -465,7 +465,7 @@ function CoverModal({
           Upload: .jpg, .png, .webp — max 5MB
         </p>
 
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <button
             onClick={onClose}
             style={{ background: 'none', border: '1.5px solid #E8E2D5', borderRadius: '8px', padding: '10px 20px', fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: '#8A8278', cursor: 'pointer' }}
@@ -644,6 +644,7 @@ function BookCard({
               cursor: 'pointer',
               transition: 'background 150ms ease, color 150ms ease',
               letterSpacing: '0.02em',
+              minHeight: '44px',
             }}
           >
             Retry
@@ -853,8 +854,8 @@ function BookCard({
                 background: 'rgba(13,13,11,0.65)',
                 border: 'none',
                 borderRadius: '6px',
-                width: '28px',
-                height: '28px',
+                width: '44px',
+                height: '44px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -875,7 +876,7 @@ function BookCard({
                 background: 'rgba(13,13,11,0.65)',
                 border: 'none',
                 borderRadius: '6px',
-                padding: '4px 8px',
+                padding: '8px 12px',
                 fontFamily: 'var(--font-inter), sans-serif',
                 fontSize: '11px',
                 fontWeight: 500,
@@ -933,6 +934,7 @@ function BookCard({
                   fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px',
                   fontWeight: 600, color: '#5C5751',
                   transition: 'all 150ms ease',
+                  minHeight: '44px',
                 }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLAnchorElement).style.background = '#EDE9E0'
@@ -1119,7 +1121,7 @@ function DeleteBookModal({
           </p>
         )}
 
-        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <button
             onClick={onClose}
             disabled={deleting}
@@ -1187,14 +1189,14 @@ export function DashboardClient({
         paddingTop: '64px',
         maxWidth: '1200px',
         margin: '0 auto',
-        padding: '104px 24px 64px',
+        padding: '104px 24px 120px',
       }}>
         {/* Welcome */}
         <div style={{ marginBottom: '40px' }}>
           <h1 style={{
             fontFamily: 'var(--font-playfair), serif',
             fontWeight: 700,
-            fontSize: '36px',
+            fontSize: 'clamp(22px, 5vw, 36px)',
             color: '#0D0D0B',
             margin: 0,
             lineHeight: 1.2,
@@ -1213,7 +1215,8 @@ export function DashboardClient({
         </div>
 
         {/* Stats Row */}
-        <div style={{
+        <style>{`.br-stats-grid { grid-template-columns: repeat(3, 1fr) !important; } @media (max-width: 640px) { .br-stats-grid { grid-template-columns: 1fr !important; } }`}</style>
+        <div className="br-stats-grid" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
           gap: '20px',
@@ -1241,7 +1244,7 @@ export function DashboardClient({
                 <div style={{
                   fontFamily: 'var(--font-playfair), serif',
                   fontWeight: 900,
-                  fontSize: '48px',
+                  fontSize: 'clamp(28px, 8vw, 48px)',
                   color: '#0D0D0B',
                   lineHeight: 1,
                 }}>
@@ -1350,7 +1353,7 @@ export function DashboardClient({
       <Link href="/upload" style={{ textDecoration: 'none' }}>
         <div style={{
           position: 'fixed',
-          bottom: '32px',
+          bottom: 'calc(32px + env(safe-area-inset-bottom, 0px))',
           right: '32px',
           background: '#C8402F',
           color: '#FAFAF7',
@@ -1420,6 +1423,7 @@ export function DashboardClient({
               <h3 style={{
                 fontFamily: 'var(--font-playfair), serif', fontWeight: 700,
                 fontSize: '20px', color: '#FFFFFF', margin: 0,
+                minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {videoBook.title}
               </h3>
@@ -1427,7 +1431,7 @@ export function DashboardClient({
                 onClick={() => setVideoBook(null)}
                 style={{
                   background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: '999px',
-                  width: 36, height: 36, color: '#FFFFFF', fontSize: '18px', cursor: 'pointer',
+                  width: 44, height: 44, color: '#FFFFFF', fontSize: '18px', cursor: 'pointer',
                 }}
               >
                 ✕

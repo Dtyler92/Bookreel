@@ -41,6 +41,12 @@ export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  // Scroll lock when mobile drawer is open
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [menuOpen])
+
   const links = [
     { href: '/browse',    label: 'Browse' },
     { href: '/pricing',   label: 'Pricing' },
@@ -90,7 +96,7 @@ export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl
         .br-seal:hover { border-color: #C8402F !important; }
         .br-dropdown-item { transition: background 120ms ease; }
         .br-dropdown-item:hover { background: #F5F0E8 !important; }
-        .br-hamburger { cursor: pointer; background: none; border: none; padding: 4px; display: flex; flex-direction: column; gap: 5px; }
+        .br-hamburger { cursor: pointer; background: none; border: none; padding: 10px; display: flex; flex-direction: column; gap: 5px; }
         .br-hamburger span { display: block; width: 22px; height: 1.5px; background: #0D0D0B; transition: all 300ms ease; }
         .br-hamburger.open span:nth-child(1) { transform: rotate(45deg) translate(4.5px, 4.5px); }
         .br-hamburger.open span:nth-child(2) { opacity: 0; }
@@ -125,10 +131,11 @@ export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl
         zIndex: 100,
         transition: 'background 300ms ease, border-color 300ms ease',
         display: 'flex', alignItems: 'center',
+        paddingTop: 'env(safe-area-inset-top, 0px)',
       }}>
         <div style={{
           maxWidth: '1400px', width: '100%',
-          margin: '0 auto', padding: '0 40px',
+          margin: '0 auto', padding: '0 20px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
 
@@ -178,7 +185,7 @@ export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl
                     background: '#EDE9E0',
                     border: `1px solid ${credits === 0 ? 'rgba(200,64,47,0.35)' : '#D9D2C5'}`,
                     borderRadius: '100px',
-                    height: '36px', padding: '0 14px 0 10px',
+                    height: '44px', padding: '0 14px 0 10px',
                     cursor: 'pointer',
                   }}
                 >
@@ -201,7 +208,7 @@ export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl
                   className="br-seal"
                   onClick={() => setDropdownOpen(o => !o)}
                   style={{
-                    width: '36px', height: '36px',
+                    width: '44px', height: '44px',
                     borderRadius: '50%',
                     overflow: 'hidden',
                     border: `1.5px solid ${dropdownOpen ? '#C8402F' : '#3A3835'}`,
@@ -216,8 +223,8 @@ export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl
                     <Image
                       src={authorPhotoUrl}
                       alt={userName}
-                      width={36}
-                      height={36}
+                      width={44}
+                      height={44}
                       className="object-cover w-full h-full"
                       unoptimized
                     />
@@ -289,7 +296,7 @@ export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl
               </div>
             ) : (
               /* Unauthenticated — quill icon */
-              <Link href="/login" style={{ display: 'flex', alignItems: 'center', color: muted }}>
+              <Link href="/login" style={{ display: 'flex', alignItems: 'center', color: muted, padding: '10px' }}>
                 <QuillIcon size={24} color={muted} />
               </Link>
             )}
@@ -326,7 +333,7 @@ export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl
                   fontFamily: 'var(--font-playfair), serif',
                   fontSize: '18px', fontWeight: 700,
                   color: ink, textDecoration: 'none',
-                  padding: '10px 0',
+                  padding: '13px 0',
                 }}
               >
                 {link.label}
@@ -341,7 +348,7 @@ export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl
               style={{
                 fontFamily: 'var(--font-inter), sans-serif',
                 fontSize: '14px', color: muted,
-                textDecoration: 'none', padding: '8px 0',
+                textDecoration: 'none', padding: '13px 0',
               }}
             >
               {credits.toLocaleString()} credits
@@ -352,7 +359,7 @@ export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl
               style={{
                 fontFamily: 'var(--font-inter), sans-serif',
                 fontSize: '14px', color: muted,
-                textDecoration: 'none', padding: '8px 0',
+                textDecoration: 'none', padding: '13px 0',
               }}
             >
               Sign Out

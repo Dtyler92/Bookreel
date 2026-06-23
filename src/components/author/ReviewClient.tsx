@@ -437,7 +437,7 @@ function CharacterCard({
           </div>
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
               onClick={handleSave}
               disabled={saving}
@@ -462,7 +462,7 @@ function CharacterCard({
               style={{
                 background: 'none',
                 border: 'none',
-                padding: '8px 12px',
+                padding: '12px 16px',
                 fontFamily: 'var(--font-inter), sans-serif',
                 fontSize: '13px',
                 fontWeight: 500,
@@ -500,6 +500,8 @@ function CharacterCard({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 8,
           paddingTop: '16px',
           borderTop: '1px solid #EDE9E0',
           marginTop: '16px',
@@ -511,7 +513,7 @@ function CharacterCard({
           style={{
             background: 'none',
             border: 'none',
-            padding: 0,
+            padding: '10px 8px',
             fontFamily: 'var(--font-inter), sans-serif',
             fontSize: '13px',
             fontWeight: 500,
@@ -777,7 +779,7 @@ function SceneCard({
                       color: '#FFFFFF',
                       border: 'none',
                       borderRadius: '6px',
-                      padding: '7px 14px',
+                      padding: '10px 14px',
                       fontFamily: 'var(--font-inter), sans-serif',
                       fontSize: '12px',
                       fontWeight: 600,
@@ -827,7 +829,7 @@ function SceneCard({
               background: '#F4F1EB',
             }}
           />
-          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
             <button
               onClick={handleSaveEdit}
               disabled={saving}
@@ -873,7 +875,7 @@ function SceneCard({
               style={{
                 background: 'none',
                 border: 'none',
-                padding: 0,
+                padding: '10px 4px',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
@@ -916,6 +918,8 @@ function SceneCard({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 8,
           paddingTop: '16px',
           borderTop: '1px solid #EDE9E0',
         }}
@@ -927,7 +931,7 @@ function SceneCard({
               background: 'transparent',
               border: '1px solid #E8E2D5',
               borderRadius: '8px',
-              padding: '7px 14px',
+              padding: '10px 14px',
               fontFamily: 'var(--font-inter), sans-serif',
               fontSize: '12px',
               fontWeight: 600,
@@ -1033,11 +1037,12 @@ export default function ReviewClient({
           style={{
             maxWidth: '1300px',
             margin: '0 auto',
-            padding: '24px 40px',
+            padding: '16px 20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '16px',
+            flexWrap: 'wrap',
+            gap: 8,
           }}
         >
           {/* Left */}
@@ -1104,7 +1109,9 @@ export default function ReviewClient({
       </div>
 
       {/* ── Main content ─────────────────────────────────────────────────────── */}
+      <style>{`@media (max-width: 768px) { .br-review-grid { grid-template-columns: 1fr !important; gap: 24px !important; } }`}</style>
       <div
+        className="br-review-grid"
         style={{
           maxWidth: '1300px',
           margin: '0 auto',
@@ -1183,15 +1190,17 @@ export default function ReviewClient({
           backgroundColor: 'rgba(250,250,247,0.95)',
           backdropFilter: 'blur(8px)',
           borderTop: '1px solid #E8E2D5',
-          padding: '0 40px',
+          padding: '0 16px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 8,
           zIndex: 50,
         }}
       >
         {/* Left: counts + progress bar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
           <span
             style={{
               fontFamily: 'var(--font-inter), sans-serif',
@@ -1203,7 +1212,8 @@ export default function ReviewClient({
           </span>
           <div
             style={{
-              width: '200px',
+              width: '100%',
+              maxWidth: '200px',
               height: '4px',
               backgroundColor: '#E8E2D5',
               borderRadius: '2px',

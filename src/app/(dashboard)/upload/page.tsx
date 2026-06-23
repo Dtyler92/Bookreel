@@ -335,7 +335,7 @@ export default function UploadPage() {
 
           {/* Progress bar */}
           <div style={{
-            width: '280px',
+            width: 'min(280px, 80vw)',
             height: '4px',
             background: '#E8E2D5',
             borderRadius: '4px',
@@ -393,8 +393,8 @@ export default function UploadPage() {
             const isCompleted = step > stepNum
 
             const circleStyle: React.CSSProperties = {
-              width: '36px',
-              height: '36px',
+              width: '40px',
+              height: '40px',
               borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
@@ -459,7 +459,7 @@ export default function UploadPage() {
             background: '#FFFFFF',
             border: '1px solid #E8E2D5',
             borderRadius: '12px',
-            padding: '36px 40px',
+            padding: '28px 20px',
           }}>
             <h1 style={{
               fontFamily: 'var(--font-playfair), serif',
@@ -521,7 +521,7 @@ export default function UploadPage() {
               </div>
               {/* Inline pen name input */}
               {showAddPenName && (
-                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
                   <input
                     type="text"
                     value={newPenName}
@@ -538,7 +538,7 @@ export default function UploadPage() {
                     disabled={savingPenName || !newPenName.trim()}
                     style={{
                       background: '#C8402F', color: '#fff', border: 'none',
-                      borderRadius: '8px', padding: '0 18px',
+                      borderRadius: '8px', padding: '12px 18px',
                       fontFamily: 'var(--font-inter), sans-serif',
                       fontSize: '14px', fontWeight: 600, cursor: 'pointer',
                       opacity: savingPenName || !newPenName.trim() ? 0.5 : 1,
@@ -551,7 +551,7 @@ export default function UploadPage() {
                     onClick={() => { setShowAddPenName(false); setNewPenName('') }}
                     style={{
                       background: 'none', border: '1.5px solid #E8E2D5',
-                      borderRadius: '8px', padding: '0 14px',
+                      borderRadius: '8px', padding: '12px 14px',
                       fontFamily: 'var(--font-inter), sans-serif',
                       fontSize: '14px', color: '#8A8278', cursor: 'pointer',
                     }}
@@ -658,7 +658,7 @@ export default function UploadPage() {
             background: '#FFFFFF',
             border: '1px solid #E8E2D5',
             borderRadius: '12px',
-            padding: '36px 40px',
+            padding: '28px 20px',
           }}>
             <h1 style={{
               fontFamily: 'var(--font-playfair), serif',
@@ -687,7 +687,7 @@ export default function UploadPage() {
               style={{
                 border: `2.5px dashed ${dragging ? '#C8402F' : '#E8E2D5'}`,
                 borderRadius: '12px',
-                padding: '60px 40px',
+                padding: '40px 20px',
                 textAlign: 'center',
                 background: dragging ? 'rgba(200,64,47,0.03)' : '#FAFAF7',
                 cursor: 'pointer',
@@ -737,7 +737,7 @@ export default function UploadPage() {
                       color: '#C8402F',
                       cursor: 'pointer',
                       textDecoration: 'underline',
-                      padding: 0,
+                      padding: '10px 8px',
                     }}
                   >
                     Remove
@@ -752,7 +752,16 @@ export default function UploadPage() {
                     color: '#0D0D0B',
                     margin: '0 0 6px',
                   }}>
-                    Drop your manuscript here
+                    Tap or click to upload your manuscript
+                  </p>
+                  <p style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '13px',
+                    color: '#B0A898',
+                    margin: '0 0 4px',
+                    fontStyle: 'italic',
+                  }}>
+                    Drag &amp; drop also works on desktop
                   </p>
                   <p style={{
                     fontFamily: 'var(--font-inter), sans-serif',
@@ -760,7 +769,7 @@ export default function UploadPage() {
                     color: '#8A8278',
                     margin: '0 0 6px',
                   }}>
-                    PDF or TXT up to 50MB — or click to browse
+                    PDF or TXT up to 50MB
                   </p>
                   <p style={{
                     fontFamily: 'var(--font-inter), sans-serif',
@@ -796,7 +805,7 @@ export default function UploadPage() {
             )}
 
             {/* Back + Upload buttons */}
-            <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => setStep(1)}
                 disabled={uploading}
@@ -812,12 +821,13 @@ export default function UploadPage() {
                   color: '#1A1A18',
                   cursor: 'pointer',
                   opacity: uploading ? 0.55 : 1,
+                  minHeight: '44px',
                 }}
               >
                 ← Back
               </button>
               <PrimaryButton
-                style={{ flex: 2 }}
+                style={{ flex: 2, minHeight: '44px' }}
                 onClick={handleUpload}
                 disabled={!file || uploading}
               >
@@ -833,7 +843,7 @@ export default function UploadPage() {
             background: '#FFFFFF',
             border: '1px solid #E8E2D5',
             borderRadius: '12px',
-            padding: '56px 40px',
+            padding: '28px 20px',
             textAlign: 'center',
           }}>
             {/* Checkmark circle */}
@@ -907,6 +917,7 @@ export default function UploadPage() {
                   color: '#8A8278',
                   cursor: 'pointer',
                   textDecoration: 'underline',
+                  padding: '12px 0',
                 }}
               >
                 Skip — Review My Story →

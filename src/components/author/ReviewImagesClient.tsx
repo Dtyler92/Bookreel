@@ -99,13 +99,13 @@ function GenerationProgressBanner({
         borderRadius: 14,
         background: '#F4F1EB',
         border: '1px solid #E8E2D5',
-        padding: '28px 32px',
+        padding: '20px 20px',
         marginBottom: 32,
         position: 'relative',
       }}
     >
       {/* Top row: eyebrow + count badge */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: 10 }}>
         <div>
           {/* Eyebrow */}
           <p style={{
@@ -536,6 +536,7 @@ function CharacterCard({
           <button
             onClick={() => { setApproved(false); onApprove(character.id, false) }}
             className="text-xs text-[#9C9286] hover:text-[#C8412C] underline transition-colors"
+            style={{ padding: '8px 4px' }}
           >
             Undo approval
           </button>
@@ -698,6 +699,7 @@ function ItemCard({
           <button
             onClick={() => { setApproved(false); onApprove(item.id, false) }}
             className="text-xs text-[#9C9286] hover:text-[#C8412C] underline transition-colors"
+            style={{ padding: '8px 4px' }}
           >
             Undo approval
           </button>
@@ -876,11 +878,12 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
           style={{
             maxWidth: '1300px',
             margin: '0 auto',
-            padding: '24px 40px',
+            padding: '16px 20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '16px',
+            flexWrap: 'wrap',
+            gap: 8,
           }}
         >
           {/* Left */}
@@ -965,7 +968,7 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
           <div style={{
             background: '#FFFFFF',
             borderRadius: '16px',
-            padding: '40px 36px',
+            padding: '28px 20px',
             width: '100%',
             maxWidth: '420px',
             boxShadow: '0 20px 60px rgba(13,13,11,0.18)',
@@ -990,7 +993,7 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
             }}>
               Trailer generation requires an Author or Pro plan. Upgrade your plan to bring your book to life with a cinematic trailer.
             </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
               <button
                 onClick={() => setShowUpgradeModal(false)}
                 style={{
@@ -1080,7 +1083,7 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
 
       {/* ── Sticky bottom bar ─────────────────────────────────────── */}
       <div className="fixed bottom-0 inset-x-0 border-t border-[#E8E2D5] bg-white shadow-lg z-10">
-        <div className="max-w-[1300px] mx-auto px-4 sm:px-10 py-4 flex items-center gap-6">
+        <div className="max-w-[1300px] mx-auto px-4 sm:px-10 py-4 flex items-center gap-6 flex-wrap">
           {/* Progress */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between mb-1">
@@ -1115,7 +1118,7 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
                   Starting…
                 </span>
               ) : (
-                wizardMode ? 'Generate My Trailer →' : 'Continue to Trailer Generation →'
+                wizardMode ? 'Generate My Trailer →' : 'Continue to Generation →'
               )}
             </button>
           </div>

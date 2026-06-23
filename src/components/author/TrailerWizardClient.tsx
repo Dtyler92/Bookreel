@@ -33,13 +33,19 @@ function StepBar({ stepIndex }: { stepIndex: number }) {
       borderBottom: '1px solid #E8E2D5',
       padding: '0 24px',
     }}>
-      <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', alignItems: 'center', height: 52 }}>
+      <style>{`
+        @media (max-width: 640px) {
+          .br-wizard-label { display: none; }
+          .br-step-connector { width: 16px !important; }
+        }
+      `}</style>
+      <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', alignItems: 'center', height: 52, flexWrap: 'wrap', gap: 8 }}>
         {/* Label */}
-        <span style={{
+        <span className="br-wizard-label" style={{
           fontFamily: 'var(--font-inter), sans-serif',
           fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
           textTransform: 'uppercase', color: '#8A8278',
-          marginRight: 24, whiteSpace: 'nowrap',
+          marginRight: 24,
         }}>
           Trailer Wizard
         </span>
@@ -53,7 +59,7 @@ function StepBar({ stepIndex }: { stepIndex: number }) {
               <div key={s.key} style={{ display: 'flex', alignItems: 'center' }}>
                 {/* Connector */}
                 {i > 0 && (
-                  <div style={{
+                  <div className="br-step-connector" style={{
                     width: 32, height: 1,
                     background: isDone ? '#16A34A' : '#E8E2D5',
                     transition: 'background 300ms ease',
@@ -85,7 +91,7 @@ function StepBar({ stepIndex }: { stepIndex: number }) {
                       width: 16, height: 16, borderRadius: '50%',
                       background: isCurrent ? '#C8402F' : '#E8E2D5',
                       color: isCurrent ? '#fff' : '#8A8278',
-                      fontSize: 9, fontWeight: 700,
+                      fontSize: 11, fontWeight: 700,
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       flexShrink: 0,
                     }}>
@@ -178,7 +184,7 @@ export default function TrailerWizardClient({
           {allScenesApproved && (
             <div style={{ maxWidth: 880, margin: '0 auto', padding: '16px 24px 0' }}>
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
+                display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
                 background: '#F0FDF4', border: '1px solid #BBF7D0',
                 borderRadius: 8, padding: '10px 16px',
                 fontFamily: 'var(--font-inter), sans-serif',
@@ -208,7 +214,7 @@ export default function TrailerWizardClient({
       {step === 'confirm' && (
         <div style={{
           maxWidth: 520, margin: '0 auto',
-          padding: '72px 24px 96px',
+          padding: '40px 20px 72px',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32,
         }}>
 
@@ -224,7 +230,9 @@ export default function TrailerWizardClient({
               <rect x="2" y="4" width="20" height="16" rx="2"/>
               <path d="M10 9l5 3-5 3V9z" fill="#C8402F" stroke="none"/>
             </svg>
-            {book.title}
+            <span style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {book.title}
+            </span>
           </div>
 
           {/* Heading */}
@@ -255,12 +263,12 @@ export default function TrailerWizardClient({
               { label: 'Character images approved', detail: `${initialCharacters.length} character${initialCharacters.length !== 1 ? 's' : ''}` },
             ].map(({ label, detail }) => (
               <div key={label} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap',
                 background: '#FFFFFF', border: '1px solid #BBF7D0',
                 borderRadius: 10, padding: '14px 18px',
                 boxShadow: '0 1px 4px rgba(13,13,11,0.04)',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <div style={{
                     width: 24, height: 24, borderRadius: '50%',
                     background: '#F0FDF4', border: '1.5px solid #86EFAC',
@@ -344,6 +352,7 @@ export default function TrailerWizardClient({
               fontFamily: 'var(--font-inter), sans-serif',
               fontSize: 13, fontWeight: 500, color: '#8A8278',
               transition: 'color 150ms ease',
+              padding: '12px 0',
             }}
             onMouseEnter={e => (e.currentTarget.style.color = '#0D0D0B')}
             onMouseLeave={e => (e.currentTarget.style.color = '#8A8278')}
