@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { GlobalNav } from '@/components/shared/GlobalNav'
 import BookHubClient from '@/components/author/BookHubClient'
 
+export const dynamic = 'force-dynamic'
+
 export default async function BookHubPage({
   params,
 }: {

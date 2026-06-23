@@ -313,6 +313,7 @@ export default function BookHubClient({ book, trailers, characters, scenes, audi
         if (data.status === 'complete') {
           setLiveTrailer(prev => prev ? { ...prev, status: 'complete', final_video_url: data.videoUrl, video_url: data.videoUrl } : prev)
           clearInterval(interval)
+          router.refresh() // re-run server component to pull fresh trailer data + video URL
         } else if (data.status === 'pending' || data.status === 'processing' || data.status === 'generating') {
           // Update to in-progress so the card shows the shimmer immediately
           setLiveTrailer(prev => prev ? { ...prev, status: data.status } : prev)
