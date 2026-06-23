@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { GlobalNav } from '@/components/shared/GlobalNav'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { BuyCreditsModal } from '@/components/author/BuyCreditsModal'
@@ -684,11 +685,16 @@ function BookCard({
     return null
   }
 
+  const router = useRouter()
+
   return (
     <>
       {/* Inject keyframes once per card mount — React dedupes style tags */}
       <style>{CARD_KEYFRAMES}</style>
-      <Link key={book.id} href={`/book/${book.id}`} style={{ textDecoration: 'none' }}>
+      <div
+        onClick={() => router.push(`/book/${book.id}`)}
+        style={{ textDecoration: 'none', cursor: 'pointer' }}
+      >
         <div style={{
           background: '#FFFFFF',
           border: `1px solid ${isGenerating ? 'rgba(200,64,47,0.3)' : '#E8E2D5'}`,
@@ -821,7 +827,7 @@ function BookCard({
             )}
           </div>
         </div>
-      </Link>
+      </div>
     </>
   )
 }
