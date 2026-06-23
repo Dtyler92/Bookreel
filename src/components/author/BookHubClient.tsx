@@ -290,30 +290,38 @@ export default function BookHubClient({ book, trailers, characters, scenes, audi
   // Derive latest trailer for backward-compat with existing status logic
   const latestTrailer = trailers[0] ?? null
 
-  // Live trailer state — polls until complete so the card updates without a refresh
+  // Live trailer state — polls until complete so the card updates without a refresh.
+  // Also polls on 'failed' so if the author triggers a new generation it catches
+  // the failed→pending transition without requiring a page refresh.
   const [liveTrailer, setLiveTrailer] = useState(latestTrailer)
 
   useEffect(() => {
-    const isInProgress = liveTrailer && (
+    const shouldPoll = liveTrailer && (
       liveTrailer.status === 'pending' ||
       liveTrailer.status === 'processing' ||
-      liveTrailer.status === 'generating'
+      liveTrailer.status === 'generating' ||
+      liveTrailer.status === 'failed' ||
+      liveTrailer.status === null
     )
-    if (!isInProgress) return
+    if (!shouldPoll) return
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/books/status/${book.id}`)
         if (!res.ok) return
         const data = await res.json()
+        if (!data.status) return
         if (data.status === 'complete') {
           setLiveTrailer(prev => prev ? { ...prev, status: 'complete', final_video_url: data.videoUrl, video_url: data.videoUrl } : prev)
           clearInterval(interval)
+        } else if (data.status === 'pending' || data.status === 'processing' || data.status === 'generating') {
+          // Update to in-progress so the card shows the shimmer immediately
+          setLiveTrailer(prev => prev ? { ...prev, status: data.status } : prev)
         } else if (data.status === 'failed') {
           setLiveTrailer(prev => prev ? { ...prev, status: 'failed' } : prev)
-          clearInterval(interval)
+          // Keep polling — author may trigger a new generation
         }
       } catch { /* swallow */ }
-    }, 20000)
+    }, 8000)
     return () => clearInterval(interval)
   }, [book.id, liveTrailer?.status])
 
@@ -335,15 +343,17 @@ export default function BookHubClient({ book, trailers, characters, scenes, audi
       icon: <IconTrailer />,
       title: 'Book Trailer',
       description: hasTrailer
-        ? `${completedTrailers.length > 1 ? `${completedTrailers.length} trailers ready` : 'Your cinematic trailer is ready'}${latestTrailer?.quality_tier ? ` — ${latestTrailer.quality_tier}` : ''}.`
+        ? `${completedTrailers.length > 1 ? `${completedTrailers.length} trailers ready` : 'Your cinematic trailer is ready'}${liveTrailer?.quality_tier ? ` — ${liveTrailer.quality_tier}` : ''}.`
         : trailerInProgress
         ? 'Your trailer is being crafted. Usually ready in 15–20 min.'
+        : liveTrailer?.status === 'failed'
+        ? 'Previous generation failed. You can try again.'
         : 'Transform your manuscript into a cinematic video trailer.',
       state: hasTrailer ? 'complete' : trailerInProgress ? 'in-progress' : 'empty',
-      meta: latestTrailer?.quality_tier ?? undefined,
-      ctaLabel: hasTrailer ? 'Watch Trailer' : trailerInProgress ? undefined : 'Create Trailer',
+      meta: liveTrailer?.quality_tier ?? undefined,
+      ctaLabel: hasTrailer ? 'Watch Trailer' : trailerInProgress ? undefined : liveTrailer?.status === 'failed' ? 'Try Again' : 'Create Trailer',
       ctaHref: hasTrailer && trailerVideoUrl ? trailerVideoUrl : hasTrailer ? `/review/${book.id}` : undefined,
-      onCtaClick: !latestTrailer ? () => router.push(`/trailer-wizard/${book.id}`) : undefined,
+      onCtaClick: !hasTrailer && !trailerInProgress ? () => router.push(`/trailer-wizard/${book.id}`) : undefined,
       cardHref: hasTrailer ? (trailerVideoUrl ?? `/review/${book.id}`) : undefined,
     },
     {
