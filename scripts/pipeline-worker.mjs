@@ -40,6 +40,8 @@ const PIPELINE_WORKER_SECRET = getEnv('PIPELINE_WORKER_SECRET')
 const APP_URL = getEnv('NEXT_PUBLIC_APP_URL') || 'https://bookreel-five.vercel.app'
 const FAL_API_KEY = getEnv('FAL_API_KEY')
 const EVOLINK_API_KEY = getEnv('EVOLINK_API_KEY')   // EvoLink video engine (Seedance 2.0, 54-59% cheaper)
+const HEYGEN_API_KEY = getEnv('HEYGEN_API_KEY')
+const HEYGEN_BASE = 'https://api.heygen.com/web-app/public'
 const ANTHROPIC_API_KEY = getEnv('ANTHROPIC_API_KEY')
 const OPENROUTER_API_KEY = getEnv('OPENROUTER_API_KEY')
 
@@ -101,6 +103,10 @@ if (isPlaceholder(FAL_API_KEY)) {
 if (USE_EVOLINK && isPlaceholder(EVOLINK_API_KEY)) {
   console.error('[worker] FATAL: USE_EVOLINK=true but EVOLINK_API_KEY not set — add it to .env.local or set USE_EVOLINK=false to fall back to fal.ai')
   process.exit(1)
+}
+
+if (isPlaceholder(HEYGEN_API_KEY)) {
+  console.warn('[worker] ⚠ HEYGEN_API_KEY not set — character lines will use sync-lipsync/v2 fallback')
 }
 
 console.log('[worker] BookReel Pipeline Worker starting...')
@@ -193,6 +199,8 @@ const PRICING = {
   evolink_kling_1080p_audio: 0.121,   // same as evolink_kling_motion
   evolink_seedance_720p:     0.093,   // same as fal_seedance
   lipsync_per_sec:           0.05,    // $3/min = $0.05/s (sync-lipsync v2)
+  heygen_avatar_creation: 1.00,   // one-time per character
+  heygen_video_720p: 0.50,        // per 10s clip at 720p ($0.05/sec)
 }
 // Rough Claude Sonnet token prices (script/line-selection LLM, billed to Anthropic/
 // OpenRouter — a SEPARATE balance from fal, tracked here for full per-render visibility).
@@ -1267,6 +1275,126 @@ async function lipSyncClip(videoUrl, audioUrl, sceneNumber, clipSeconds = 10, le
   return url
 }
 
+// ── HeyGen Photo Avatar — create once per character, cache avatar_id ──────────
+// Uploads the character face image to HeyGen and creates a Photo Avatar.
+// Returns the avatar_id string. Throws on failure.
+async function createHeygenAvatar(characterName, faceImageUrl) {
+  console.log(`[worker]   HeyGen: creating avatar for "${characterName}"...`)
+
+  // Step 1: Create avatar record
+  const createRes = await fetch(`${HEYGEN_BASE}/avatars`, {
+    method: 'POST',
+    headers: { 'x-api-key': HEYGEN_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'photo',
+      name: characterName,
+      file: { type: 'url', url: faceImageUrl },
+    }),
+  })
+  if (!createRes.ok) {
+    const err = await createRes.text()
+    throw new Error(`HeyGen avatar creation failed ${createRes.status}: ${err.substring(0, 200)}`)
+  }
+  const createData = await createRes.json()
+  const avatarId = createData?.data?.avatar_item?.id
+  if (!avatarId) throw new Error(`HeyGen avatar creation returned no avatar_id: ${JSON.stringify(createData).substring(0, 200)}`)
+  console.log(`[worker]   HeyGen: avatar created — ${avatarId}`)
+  return avatarId
+}
+
+// ── HeyGen clip generation — avatar + audio → expressive video ────────────────
+// Returns a public video URL. Uses the character's cached avatar_id.
+// motionPrompt should describe the emotional performance (e.g. "speaks with desperate urgency, eyes wide")
+async function generateHeygenClip(avatarId, audioUrl, sceneImageUrl, motionPrompt, durationSeconds = 10, ledger = null) {
+  console.log(`[worker]   HeyGen: generating clip (avatar=${avatarId}, ${durationSeconds}s)...`)
+
+  const body = {
+    type: 'video',
+    ai_model_id: '26f0fc66-152b-40ab-abed-76c43df99bc8',  // Hedra Avatar model
+    audio_url: audioUrl,
+    generated_video_inputs: {
+      text_prompt: motionPrompt || 'A character speaking expressively, cinematic close-up, dramatic lighting',
+      aspect_ratio: '9:16',
+      resolution: '720p',
+      duration_ms: durationSeconds * 1000,
+    },
+  }
+
+  // Use scene image as background if provided
+  if (sceneImageUrl) {
+    body.generated_video_inputs.background = { type: 'image', url: sceneImageUrl }
+  }
+
+  // avatar_id goes at top level
+  body.avatar_id = avatarId
+
+  const genRes = await fetch(`${HEYGEN_BASE}/generations`, {
+    method: 'POST',
+    headers: { 'x-api-key': HEYGEN_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!genRes.ok) {
+    const err = await genRes.text()
+    throw new Error(`HeyGen video generation failed ${genRes.status}: ${err.substring(0, 200)}`)
+  }
+  const genData = await genRes.json()
+  const generationId = genData?.data?.video_id
+  if (!generationId) throw new Error(`HeyGen returned no generation id: ${JSON.stringify(genData).substring(0, 200)}`)
+
+  console.log(`[worker]   HeyGen: generation queued — ${generationId}`)
+
+  // Poll for completion (max 20 min, every 5s)
+  for (let i = 0; i < 240; i++) {
+    await new Promise(r => setTimeout(r, 5000))
+    const statusRes = await fetch(`${HEYGEN_BASE}/generations/${generationId}/status`, {
+      headers: { 'x-api-key': HEYGEN_API_KEY },
+    })
+    if (!statusRes.ok) { console.warn('[worker]   HeyGen poll failed, retrying...'); continue }
+    const statusData = await statusRes.json()
+    const status = statusData?.data?.status
+    const progress = statusData?.data?.progress ?? '?'
+    if (i % 6 === 0) console.log(`[worker]   HeyGen poll ${i+1}: ${status} (${progress})`)
+
+    if (status === 'completed' || status === 'complete') {
+      const videoUrl = statusData?.data?.video_url || statusData?.data?.download_url
+      if (!videoUrl) throw new Error('HeyGen completed but returned no video URL')
+      if (ledger) ledger.add(`HeyGen character clip ${durationSeconds}s`, 'heygen', PRICING.heygen_video_720p)
+      console.log(`[worker]   HeyGen: clip complete — ${videoUrl.substring(0, 80)}`)
+      return videoUrl
+    }
+    if (status === 'failed' || status === 'error') {
+      const errMsg = statusData?.data?.error_message || statusData?.data?.failure_message || 'unknown error'
+      throw new Error(`HeyGen generation failed: ${errMsg}`)
+    }
+  }
+  throw new Error('HeyGen generation timed out after 20 minutes')
+}
+
+// ── Derive motion prompt from scene description + character context ────────────
+function deriveMotionPrompt(sceneDescription, characterLine, genre) {
+  const desc = (sceneDescription || '').toLowerCase()
+  const line = (characterLine || '').toLowerCase()
+
+  // Detect emotional tone from scene + line content
+  const isTense    = /threaten|danger|escape|trap|cornered|fight|attack|chase|betray|die|kill|murder|weapon|afraid|fear|terror|horrif/i.test(desc + ' ' + line)
+  const isSad      = /loss|griev|mourn|cry|tears|heartbreak|alone|abandon|regret|sorrow|tragic/i.test(desc + ' ' + line)
+  const isAngry    = /rage|fury|furious|anger|scream|shout|yell|confront|accuse|betray/i.test(desc + ' ' + line)
+  const isDesper   = /plead|beg|please|desperate|last chance|no time|hurry|now or never/i.test(desc + ' ' + line)
+  const isMyster   = /secret|truth|know|reveal|discover|hidden|lie|deceive|whisper/i.test(desc + ' ' + line)
+  const isRomantic = /love|heart|kiss|together|feel|hold|touch|close/i.test(desc + ' ' + line)
+
+  let emotion = 'speaks with quiet intensity, controlled emotion, cinematic close-up'
+  if (isTense)    emotion = 'speaks with urgent fear, eyes wide, tense jaw, barely contained panic'
+  if (isSad)      emotion = 'speaks with deep sorrow, eyes glistening, voice breaking with grief'
+  if (isAngry)    emotion = 'speaks with fierce anger, piercing eyes, taut expression, barely restrained fury'
+  if (isDesper)   emotion = 'speaks with desperate urgency, leaning forward, voice cracking under pressure'
+  if (isMyster)   emotion = 'speaks in a low whisper, eyes narrowed, charged with secret knowledge'
+  if (isRomantic) emotion = 'speaks softly with vulnerability, warm gaze, gentle emotional openness'
+
+  const genreNote = genre ? `, ${genre} aesthetic, dramatic cinematic lighting` : ', dramatic cinematic lighting'
+  return `${emotion}${genreNote}`
+}
+
 // ── Suggested policy-safe rewrite (when Runway rejects a scene) ────────────────
 async function generateSafeRewrite(sceneDescription, rejectionReason) {
   const systemPrompt = `You are a film editor helping adapt a book trailer scene that was rejected by an automated content-moderation filter. Rewrite the scene description so it conveys the same dramatic mood and story beat WITHOUT any content that could trigger moderation (no nudity, no explicit sexual content, no graphic gore/violence). Keep it cinematic, suggestive rather than explicit, and suitable for a general-audience book trailer. Return ONLY the rewritten scene description, 1-3 sentences, no preamble.`
@@ -1391,10 +1519,12 @@ async function runPipeline(job) {
   if (!existsSync(tmpDirLines)) mkdirSync(tmpDirLines, { recursive: true })
   const maxLines = tier === 'premium' ? 2 : 1
   const lineBySceneNumber = new Map()
+  let characters = []
   try {
-    const { data: characters } = await supabase.from('characters').select('*').eq('book_id', bookId)
+    const { data: charactersData } = await supabase.from('characters').select('*').eq('book_id', bookId)
+    characters = charactersData || []
     const eligibleSceneNumbers = new Set(scenesToGenerate.map(s => s.scene_number))
-    const selected = await selectCharacterLines(book.title, book.genre, characters || [], scenesToGenerate, maxLines, ledger)
+    const selected = await selectCharacterLines(book.title, book.genre, characters, scenesToGenerate, maxLines, ledger)
     for (const ln of selected) {
       if (!eligibleSceneNumbers.has(ln.scene_number)) continue
       if (lineBySceneNumber.has(ln.scene_number)) continue // one line per scene
@@ -1578,11 +1708,49 @@ async function runPipeline(job) {
           // Generate TTS audio for the character line
           const { url: lineAudioUrl, path: lineAudioPath } =
             await generateCharacterLineAudio(chosenLine.line, chosenLine.voice, tmpDirLines, scene.scene_number, ledger)
-          // Post-process: lip-sync TTS onto the already-generated Kling clip
-          const syncedUrl = await lipSyncClip(clipUrl, lineAudioUrl, scene.scene_number, sceneLength, ledger)
-          clipUrl = syncedUrl
-          characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
-          console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line lip-synced (sync-lipsync v2)`)
+
+          // Find the character record to get/create HeyGen avatar_id
+          const charRecord = (characters || []).find(c =>
+            c.name?.toLowerCase().trim() === chosenLine.character_name?.toLowerCase().trim()
+          )
+          const faceImageUrl = charRecord?.image_url_left || charRecord?.image_url_front || charRecord?.image_url || null
+
+          let usedHeygen = false
+          if (!isPlaceholder(HEYGEN_API_KEY) && faceImageUrl) {
+            try {
+              // Get or create HeyGen avatar_id for this character
+              let avatarId = charRecord?.heygen_avatar_id || null
+              if (!avatarId) {
+                avatarId = await createHeygenAvatar(chosenLine.character_name, faceImageUrl)
+                // Cache avatar_id in characters table
+                await supabase.from('characters').update({ heygen_avatar_id: avatarId }).eq('id', charRecord.id)
+                if (ledger) ledger.add(`HeyGen avatar creation: ${chosenLine.character_name}`, 'heygen', PRICING.heygen_avatar_creation)
+              } else {
+                console.log(`[worker]   HeyGen: using cached avatar for "${chosenLine.character_name}" (${avatarId})`)
+              }
+
+              // Derive motion prompt from scene emotion
+              const motionPrompt = deriveMotionPrompt(scene.description, chosenLine.line, book.genre)
+              console.log(`[worker]   Scene ${scene.scene_number}: motion prompt — "${motionPrompt.substring(0, 80)}"`)
+
+              // Generate expressive HeyGen clip (replaces Kling clip for this scene)
+              const heygenUrl = await generateHeygenClip(avatarId, lineAudioUrl, imageUrl, motionPrompt, sceneLength, ledger)
+              clipUrl = heygenUrl
+              characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
+              usedHeygen = true
+              console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line — HeyGen expressive avatar`)
+            } catch (heygenErr) {
+              console.error(`[worker]   Scene ${scene.scene_number}: HeyGen failed, falling back to sync-lipsync:`, heygenErr.message)
+            }
+          }
+
+          // Fallback: sync-lipsync/v2 if HeyGen not available or failed
+          if (!usedHeygen) {
+            const syncedUrl = await lipSyncClip(clipUrl, lineAudioUrl, scene.scene_number, sceneLength, ledger)
+            clipUrl = syncedUrl
+            characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
+            console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line lip-synced (sync-lipsync v2 fallback)`)
+          }
         } catch (lineErr) {
           console.error(`[worker]   Scene ${scene.scene_number}: character line failed (non-fatal, keeping original clip):`, lineErr.message)
         }
