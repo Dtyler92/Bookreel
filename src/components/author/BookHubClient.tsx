@@ -21,6 +21,7 @@ interface Trailer {
   video_url?: string | null
   final_video_url?: string | null
   quality_tier?: string | null
+  created_at?: string
 }
 
 interface Character {
@@ -45,7 +46,7 @@ interface Audiobook {
 
 interface Props {
   book: Book
-  trailer: Trailer | null
+  trailers: Trailer[]
   characters: Character[]
   scenes: Scene[]
   audiobook: Audiobook | null
@@ -283,11 +284,14 @@ function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, 
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function BookHubClient({ book, trailer, characters, scenes, audiobook, userName }: Props) {
+export default function BookHubClient({ book, trailers, characters, scenes, audiobook, userName }: Props) {
   const router = useRouter()
 
+  // Derive latest trailer for backward-compat with existing status logic
+  const latestTrailer = trailers[0] ?? null
+
   // Live trailer state — polls until complete so the card updates without a refresh
-  const [liveTrailer, setLiveTrailer] = useState(trailer)
+  const [liveTrailer, setLiveTrailer] = useState(latestTrailer)
 
   useEffect(() => {
     const isInProgress = liveTrailer && (
@@ -316,6 +320,7 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
   const hasTrailer = !!(liveTrailer && (liveTrailer.status === 'complete' || !!liveTrailer.video_url || !!liveTrailer.final_video_url))
   const trailerVideoUrl = liveTrailer?.final_video_url ?? liveTrailer?.video_url ?? null
   const trailerInProgress = !!(liveTrailer && (liveTrailer.status === 'pending' || liveTrailer.status === 'processing' || liveTrailer.status === 'generating'))
+  const completedTrailers = trailers.filter(t => t.status === 'complete' || !!t.video_url || !!t.final_video_url)
   const hasCharacters = characters.length > 0
   const approvedChars = characters.filter(c => c.author_approved)
   const hasApproved = approvedChars.length > 0
@@ -330,15 +335,15 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
       icon: <IconTrailer />,
       title: 'Book Trailer',
       description: hasTrailer
-        ? `Your cinematic trailer is ready${trailer?.quality_tier ? ` — ${trailer.quality_tier}` : ''}.`
+        ? `${completedTrailers.length > 1 ? `${completedTrailers.length} trailers ready` : 'Your cinematic trailer is ready'}${latestTrailer?.quality_tier ? ` — ${latestTrailer.quality_tier}` : ''}.`
         : trailerInProgress
         ? 'Your trailer is being crafted. Usually ready in 15–20 min.'
         : 'Transform your manuscript into a cinematic video trailer.',
       state: hasTrailer ? 'complete' : trailerInProgress ? 'in-progress' : 'empty',
-      meta: trailer?.quality_tier ?? undefined,
+      meta: latestTrailer?.quality_tier ?? undefined,
       ctaLabel: hasTrailer ? 'Watch Trailer' : trailerInProgress ? undefined : 'Create Trailer',
       ctaHref: hasTrailer && trailerVideoUrl ? trailerVideoUrl : hasTrailer ? `/review/${book.id}` : undefined,
-      onCtaClick: !trailer ? () => router.push(`/trailer-wizard/${book.id}`) : undefined,
+      onCtaClick: !latestTrailer ? () => router.push(`/trailer-wizard/${book.id}`) : undefined,
       cardHref: hasTrailer ? (trailerVideoUrl ?? `/review/${book.id}`) : undefined,
     },
     {
@@ -509,6 +514,44 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
           {modules.map((m, i) => <ModuleCard key={i} {...m} />)}
         </div>
+
+        {/* Generate New Trailer — shown whenever at least one trailer exists */}
+        {trailers.length > 0 && (
+          <div style={{
+            marginTop: 24,
+            padding: '14px 20px',
+            background: '#FFFFFF',
+            border: '1px solid #E8E2D5',
+            borderRadius: 10,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            flexWrap: 'wrap',
+          }}>
+            <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#8A8278' }}>
+              {completedTrailers.length > 0
+                ? `You have ${completedTrailers.length} completed trailer${completedTrailers.length !== 1 ? 's' : ''}. Want a new version?`
+                : 'Want to generate another trailer?'}
+            </span>
+            <Link
+              href={`/trailer-wizard/${book.id}`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                fontFamily: 'var(--font-inter), sans-serif', letterSpacing: '0.01em',
+                textDecoration: 'none', transition: 'all 150ms ease',
+                background: '#F7F4EF', color: '#0D0D0B',
+                border: '1.5px solid #E8E2D5',
+              }}
+            >
+              Generate New Trailer
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+              </svg>
+            </Link>
+          </div>
+        )}
 
       </main>
     </div>

@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import ReviewClient from './ReviewClient'
 import ReviewImagesClient from './ReviewImagesClient'
 
-type WizardStep = 'screenplay' | 'images' | 'generating'
+type WizardStep = 'screenplay' | 'images'
 
 interface Props {
   book: any
@@ -30,7 +30,7 @@ export default function TrailerWizardClient({
     initialCharacters.length > 0 && initialCharacters.every((c: any) => c.author_approved)
 
   const getInitialStep = (): WizardStep => {
-    if (allScenesApproved && allImagesApproved) return 'generating'
+    if (allScenesApproved && allImagesApproved) return 'images'
     if (allScenesApproved) return 'images'
     return 'screenplay'
   }
@@ -38,10 +38,16 @@ export default function TrailerWizardClient({
   const router = useRouter()
   const [step, setStep] = useState<WizardStep>(getInitialStep)
 
+  // If both screenplay and images are already approved, redirect immediately to dashboard
+  useEffect(() => {
+    if (allScenesApproved && allImagesApproved) {
+      router.push('/dashboard')
+    }
+  }, [allScenesApproved, allImagesApproved, router])
+
   const steps = [
     { key: 'screenplay', label: 'Screenplay', icon: '📝' },
     { key: 'images', label: 'Character Images', icon: '👥' },
-    { key: 'generating', label: 'Generate Trailer', icon: '🎬' },
   ]
 
   const stepIndex = steps.findIndex((s) => s.key === step)
@@ -114,24 +120,6 @@ export default function TrailerWizardClient({
             wizardMode
             onWizardComplete={() => router.push('/dashboard')}
           />
-        </div>
-      )}
-
-      {step === 'generating' && (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 px-4">
-          <div className="text-6xl">🎬</div>
-          <h2 className="text-2xl font-bold text-white">Everything looks great!</h2>
-          <p className="text-white/60 text-center max-w-md">
-            Screenplay and character images are approved. Your trailer is being created by our
-            cinematic engine.
-          </p>
-          <div className="animate-pulse text-red-400 text-sm">Generating your trailer…</div>
-          <a
-            href={`/book/${book.id}`}
-            className="text-white/40 text-sm hover:text-white/60 underline"
-          >
-            ← Back to Book Hub
-          </a>
         </div>
       )}
     </div>
