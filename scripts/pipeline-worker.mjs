@@ -112,7 +112,7 @@ if (isPlaceholder(HEYGEN_API_KEY)) {
 console.log('[worker] BookReel Pipeline Worker starting...')
 
 // ── Content-safety helpers ────────────────────────────────────────────────────
-// Soften potentially policy-violating wording so fal.ai images and Runway video
+// Soften potentially policy-violating wording so fal.ai images and Kling video
 // clear automated content moderation. Keeps the dramatic intent, removes triggers.
 const IMAGE_NEGATIVE_PROMPT = 'text, words, letters, captions, subtitles, title, watermark, logo, signature, writing, typography, numbers, labels, nudity, nude, naked, sexual, explicit, pornographic, nsfw, genitalia, exposed breasts, sex act, gore, blood, graphic violence, dismemberment, wound, corpse, mutilation, self-harm, drug use, disturbing, horror gore'
 
@@ -1397,7 +1397,7 @@ function deriveMotionPrompt(sceneDescription, characterLine, genre) {
   return `${emotion}${genreNote}`
 }
 
-// ── Suggested policy-safe rewrite (when Runway rejects a scene) ────────────────
+// ── Suggested policy-safe rewrite (when a scene is blocked by content moderation) ──
 async function generateSafeRewrite(sceneDescription, rejectionReason) {
   const systemPrompt = `You are a film editor helping adapt a book trailer scene that was rejected by an automated content-moderation filter. Rewrite the scene description so it conveys the same dramatic mood and story beat WITHOUT any content that could trigger moderation (no nudity, no explicit sexual content, no graphic gore/violence). Keep it cinematic, suggestive rather than explicit, and suitable for a general-audience book trailer. Return ONLY the rewritten scene description, 1-3 sentences, no preamble.`
   const userContent = `Original scene description: "${sceneDescription}"\n\nRejection reason: "${rejectionReason}"\n\nRewrite it to pass moderation while preserving the dramatic intent.`
@@ -1678,9 +1678,9 @@ async function runPipeline(job) {
         firstSceneImageUrl = imageUrl
       }
 
-      // Generate video. Runway failures come in two flavors:
+      // Generate video. EvoLink failures come in two flavors:
       //  - DETERMINISTIC (isModeration / isBadOutput / isRateLimit): a retry with a
-      //    fresh image fails identically and just burns the daily task cap. Bail at once.
+      //    fresh image fails identically. Bail at once.
       //  - TRANSIENT (network blip, timeout): worth one fresh-image retry.
       console.log(`[worker]   Scene ${scene.scene_number}: generating video clip (lip-sync: ${willLipSync})...`)
       // Lip-sync scenes: keep head steady + facing camera so sync model can track well.
@@ -1778,7 +1778,7 @@ async function runPipeline(job) {
       // Daily-cap hit: every remaining scene will 429 too. Stop the loop NOW so we
       // don't waste time (and so the trailer can still stitch whatever already succeeded).
       if (sceneErr.isRateLimit) {
-        console.log(`[worker]   Scene ${scene.scene_number}: ⛔ Runway daily task limit reached — halting remaining scenes for this run.`)
+        console.log(`[worker]   Scene ${scene.scene_number}: ⛔ EvoLink rate limit reached — halting remaining scenes for this run.`)
         await supabase.from('scenes').update({
           moderation_status: 'pending',
           moderation_reason: 'Trailer paused: the studio hit its daily render limit. This scene will resume automatically on the next run.',
@@ -1792,7 +1792,7 @@ async function runPipeline(job) {
 
       if (sceneErr.isModeration || sceneErr.isBadOutput) {
         // Both land in the author-review bucket: moderation = explicit policy block;
-        // bad-output = Runway's post-generation safety filter rejected the rendered
+        // bad-output = video engine's post-generation safety filter rejected the rendered
         // frames (common on dark/violent imagery). Same fix path for the author: soften it.
         const friendlyReason = 'This scene was blocked by the studio\'s content-safety filter. It may contain imagery (violence, nudity, or explicit content) that can\'t be turned into video. Edit the scene below to soften it, or use our suggested version.'
         console.log(`[worker]   Scene ${scene.scene_number}: generating suggested safe rewrite...`)
@@ -1805,7 +1805,7 @@ async function runPipeline(job) {
         }).eq('id', scene.id)
         rejectedScenes.push(scene.scene_number)
       } else {
-        // Non-moderation failure (transient Runway/network error)
+        // Non-moderation failure (transient EvoLink/network error)
         await supabase.from('scenes').update({
           moderation_status: 'rejected',
           moderation_reason: 'This scene couldn\'t be generated due to a temporary studio error. Try regenerating, or edit the scene below.',
