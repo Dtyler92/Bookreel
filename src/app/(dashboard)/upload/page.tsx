@@ -154,14 +154,6 @@ export default function UploadPage() {
   // Step 3
   const [bookId, setBookId] = useState<string | null>(null)
 
-  // Step 4 — Book Cover
-  const [step4CoverPreview, setStep4CoverPreview] = useState<string | null>(null)
-  const [step4Generating, setStep4Generating] = useState(false)
-  const [step4Uploading, setStep4Uploading] = useState(false)
-  const [step4Error, setStep4Error] = useState<string | null>(null)
-  const [step4DragOver, setStep4DragOver] = useState(false)
-  const step4FileInputRef = useRef<HTMLInputElement>(null)
-
   // Rotating loading messages
   useEffect(() => {
     if (!uploading) return
@@ -305,8 +297,14 @@ export default function UploadPage() {
       }
 
       const data = await res.json()
-      setBookId(data.bookId ?? data.id ?? null)
-      setStep(3)
+      const newBookId = data.bookId ?? data.id ?? null
+      setBookId(newBookId)
+      // Go straight to book hub — no intermediate success screen needed
+      if (newBookId) {
+        router.push(`/book/${newBookId}`)
+      } else {
+        setStep(3)
+      }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed. Please try again.')
     } finally {
