@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -133,9 +133,10 @@ interface ModuleCardProps {
   ctaLabel?: string
   ctaHref?: string
   onCtaClick?: () => void
+  cardHref?: string
 }
 
-function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, onCtaClick }: ModuleCardProps) {
+function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, onCtaClick, cardHref }: ModuleCardProps) {
   const [hovered, setHovered] = useState(false)
   const [ctaHov, setCtaHov] = useState(false)
   const locked = state === 'locked'
@@ -163,7 +164,9 @@ function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, 
         opacity: locked ? 0.55 : 1,
         display: 'flex',
         flexDirection: 'column',
+        cursor: cardHref ? 'pointer' : 'default',
       }}
+      onClick={cardHref ? () => window.open(cardHref, '_blank') : undefined}
     >
       {/* Top accent strip — red when complete, amber when in-progress */}
       <div style={{
@@ -283,9 +286,36 @@ function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, 
 export default function BookHubClient({ book, trailer, characters, scenes, audiobook, userName }: Props) {
   const router = useRouter()
 
-  const hasTrailer = !!(trailer && (trailer.status === 'complete' || !!trailer.video_url || !!trailer.final_video_url))
-  const trailerVideoUrl = trailer?.final_video_url ?? trailer?.video_url ?? null
-  const trailerInProgress = !!(trailer && (trailer.status === 'pending' || trailer.status === 'processing' || trailer.status === 'generating'))
+  // Live trailer state — polls until complete so the card updates without a refresh
+  const [liveTrailer, setLiveTrailer] = useState(trailer)
+
+  useEffect(() => {
+    const isInProgress = liveTrailer && (
+      liveTrailer.status === 'pending' ||
+      liveTrailer.status === 'processing' ||
+      liveTrailer.status === 'generating'
+    )
+    if (!isInProgress) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/books/status/${book.id}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.status === 'complete') {
+          setLiveTrailer(prev => prev ? { ...prev, status: 'complete', final_video_url: data.videoUrl, video_url: data.videoUrl } : prev)
+          clearInterval(interval)
+        } else if (data.status === 'failed') {
+          setLiveTrailer(prev => prev ? { ...prev, status: 'failed' } : prev)
+          clearInterval(interval)
+        }
+      } catch { /* swallow */ }
+    }, 20000)
+    return () => clearInterval(interval)
+  }, [book.id, liveTrailer?.status])
+
+  const hasTrailer = !!(liveTrailer && (liveTrailer.status === 'complete' || !!liveTrailer.video_url || !!liveTrailer.final_video_url))
+  const trailerVideoUrl = liveTrailer?.final_video_url ?? liveTrailer?.video_url ?? null
+  const trailerInProgress = !!(liveTrailer && (liveTrailer.status === 'pending' || liveTrailer.status === 'processing' || liveTrailer.status === 'generating'))
   const hasCharacters = characters.length > 0
   const approvedChars = characters.filter(c => c.author_approved)
   const hasApproved = approvedChars.length > 0
@@ -309,6 +339,7 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
       ctaLabel: hasTrailer ? 'Watch Trailer' : trailerInProgress ? undefined : 'Create Trailer',
       ctaHref: hasTrailer && trailerVideoUrl ? trailerVideoUrl : hasTrailer ? `/review/${book.id}` : undefined,
       onCtaClick: !trailer ? () => router.push(`/trailer-wizard/${book.id}`) : undefined,
+      cardHref: hasTrailer ? (trailerVideoUrl ?? `/review/${book.id}`) : undefined,
     },
     {
       icon: <IconCharacters />,
