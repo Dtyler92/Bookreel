@@ -32,6 +32,11 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith('/login') &&
     !request.nextUrl.pathname.startsWith('/signup') &&
     (request.nextUrl.pathname.startsWith('/dashboard') ||
+      request.nextUrl.pathname.startsWith('/book') ||
+      request.nextUrl.pathname.startsWith('/review') ||
+      request.nextUrl.pathname.startsWith('/upload') ||
+      request.nextUrl.pathname.startsWith('/account') ||
+      request.nextUrl.pathname.startsWith('/audiobook') ||
       request.nextUrl.pathname.startsWith('/api/books'))
   ) {
     // Only hard-redirect for page routes, not API routes

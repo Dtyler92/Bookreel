@@ -30,7 +30,7 @@ export default async function BookHubPage({
     .from('books')
     .select('*')
     .eq('id', bookId)
-    .eq('user_id', user.id)
+    .eq('author_id', user.id)
     .single()
 
   if (!book) {
