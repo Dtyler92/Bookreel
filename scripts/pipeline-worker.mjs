@@ -41,7 +41,7 @@ const APP_URL = getEnv('NEXT_PUBLIC_APP_URL') || 'https://bookreel-five.vercel.a
 const FAL_API_KEY = getEnv('FAL_API_KEY')
 const EVOLINK_API_KEY = getEnv('EVOLINK_API_KEY')   // EvoLink video engine (Seedance 2.0, 54-59% cheaper)
 const HEYGEN_API_KEY = getEnv('HEYGEN_API_KEY')
-const HEYGEN_BASE = 'https://api.heygen.com/web-app/public'
+const HEYGEN_BASE = 'https://api.heygen.com'
 const ANTHROPIC_API_KEY = getEnv('ANTHROPIC_API_KEY')
 const OPENROUTER_API_KEY = getEnv('OPENROUTER_API_KEY')
 
@@ -735,12 +735,14 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTra
   const filterParts = allInputs
     .map((_, i) => `[${i}:v]scale=${width}:${height},setsar=1,fps=${fps},format=yuv420p[v${i}]`)
     .join(';')
-  const audioNormParts = allInputs
+  // Only extract native audio from actual video clips — endcard has no audio stream
+  const clipCount = clipPaths.length
+  const audioNormParts = clipPaths
     .map((_, i) => `[${i}:a]aresample=44100,volume=0.35[ca${i}]`)
     .join(';')
   const concatInputs = allInputs.map((_, i) => `[v${i}]`).join('')
-  const concatAudioInputs = allInputs.map((_, i) => `[ca${i}]`).join('')
-  const filterComplex = `${filterParts};${audioNormParts};${concatInputs}concat=n=${allInputs.length}:v=1:a=0[out];${concatAudioInputs}concat=n=${allInputs.length}:v=0:a=1[sfx]`
+  const concatAudioInputs = clipPaths.map((_, i) => `[ca${i}]`).join('')
+  const filterComplex = `${filterParts};${audioNormParts};${concatInputs}concat=n=${allInputs.length}:v=1:a=0[out];${concatAudioInputs}concat=n=${clipCount}:v=0:a=1[sfx]`
 
   // ── Measure the full video timeline ─────────────────────────────────────────
   // Total video duration = sum of all clip durations + end card. The audio MUST
@@ -1282,7 +1284,7 @@ async function createHeygenAvatar(characterName, faceImageUrl) {
   console.log(`[worker]   HeyGen: creating avatar for "${characterName}"...`)
 
   // Step 1: Create avatar record
-  const createRes = await fetch(`${HEYGEN_BASE}/avatars`, {
+  const createRes = await fetch(`${HEYGEN_BASE}/v3/avatars`, {
     method: 'POST',
     headers: { 'x-api-key': HEYGEN_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -1328,7 +1330,7 @@ async function generateHeygenClip(avatarId, audioUrl, sceneImageUrl, motionPromp
   // avatar_id goes at top level
   body.avatar_id = avatarId
 
-  const genRes = await fetch(`${HEYGEN_BASE}/generations`, {
+  const genRes = await fetch(`${HEYGEN_BASE}/v3/videos`, {
     method: 'POST',
     headers: { 'x-api-key': HEYGEN_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1346,7 +1348,7 @@ async function generateHeygenClip(avatarId, audioUrl, sceneImageUrl, motionPromp
   // Poll for completion (max 20 min, every 5s)
   for (let i = 0; i < 240; i++) {
     await new Promise(r => setTimeout(r, 5000))
-    const statusRes = await fetch(`${HEYGEN_BASE}/generations/${generationId}/status`, {
+    const statusRes = await fetch(`${HEYGEN_BASE}/v3/videos/${generationId}`, {
       headers: { 'x-api-key': HEYGEN_API_KEY },
     })
     if (!statusRes.ok) { console.warn('[worker]   HeyGen poll failed, retrying...'); continue }
