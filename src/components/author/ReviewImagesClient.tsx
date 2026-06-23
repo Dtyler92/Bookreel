@@ -354,7 +354,7 @@ function CharacterCard({
 }: {
   character: Character
   onApprove: (id: string, approved: boolean) => void
-  onImageUpdate: (id: string, imageUrl: string) => void
+  onImageUpdate: (id: string, imageUrl: string, faceUrl?: string, frontUrl?: string, backUrl?: string) => void
 }) {
   const [feedback, setFeedback] = useState('')
   const [loading, setLoading] = useState(false)
@@ -401,7 +401,7 @@ function CharacterCard({
           setRegenDone(true)
           // Wait for fade-out animation (500ms) before updating image
           setTimeout(() => {
-            onImageUpdate(character.id, data.newImageUrl)
+            onImageUpdate(character.id, data.newImageUrl, data.newFaceUrl, data.newFrontUrl, data.newBackUrl)
             setFeedback('')
             setRegenerating(false)
             setRegenDone(false)
@@ -795,8 +795,14 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
     setCharacters((prev) => prev.map((c) => (c.id === id ? { ...c, author_approved: approved } : c)))
   }
 
-  const handleCharacterImageUpdate = (id: string, imageUrl: string) => {
-    setCharacters((prev) => prev.map((c) => (c.id === id ? { ...c, image_url: imageUrl } : c)))
+  const handleCharacterImageUpdate = (id: string, imageUrl: string, faceUrl?: string, frontUrl?: string, backUrl?: string) => {
+    setCharacters((prev) => prev.map((c) => c.id === id ? {
+      ...c,
+      image_url: imageUrl,
+      ...(frontUrl && { image_url_front: frontUrl }),
+      ...(backUrl && { image_url_back: backUrl }),
+      ...(faceUrl && { image_url_left: faceUrl }),
+    } : c))
   }
 
   const handleItemApprove = (id: string, approved: boolean) => {

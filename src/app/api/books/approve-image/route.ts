@@ -43,6 +43,9 @@ export async function PATCH(request: Request) {
     const table = type === 'character' ? 'characters' : 'items'
 
     let newImageUrl: string | undefined
+    let newFaceUrl: string | undefined
+    let newFrontUrl: string | undefined
+    let newBackUrl: string | undefined
 
     // Build update payload — declared early so image generation can populate it
     const updatePayload: Record<string, unknown> = {
@@ -93,6 +96,7 @@ export async function PATCH(request: Request) {
             } as any,
           }) as { data: FalImageResult; requestId: string }
           const faceUrl = faceResult.data.images[0]?.url
+          newFaceUrl = faceUrl
           if (faceUrl) updatePayload.image_url_left = faceUrl
 
           // Step 2 — Front full body, using face as reference
@@ -109,6 +113,7 @@ export async function PATCH(request: Request) {
             } as any,
           }) as { data: FalImageResult; requestId: string }
           const frontUrl = frontResult.data.images[0]?.url
+          newFrontUrl = frontUrl
           if (frontUrl) {
             updatePayload.image_url_front = frontUrl
             newImageUrl = frontUrl
@@ -130,6 +135,7 @@ export async function PATCH(request: Request) {
             } as any,
           }) as { data: FalImageResult; requestId: string }
           const backUrl = backResult.data.images[0]?.url
+          newBackUrl = backUrl
           if (backUrl) updatePayload.image_url_back = backUrl
 
         } catch (falErr) {
@@ -170,7 +176,7 @@ export async function PATCH(request: Request) {
       return Response.json({ error: 'Failed to update record', detail: updateError.message }, { status: 500 })
     }
 
-    return Response.json({ success: true, newImageUrl })
+    return Response.json({ success: true, newImageUrl, newFaceUrl, newFrontUrl, newBackUrl })
   } catch (error) {
     console.error('[approve-image] Unhandled error:', error)
     return Response.json({ error: 'Internal server error', detail: String(error) }, { status: 500 })
