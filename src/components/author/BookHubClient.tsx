@@ -18,7 +18,6 @@ interface Book {
 interface Trailer {
   id: string
   status: string
-  video_url?: string | null
   final_video_url?: string | null
   quality_tier?: string | null
   created_at?: string
@@ -311,7 +310,7 @@ export default function BookHubClient({ book, trailers, characters, scenes, audi
         const data = await res.json()
         if (!data.status) return
         if (data.status === 'complete') {
-          setLiveTrailer(prev => prev ? { ...prev, status: 'complete', final_video_url: data.videoUrl, video_url: data.videoUrl } : prev)
+          setLiveTrailer(prev => prev ? { ...prev, status: 'complete', final_video_url: data.videoUrl } : prev)
           clearInterval(interval)
           router.refresh() // re-run server component to pull fresh trailer data + video URL
         } else if (data.status === 'pending' || data.status === 'processing' || data.status === 'generating') {
@@ -326,10 +325,10 @@ export default function BookHubClient({ book, trailers, characters, scenes, audi
     return () => clearInterval(interval)
   }, [book.id, liveTrailer?.status])
 
-  const hasTrailer = !!(liveTrailer && (liveTrailer.status === 'complete' || !!liveTrailer.video_url || !!liveTrailer.final_video_url))
-  const trailerVideoUrl = liveTrailer?.final_video_url ?? liveTrailer?.video_url ?? null
+  const hasTrailer = !!(liveTrailer && (liveTrailer.status === 'complete' || !!liveTrailer.final_video_url))
+  const trailerVideoUrl = liveTrailer?.final_video_url ?? null
   const trailerInProgress = !!(liveTrailer && (liveTrailer.status === 'pending' || liveTrailer.status === 'processing' || liveTrailer.status === 'generating'))
-  const completedTrailers = trailers.filter(t => t.status === 'complete' || !!t.video_url || !!t.final_video_url)
+  const completedTrailers = trailers.filter(t => t.status === 'complete' || !!t.final_video_url)
   const hasCharacters = characters.length > 0
   const approvedChars = characters.filter(c => c.author_approved)
   const hasApproved = approvedChars.length > 0
