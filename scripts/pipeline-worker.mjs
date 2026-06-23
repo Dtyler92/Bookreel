@@ -505,7 +505,7 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
       body: JSON.stringify({
         model: evolinkModel,
         prompt: safePrompt,
-        image_urls: [imageUrl],
+        image_start: imageUrl,
         duration: parseInt(duration),
         quality: resolution,
         aspect_ratio: '16:9',
