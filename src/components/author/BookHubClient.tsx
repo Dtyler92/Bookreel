@@ -489,7 +489,7 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
         : 'Create a full-cast AI-narrated audiobook.',
       state: hasAudiobook ? 'complete' : audiobookInProgress ? 'in-progress' : 'empty',
       ctaLabel: hasAudiobook ? 'Listen' : audiobookInProgress ? undefined : 'Create Audiobook',
-      ctaHref: hasAudiobook || audiobookInProgress ? `/audiobook/${book.id}` : undefined,
+      ctaHref: hasAudiobook ? `/listen/${book.id}` : audiobookInProgress ? `/audiobook/${book.id}` : undefined,
       onCtaClick: !hasAudiobook && !audiobookInProgress ? () => router.push(`/audiobook/${book.id}`) : undefined,
     },
     {
