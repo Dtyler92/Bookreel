@@ -66,10 +66,66 @@ function ShimmerBar() {
   )
 }
 
+// ─── Icons ────────────────────────────────────────────────────────────────────
+
+function IconTrailer() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="M10 9l5 3-5 3V9z" fill="#C8402F" stroke="none" />
+    </svg>
+  )
+}
+function IconCharacters() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="7" r="3.5" />
+      <path d="M2 21v-1a7 7 0 0 1 14 0v1" />
+      <circle cx="18" cy="8" r="2.5" />
+      <path d="M16 21v-.5a5 5 0 0 1 6 0V21" />
+    </svg>
+  )
+}
+function IconScreenplay() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="8" y1="13" x2="16" y2="13" />
+      <line x1="8" y1="17" x2="13" y2="17" />
+    </svg>
+  )
+}
+function IconAudiobook() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+      <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3z" />
+      <path d="M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+    </svg>
+  )
+}
+function IconSocial() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D4CDC1" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="18" rx="2" />
+      <path d="M8 12h8M8 8h5M8 16h3" />
+    </svg>
+  )
+}
+function IconEmail() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D4CDC1" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+      <polyline points="22,6 12,13 2,6" />
+    </svg>
+  )
+}
+
 // ─── Module card ─────────────────────────────────────────────────────────────
 
 interface ModuleCardProps {
-  icon: string
+  icon: React.ReactNode
   title: string
   description: string
   state: 'complete' | 'in-progress' | 'empty' | 'locked'
@@ -124,7 +180,7 @@ function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, 
           <div style={{
             width: 40, height: 40, borderRadius: 8, flexShrink: 0,
             background: '#F4F1EB', border: '1px solid #E8E2D5',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             {icon}
           </div>
@@ -241,7 +297,7 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
 
   const modules: ModuleCardProps[] = [
     {
-      icon: '🎬',
+      icon: <IconTrailer />,
       title: 'Book Trailer',
       description: hasTrailer
         ? `Your cinematic trailer is ready${trailer?.quality_tier ? ` — ${trailer.quality_tier}` : ''}.`
@@ -255,7 +311,7 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
       onCtaClick: !trailer ? () => router.push(`/trailer-wizard/${book.id}`) : undefined,
     },
     {
-      icon: '👥',
+      icon: <IconCharacters />,
       title: 'Character Images',
       description: hasApproved
         ? `${approvedChars.length} character${approvedChars.length !== 1 ? 's' : ''} approved and ready.`
@@ -269,7 +325,7 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
       onCtaClick: !hasCharacters ? () => router.push(`/upload?book=${book.id}`) : undefined,
     },
     {
-      icon: '📝',
+      icon: <IconScreenplay />,
       title: 'Screenplay',
       description: hasScreenplay
         ? `${scenes.length} scene${scenes.length !== 1 ? 's' : ''} scripted and ready.`
@@ -283,7 +339,7 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
       onCtaClick: !hasScreenplay && scenes.length === 0 ? () => router.push(`/upload?book=${book.id}`) : undefined,
     },
     {
-      icon: '🎧',
+      icon: <IconAudiobook />,
       title: 'Audiobook',
       description: hasAudiobook
         ? 'Your audiobook is complete and ready to listen.'
@@ -296,13 +352,13 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
       onCtaClick: !hasAudiobook && !audiobookInProgress ? () => router.push(`/audiobook/${book.id}`) : undefined,
     },
     {
-      icon: '📱',
+      icon: <IconSocial />,
       title: 'Social Media Clips',
       description: 'Short-form clips for TikTok, Instagram Reels & more — auto-cut from your trailer.',
       state: 'locked',
     },
     {
-      icon: '✉️',
+      icon: <IconEmail />,
       title: 'Email Templates',
       description: 'Launch emails, ARC requests & newsletters — personalized to your book.',
       state: 'locked',
