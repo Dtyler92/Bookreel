@@ -188,7 +188,11 @@ const PRICING = {
   // Seedance per-second price is also resolved at runtime in SEEDANCE_PER_SEC above
   tts_per_1k_char: 0.10,    // elevenlabs eleven-v3 — per 1000 chars
   music_bed: 0.015,         // stable-audio — approx (open model, compute-second)
-  // No separate lipsync cost — Seedance reference-to-video handles it natively
+  // Alias keys used by newer billing paths (prevents NaN in ledger)
+  evolink_kling_720p_audio:  0.106,   // same as evolink_kling_turbo
+  evolink_kling_1080p_audio: 0.121,   // same as evolink_kling_motion
+  evolink_seedance_720p:     0.093,   // same as fal_seedance
+  lipsync_per_sec:           0.05,    // $3/min = $0.05/s (sync-lipsync v2)
 }
 // Rough Claude Sonnet token prices (script/line-selection LLM, billed to Anthropic/
 // OpenRouter — a SEPARATE balance from fal, tracked here for full per-render visibility).
@@ -723,8 +727,12 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTra
   const filterParts = allInputs
     .map((_, i) => `[${i}:v]scale=${width}:${height},setsar=1,fps=${fps},format=yuv420p[v${i}]`)
     .join(';')
+  const audioNormParts = allInputs
+    .map((_, i) => `[${i}:a]aresample=44100,volume=0.35[ca${i}]`)
+    .join(';')
   const concatInputs = allInputs.map((_, i) => `[v${i}]`).join('')
-  const filterComplex = `${filterParts};${concatInputs}concat=n=${allInputs.length}:v=1:a=0[out]`
+  const concatAudioInputs = allInputs.map((_, i) => `[ca${i}]`).join('')
+  const filterComplex = `${filterParts};${audioNormParts};${concatInputs}concat=n=${allInputs.length}:v=1:a=0[out];${concatAudioInputs}concat=n=${allInputs.length}:v=0:a=1[sfx]`
 
   // ── Measure the full video timeline ─────────────────────────────────────────
   // Total video duration = sum of all clip durations + end card. The audio MUST
@@ -851,6 +859,10 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTra
       mixLabels.push('[mus]')
     }
 
+    // Native clip SFX (Kling native audio) — sits low under everything else
+    parts.push(`[sfx]volume=0.25[sfxa]`)
+    mixLabels.push('[sfxa]')
+
     let finalAudioLabel
     if (mixLabels.length === 1) {
       finalAudioLabel = mixLabels[0]
@@ -872,7 +884,7 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTra
   } else {
     execSync(
       `ffmpeg ${inputArgs} -filter_complex "${filterComplex}" ` +
-      `-map "[out]" -c:v libx264 -pix_fmt yuv420p -movflags +faststart ${outputPath} -y 2>&1`
+      `-map "[out]" -map "[sfx]" -c:v libx264 -c:a aac -b:a 192k -pix_fmt yuv420p -movflags +faststart ${outputPath} -y 2>&1`
     )
     console.log('[worker]   FFmpeg stitch complete (no audio):', outputPath)
   }
@@ -1557,22 +1569,20 @@ async function runPipeline(job) {
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
-      // Character punch-line: if this scene was chosen, use Seedance reference-to-video
-      // to generate the clip WITH native lip-sync baked in (image + TTS audio → synced video).
-      // Non-fatal — on any failure we keep the original clip and skip the line.
+      // Character punch-line: if this scene was chosen, generate TTS audio and then
+      // post-process with fal-ai/sync-lipsync/v2 to sync it onto the already-generated
+      // Kling clip. Non-fatal — on any failure we keep the original clip and skip the line.
       const chosenLine = lineBySceneNumber.get(scene.scene_number)
       if (chosenLine) {
         try {
           // Generate TTS audio for the character line
           const { url: lineAudioUrl, path: lineAudioPath } =
             await generateCharacterLineAudio(chosenLine.line, chosenLine.voice, tmpDirLines, scene.scene_number, ledger)
-          // Replace the standard clip with a Seedance reference-to-video clip that
-          // natively lip-syncs the character's voice onto their face image.
-          const syncedUrl = await generateCharacterClip(imageUrl, lineAudioUrl, scene.description, sceneLength, ledger, refEndpoint, perSec)
+          // Post-process: lip-sync TTS onto the already-generated Kling clip
+          const syncedUrl = await lipSyncClip(clipUrl, lineAudioUrl, scene.scene_number, sceneLength, ledger)
           clipUrl = syncedUrl
-          // clipUrls.length is this clip's index (we push next).
           characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
-          console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line lip-synced (Seedance ref2v)`)
+          console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line lip-synced (sync-lipsync v2)`)
         } catch (lineErr) {
           console.error(`[worker]   Scene ${scene.scene_number}: character line failed (non-fatal, keeping original clip):`, lineErr.message)
         }
