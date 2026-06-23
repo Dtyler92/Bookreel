@@ -1709,9 +1709,8 @@ async function runPipeline(job) {
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
-      // Character punch-line: if this scene was chosen, generate TTS audio and then
-      // post-process with fal-ai/sync-lipsync/v2 to sync it onto the already-generated
-      // Kling clip. Non-fatal — on any failure we keep the original clip and skip the line.
+      // Character punch-line: generate TTS audio then HeyGen expressive avatar clip.
+      // No fallback — if HeyGen fails we keep the original Kling clip (silent).
       const chosenLine = lineBySceneNumber.get(scene.scene_number)
       if (chosenLine) {
         try {
@@ -1725,41 +1724,28 @@ async function runPipeline(job) {
           )
           const faceImageUrl = charRecord?.image_url_left || charRecord?.image_url_front || charRecord?.image_url || null
 
-          let usedHeygen = false
           if (!isPlaceholder(HEYGEN_API_KEY) && faceImageUrl) {
-            try {
-              // Get or create HeyGen avatar_id for this character
-              let avatarId = charRecord?.heygen_avatar_id || null
-              if (!avatarId) {
-                avatarId = await createHeygenAvatar(chosenLine.character_name, faceImageUrl)
-                // Cache avatar_id in characters table
-                await supabase.from('characters').update({ heygen_avatar_id: avatarId }).eq('id', charRecord.id)
-                if (ledger) ledger.add(`HeyGen avatar creation: ${chosenLine.character_name}`, 'heygen', PRICING.heygen_avatar_creation)
-              } else {
-                console.log(`[worker]   HeyGen: using cached avatar for "${chosenLine.character_name}" (${avatarId})`)
-              }
-
-              // Derive motion prompt from scene emotion
-              const motionPrompt = deriveMotionPrompt(scene.description, chosenLine.line, book.genre)
-              console.log(`[worker]   Scene ${scene.scene_number}: motion prompt — "${motionPrompt.substring(0, 80)}"`)
-
-              // Generate expressive HeyGen clip (replaces Kling clip for this scene)
-              const heygenUrl = await generateHeygenClip(avatarId, lineAudioUrl, imageUrl, motionPrompt, sceneLength, ledger)
-              clipUrl = heygenUrl
-              characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
-              usedHeygen = true
-              console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line — HeyGen expressive avatar`)
-            } catch (heygenErr) {
-              console.error(`[worker]   Scene ${scene.scene_number}: HeyGen failed, falling back to sync-lipsync:`, heygenErr.message)
+            // Get or create HeyGen avatar_id for this character
+            let avatarId = charRecord?.heygen_avatar_id || null
+            if (!avatarId) {
+              avatarId = await createHeygenAvatar(chosenLine.character_name, faceImageUrl)
+              await supabase.from('characters').update({ heygen_avatar_id: avatarId }).eq('id', charRecord.id)
+              if (ledger) ledger.add(`HeyGen avatar creation: ${chosenLine.character_name}`, 'heygen', PRICING.heygen_avatar_creation)
+            } else {
+              console.log(`[worker]   HeyGen: using cached avatar for "${chosenLine.character_name}" (${avatarId})`)
             }
-          }
 
-          // Fallback: sync-lipsync/v2 if HeyGen not available or failed
-          if (!usedHeygen) {
-            const syncedUrl = await lipSyncClip(clipUrl, lineAudioUrl, scene.scene_number, sceneLength, ledger)
-            clipUrl = syncedUrl
+            // Derive motion prompt from scene emotion
+            const motionPrompt = deriveMotionPrompt(scene.description, chosenLine.line, book.genre)
+            console.log(`[worker]   Scene ${scene.scene_number}: motion prompt — "${motionPrompt.substring(0, 80)}"`)
+
+            // Generate expressive HeyGen clip (replaces Kling clip for this scene)
+            const heygenUrl = await generateHeygenClip(avatarId, lineAudioUrl, imageUrl, motionPrompt, sceneLength, ledger)
+            clipUrl = heygenUrl
             characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
-            console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line lip-synced (sync-lipsync v2 fallback)`)
+            console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line — HeyGen expressive avatar`)
+          } else {
+            console.log(`[worker]   Scene ${scene.scene_number}: HeyGen skipped (no API key or no face image) — keeping original clip`)
           }
         } catch (lineErr) {
           console.error(`[worker]   Scene ${scene.scene_number}: character line failed (non-fatal, keeping original clip):`, lineErr.message)
