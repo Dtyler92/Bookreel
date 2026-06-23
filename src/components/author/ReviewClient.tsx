@@ -21,6 +21,8 @@ interface Props {
   bookGenre?: string | null
   initialCharacters: CharacterWithApproval[]
   initialScenes: SceneWithApproval[]
+  wizardMode?: boolean
+  onWizardComplete?: () => void
 }
 
 // ─── Helper: parse combined description field ─────────────────────────────────
@@ -956,6 +958,8 @@ export default function ReviewClient({
   bookGenre,
   initialCharacters,
   initialScenes,
+  wizardMode,
+  onWizardComplete,
 }: Props) {
   const router = useRouter()
   const [characters, setCharacters] = useState<CharacterWithApproval[]>(initialCharacters)
@@ -965,11 +969,12 @@ export default function ReviewClient({
 
   const approvedCharacters = new Set(characters.filter((c) => c.author_approved).map((c) => c.id))
   const approvedScenes = new Set(scenes.filter((s) => s.author_approved).map((s) => s.id))
-  const allApproved =
-    characters.length > 0 &&
-    scenes.length > 0 &&
-    approvedCharacters.size === characters.length &&
-    approvedScenes.size === scenes.length
+  const allApproved = wizardMode
+    ? scenes.length > 0 && approvedScenes.size === scenes.length
+    : characters.length > 0 &&
+      scenes.length > 0 &&
+      approvedCharacters.size === characters.length &&
+      approvedScenes.size === scenes.length
 
   const handleCharacterApprove = (id: string, approved: boolean) => {
     setCharacters((prev) => prev.map((c) => (c.id === id ? { ...c, author_approved: approved } : c)))
@@ -988,13 +993,17 @@ export default function ReviewClient({
   }
 
   const handleGenerate = async () => {
-    setGenerating(true)
-    setGenerateError(null)
-    try {
-      router.push(`/review-images/${bookId}`)
-    } catch (err) {
-      setGenerateError(err instanceof Error ? err.message : 'Failed to navigate.')
-      setGenerating(false)
+    if (wizardMode) {
+      onWizardComplete?.()
+    } else {
+      setGenerating(true)
+      setGenerateError(null)
+      try {
+        router.push(`/review-images/${bookId}`)
+      } catch (err) {
+        setGenerateError(err instanceof Error ? err.message : 'Failed to navigate.')
+        setGenerating(false)
+      }
     }
   }
 
@@ -1243,7 +1252,7 @@ export default function ReviewClient({
               transition: 'background-color 200ms ease, color 200ms ease, opacity 200ms ease',
             }}
           >
-            {generating ? 'Opening…' : 'Continue to Visual Review →'}
+            {wizardMode ? 'Continue to Image Review →' : generating ? 'Opening…' : 'Continue to Visual Review →'}
           </button>
           <span
             style={{

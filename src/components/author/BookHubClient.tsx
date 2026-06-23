@@ -160,7 +160,7 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
       statusLabel: hasTrailer ? `${trailer?.quality_tier ?? ''} trailer ready`.trim() : trailerInProgress ? 'Generating…' : undefined,
       href: hasTrailer ? `/review/${book.id}` : undefined,
       addLabel: 'Generate Trailer',
-      addHref: !trailer ? `/upload?book=${book.id}` : undefined,
+      addHref: !trailer ? `/trailer-wizard/${book.id}` : undefined,
       onClick: trailerInProgress ? () => router.push(`/review/${book.id}`) : undefined,
     },
     {
@@ -252,7 +252,8 @@ export default function BookHubClient({ book, trailer, characters, scenes, audio
               href={section.href}
               addLabel={section.addLabel}
               addHref={section.addHref}
-            />
+              onClick={section.onClick}
+              />
           ))}
         </div>
       </div>

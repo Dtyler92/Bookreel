@@ -16,6 +16,8 @@ interface Props {
   initialCharacters: Character[]
   initialItems: Item[]
   userId?: string
+  wizardMode?: boolean
+  onWizardComplete?: () => void
 }
 
 // ─── Role Badge ───────────────────────────────────────────────────────────────
@@ -707,7 +709,7 @@ function ItemCard({
 
 // ─── Main ReviewImagesClient ──────────────────────────────────────────────────
 
-export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initialCharacters, initialItems, userId }: Props) {
+export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initialCharacters, initialItems, userId, wizardMode, onWizardComplete }: Props) {
   const router = useRouter()
   const [characters, setCharacters] = useState<Character[]>(initialCharacters)
   const [items, setItems] = useState<Item[]>(initialItems)
@@ -839,7 +841,11 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
         }
         throw new Error(data?.error ?? `Generation failed (${res.status})`)
       }
-      router.push('/dashboard?generated=1')
+      if (wizardMode) {
+        onWizardComplete?.()
+      } else {
+        router.push('/dashboard?generated=1')
+      }
     } catch (err) {
       setContinueError(err instanceof Error ? err.message : 'Failed to start generation.')
       setContinuing(false)
@@ -1109,7 +1115,7 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
                   Starting…
                 </span>
               ) : (
-                'Continue to Trailer Generation →'
+                wizardMode ? 'Generate My Trailer →' : 'Continue to Trailer Generation →'
               )}
             </button>
           </div>
