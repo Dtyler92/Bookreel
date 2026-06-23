@@ -16,6 +16,95 @@ interface Props {
   userId: string
 }
 
+// ─── Step indicator ───────────────────────────────────────────────────────────
+
+const STEPS = [
+  { key: 'screenplay', label: 'Screenplay' },
+  { key: 'images',     label: 'Characters' },
+  { key: 'confirm',    label: 'Generate'   },
+]
+
+function StepBar({ stepIndex }: { stepIndex: number }) {
+  return (
+    <div style={{
+      position: 'sticky', top: 64, zIndex: 40,
+      background: 'rgba(253,252,249,0.95)',
+      backdropFilter: 'blur(12px)',
+      borderBottom: '1px solid #E8E2D5',
+      padding: '0 24px',
+    }}>
+      <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', alignItems: 'center', height: 52 }}>
+        {/* Label */}
+        <span style={{
+          fontFamily: 'var(--font-inter), sans-serif',
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+          textTransform: 'uppercase', color: '#8A8278',
+          marginRight: 24, whiteSpace: 'nowrap',
+        }}>
+          Trailer Wizard
+        </span>
+
+        {/* Steps */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+          {STEPS.map((s, i) => {
+            const isDone    = i < stepIndex
+            const isCurrent = i === stepIndex
+            return (
+              <div key={s.key} style={{ display: 'flex', alignItems: 'center' }}>
+                {/* Connector */}
+                {i > 0 && (
+                  <div style={{
+                    width: 32, height: 1,
+                    background: isDone ? '#16A34A' : '#E8E2D5',
+                    transition: 'background 300ms ease',
+                  }} />
+                )}
+                {/* Pill */}
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '5px 12px', borderRadius: 100,
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 12, fontWeight: 600, letterSpacing: '0.02em',
+                  transition: 'all 200ms ease',
+                  background: isDone    ? '#F0FDF4'
+                            : isCurrent ? '#FDECEA'
+                            : 'transparent',
+                  border: `1px solid ${isDone    ? '#BBF7D0'
+                                     : isCurrent ? '#F5C0B8'
+                                     : '#E8E2D5'}`,
+                  color: isDone    ? '#15803D'
+                       : isCurrent ? '#C8402F'
+                       : '#8A8278',
+                }}>
+                  {isDone ? (
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <span style={{
+                      width: 16, height: 16, borderRadius: '50%',
+                      background: isCurrent ? '#C8402F' : '#E8E2D5',
+                      color: isCurrent ? '#fff' : '#8A8278',
+                      fontSize: 9, fontWeight: 700,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      {i + 1}
+                    </span>
+                  )}
+                  {s.label}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function TrailerWizardClient({
   book,
   trailer,
@@ -26,33 +115,30 @@ export default function TrailerWizardClient({
 }: Props) {
   const router = useRouter()
 
-  const allScenesApproved =
-    initialScenes.length > 0 && initialScenes.every((s: any) => s.author_approved)
-  const allImagesApproved =
-    initialCharacters.length > 0 && initialCharacters.every((c: any) => c.author_approved)
+  const allScenesApproved  = initialScenes.length > 0    && initialScenes.every((s: any)    => s.author_approved)
+  const allImagesApproved  = initialCharacters.length > 0 && initialCharacters.every((c: any) => c.author_approved)
 
   const getInitialStep = (): WizardStep => {
-    // Everything already approved — show confirm screen so author can actually trigger generation
     if (allScenesApproved && allImagesApproved) return 'confirm'
     if (allScenesApproved) return 'images'
     return 'screenplay'
   }
 
-  const [step, setStep] = useState<WizardStep>(getInitialStep)
+  const [step, setStep]           = useState<WizardStep>(getInitialStep)
   const [generating, setGenerating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError]           = useState<string | null>(null)
+
+  const stepIndex = STEPS.findIndex(s => s.key === step)
 
   const handleGenerate = async () => {
     setGenerating(true)
     setError(null)
     try {
-      // Mark images approved on trailer record
       await fetch('/api/books/mark-images-approved', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookId: book.id }),
       })
-      // Kick off generation
       const res = await fetch('/api/books/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,43 +155,10 @@ export default function TrailerWizardClient({
     }
   }
 
-  const steps = [
-    { key: 'screenplay', label: 'Screenplay', icon: '📝' },
-    { key: 'images',     label: 'Characters',  icon: '👥' },
-    { key: 'confirm',    label: 'Generate',    icon: '🎬' },
-  ]
-  const stepIndex = steps.findIndex(s => s.key === step)
-
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      {/* Step indicator */}
-      <div className="sticky top-0 z-50 bg-[#0a0a0a]/95 backdrop-blur border-b border-white/10 px-4 py-3">
-        <div className="max-w-4xl mx-auto">
-          <p className="text-xs text-white/40 uppercase tracking-widest mb-3">
-            Trailer Creation Wizard
-          </p>
-          <div className="flex items-center gap-2">
-            {steps.map((s, i) => {
-              const isDone = i < stepIndex
-              const isCurrent = i === stepIndex
-              return (
-                <div key={s.key} className="flex items-center gap-2">
-                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                    isDone    ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
-                    isCurrent ? 'bg-red-600/20 text-red-400 border border-red-500/40' :
-                                'bg-white/5 text-white/30 border border-white/10'
-                  }`}>
-                    {isDone ? '✓' : s.icon} {s.label}
-                  </div>
-                  {i < steps.length - 1 && (
-                    <div className={`h-px w-6 ${i < stepIndex ? 'bg-green-500/50' : 'bg-white/10'}`} />
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
+    <div style={{ minHeight: '100vh', background: '#FAFAF7' }}>
+
+      <StepBar stepIndex={stepIndex} />
 
       {/* Screenplay step */}
       {step === 'screenplay' && (
@@ -123,9 +176,18 @@ export default function TrailerWizardClient({
       {step === 'images' && (
         <div>
           {allScenesApproved && (
-            <div className="max-w-4xl mx-auto px-4 pt-4">
-              <div className="flex items-center gap-2 text-green-400 text-sm bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-3">
-                ✓ Screenplay approved — now review your character images before generating
+            <div style={{ maxWidth: 880, margin: '0 auto', padding: '16px 24px 0' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: '#F0FDF4', border: '1px solid #BBF7D0',
+                borderRadius: 8, padding: '10px 16px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 13, fontWeight: 500, color: '#15803D',
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Screenplay approved — now review your character images before generating
               </div>
             </div>
           )}
@@ -144,36 +206,124 @@ export default function TrailerWizardClient({
 
       {/* Confirm + generate step */}
       {step === 'confirm' && (
-        <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 gap-6">
-          {/* Green checkmarks */}
-          <div className="flex flex-col gap-3 w-full max-w-sm">
-            <div className="flex items-center gap-3 bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-3 text-green-400 text-sm">
-              <span>✓</span> Screenplay approved
-            </div>
-            <div className="flex items-center gap-3 bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-3 text-green-400 text-sm">
-              <span>✓</span> Character images approved
-            </div>
+        <div style={{
+          maxWidth: 520, margin: '0 auto',
+          padding: '72px 24px 96px',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 32,
+        }}>
+
+          {/* Book title pill */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '6px 14px', borderRadius: 100,
+            background: '#F4F1EB', border: '1px solid #E8E2D5',
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: 12, fontWeight: 500, color: '#8A8278',
+          }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2"/>
+              <path d="M10 9l5 3-5 3V9z" fill="#C8402F" stroke="none"/>
+            </svg>
+            {book.title}
           </div>
 
-          <div className="text-center max-w-sm">
-            <h2 className="text-white text-2xl font-bold mb-2">Ready to generate</h2>
-            <p className="text-white/50 text-sm leading-relaxed">
+          {/* Heading */}
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{
+              margin: '0 0 12px',
+              fontFamily: 'var(--font-playfair), serif',
+              fontSize: 32, fontWeight: 700, color: '#0D0D0B',
+              letterSpacing: '-0.02em', lineHeight: 1.2,
+            }}>
+              Ready to generate
+            </h2>
+            <p style={{
+              margin: 0,
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 15, lineHeight: 1.65, color: '#8A8278',
+            }}>
               Your screenplay and character images are approved. Our cinematic engine will craft your trailer — usually ready in 15–20 minutes.
             </p>
           </div>
 
+          {/* Approval checklist */}
+          <div style={{
+            width: '100%', display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            {[
+              { label: 'Screenplay approved', detail: `${initialScenes.length} scene${initialScenes.length !== 1 ? 's' : ''}` },
+              { label: 'Character images approved', detail: `${initialCharacters.length} character${initialCharacters.length !== 1 ? 's' : ''}` },
+            ].map(({ label, detail }) => (
+              <div key={label} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: '#FFFFFF', border: '1px solid #BBF7D0',
+                borderRadius: 10, padding: '14px 18px',
+                boxShadow: '0 1px 4px rgba(13,13,11,0.04)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: '50%',
+                    background: '#F0FDF4', border: '1.5px solid #86EFAC',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                  <span style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: 14, fontWeight: 500, color: '#0D0D0B',
+                  }}>
+                    {label}
+                  </span>
+                </div>
+                <span style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 12, fontWeight: 500, color: '#8A8278',
+                  background: '#F4F1EB', padding: '2px 8px',
+                  borderRadius: 100, border: '1px solid #E8E2D5',
+                }}>
+                  {detail}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Error */}
           {error && (
-            <p className="text-red-400 text-sm text-center max-w-sm">{error}</p>
+            <div style={{
+              width: '100%', padding: '12px 16px', borderRadius: 8,
+              background: '#FEF2F2', border: '1px solid #FECACA',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 13, color: '#DC2626',
+            }}>
+              {error}
+            </div>
           )}
 
+          {/* Generate button */}
           <button
             onClick={handleGenerate}
             disabled={generating}
-            className="flex items-center gap-2 px-8 py-3 rounded-lg bg-[#C8402F] hover:bg-[#A8321F] text-white font-semibold text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', gap: 10,
+              padding: '16px 32px', borderRadius: 10,
+              background: generating ? '#D4736A' : '#C8402F',
+              color: '#FFFFFF', border: 'none', cursor: generating ? 'not-allowed' : 'pointer',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 15, fontWeight: 600, letterSpacing: '0.01em',
+              transition: 'background 150ms ease',
+              boxShadow: generating ? 'none' : '0 4px 16px rgba(200,64,47,0.3)',
+            }}
+            onMouseEnter={e => { if (!generating) (e.currentTarget as HTMLButtonElement).style.background = '#A8321F' }}
+            onMouseLeave={e => { if (!generating) (e.currentTarget as HTMLButtonElement).style.background = '#C8402F' }}
           >
             {generating ? (
               <>
-                <svg className="animate-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeOpacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" /></svg>
+                <svg style={{ animation: 'spin 1s linear infinite' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+                </svg>
                 Queuing your trailer…
               </>
             ) : (
@@ -181,19 +331,30 @@ export default function TrailerWizardClient({
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
                 </svg>
-                Generate Trailer
+                Generate My Trailer
               </>
             )}
           </button>
 
+          {/* Back link */}
           <button
             onClick={() => router.push(`/book/${book.id}`)}
-            className="text-white/30 text-sm hover:text-white/50 transition-colors"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 13, fontWeight: 500, color: '#8A8278',
+              transition: 'color 150ms ease',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#0D0D0B')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#8A8278')}
           >
             ← Back to Book Hub
           </button>
+
         </div>
       )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
