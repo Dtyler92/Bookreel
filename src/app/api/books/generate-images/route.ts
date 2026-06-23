@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     // Fetch characters
     const { data: characters, error: charError } = await supabase
       .from('characters')
-      .select('id, name, description, appearance_notes, image_url')
+      .select('id, name, description, appearance_notes, image_url, image_url_front, image_url_back, image_url_left')
       .eq('book_id', bookId)
 
     if (charError) {
@@ -105,38 +105,76 @@ export async function POST(request: Request) {
 
     // Generate images for characters that don't have one yet
     for (const character of characters ?? []) {
-      if (character.image_url) {
-        updatedCharacters.push({ id: character.id, image_url: character.image_url })
+      // Skip if all 3 angles already exist
+      const char = character as any
+      if (char.image_url_front && char.image_url_back && char.image_url_left) {
+        updatedCharacters.push({ id: character.id, image_url: char.image_url_front })
         continue
       }
 
-      const appearance = character.appearance_notes ?? character.description ?? character.name
-      const temperamentHint = extractTemperament(character.description)
-      const characterPrompt = `${appearance}${temperamentHint ? `, ${temperamentHint}` : ''}, natural skin texture, photorealistic portrait, editorial photography, soft cinematic lighting, sharp focus on face, book cover style, ${genre} genre aesthetic`
-      const imagePrompt = sanitizeAppearanceDescription(characterPrompt.substring(0, 500))
+      const appearance = sanitizeAppearanceDescription(char.appearance_notes ?? character.description ?? character.name)
+      const baseDesc = `${appearance}, ultra-realistic photorealistic, clean studio lighting, neutral grey background, no text, no watermarks`
 
       try {
-        console.log('[generate-images] Generating image for character:', character.name)
-        const result = await fal.subscribe(falCharacterModel, {
+        console.log('[generate-images] Generating 3-angle character sheet for:', character.name)
+
+        // Step 1 — Face close-up (no reference)
+        const faceResult = await fal.subscribe(falCharacterModel, {
           input: {
-            prompt: imagePrompt,
-            negative_prompt: IMAGE_NEGATIVE_PROMPT + ', artificial, plastic skin, overly smooth, CGI, digital art, illustration, text, watermark',
-            image_size: 'portrait_4_3',
+            prompt: `${baseDesc}, straight-on headshot portrait, face looking directly into camera, eye level, shoulders visible, neutral expression, sharp facial features, studio portrait lighting`.substring(0, 500),
+            negative_prompt: IMAGE_NEGATIVE_PROMPT,
+            aspect_ratio: '1:1',
             num_images: 1,
-            safety_tolerance: '2',
+            output_format: 'jpeg',
+            raw: true,
+            safety_tolerance: '6',
           } as any,
         }) as { data: FalImageResult; requestId: string }
+        const faceUrl = faceResult.data.images[0]?.url
 
-        const imageUrl = result.data.images[0]?.url
-        if (imageUrl) {
-          await supabase
-            .from('characters')
-            .update({ image_url: imageUrl, image_prompt: imagePrompt })
-            .eq('id', character.id)
-          updatedCharacters.push({ id: character.id, image_url: imageUrl })
+        // Step 2 — Front full body, using face as reference
+        const frontResult = await fal.subscribe(falCharacterModel, {
+          input: {
+            prompt: `${baseDesc}, same person as reference image, full body front view, facing camera directly, symmetrical pose, arms relaxed at sides, head to toe, same face and outfit`.substring(0, 500),
+            negative_prompt: IMAGE_NEGATIVE_PROMPT,
+            aspect_ratio: '3:4',
+            num_images: 1,
+            output_format: 'jpeg',
+            raw: true,
+            safety_tolerance: '6',
+            ...(faceUrl ? { image_urls: [faceUrl] } : {}),
+          } as any,
+        }) as { data: FalImageResult; requestId: string }
+        const frontUrl = frontResult.data.images[0]?.url
+
+        // Step 3 — Back full body, using face as reference
+        const backResult = await fal.subscribe(falCharacterModel, {
+          input: {
+            prompt: `${baseDesc}, same person as reference image, full body back view, seen from behind, same outfit and hair, head to toe`.substring(0, 500),
+            negative_prompt: IMAGE_NEGATIVE_PROMPT,
+            aspect_ratio: '3:4',
+            num_images: 1,
+            output_format: 'jpeg',
+            raw: true,
+            safety_tolerance: '6',
+            ...(faceUrl ? { image_urls: [faceUrl] } : {}),
+          } as any,
+        }) as { data: FalImageResult; requestId: string }
+        const backUrl = backResult.data.images[0]?.url
+
+        const updatePayload: Record<string, unknown> = {}
+        if (faceUrl) updatePayload.image_url_left = faceUrl
+        if (frontUrl) {
+          updatePayload.image_url_front = frontUrl
+          updatePayload.image_url = frontUrl
+          updatePayload.reference_image_url = frontUrl
         }
+        if (backUrl) updatePayload.image_url_back = backUrl
+
+        await supabase.from('characters').update(updatePayload).eq('id', character.id)
+        updatedCharacters.push({ id: character.id, image_url: frontUrl ?? faceUrl ?? '' })
       } catch (err) {
-        console.error('[generate-images] Character image generation failed:', character.name, err)
+        console.error(`[generate-images] 3-angle generation failed for ${character.name}:`, err)
         updatedCharacters.push({ id: character.id, image_url: '' })
       }
     }
