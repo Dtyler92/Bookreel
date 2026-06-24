@@ -69,10 +69,34 @@ export async function GET(
         return Response.json({ error: 'Audiobook not ready' }, { status: 404 })
       }
 
-      // Worker always saves to these exact paths regardless of the stored audio_url value
-      const ext = (asset === 'audiobook_m4b') ? 'm4b' : 'mp3'
-      storagePath = `audiobooks/${bookId}/audiobook.${ext}`
-      filename = `${safeTitle}.${ext}`
+      // Extract the real storage path from the stored URL
+      const basePath = extractPath(ab.audio_url)
+      if (!basePath) {
+        return Response.json({ error: 'Could not resolve audio storage path' }, { status: 500 })
+      }
+
+      if (asset === 'audiobook_m4b') {
+        // Try the M4B path (same name, .m4b extension)
+        const m4bPath = basePath.replace(/\.mp3(\?.*)?$/i, '.m4b').split('?')[0]
+        const { data: m4bSigned, error: m4bErr } = await sb.storage
+          .from('media')
+          .createSignedUrl(m4bPath, 3600, { download: `${safeTitle}.m4b` })
+
+        if (!m4bErr && m4bSigned?.signedUrl) {
+          return Response.redirect(m4bSigned.signedUrl, 302)
+        }
+        // M4B not found — fall back to MP3 with a clear filename
+        storagePath = basePath.split('?')[0]
+        filename = `${safeTitle}.mp3`
+        return Response.json({
+          error: 'M4B file not available for this audiobook. The M4B is generated for new audiobooks — this one was produced before M4B support was added. Please download the MP3 version instead.',
+          fallback: 'audiobook_mp3',
+        }, { status: 404 })
+      } else {
+        // MP3
+        storagePath = basePath.split('?')[0]
+        filename = `${safeTitle}.mp3`
+      }
 
     } else if (asset === 'trailer') {
       const { data: tr } = await sb

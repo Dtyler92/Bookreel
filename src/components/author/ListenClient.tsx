@@ -385,8 +385,7 @@ export default function ListenClient({
             display: 'flex', gap: '12px', flexWrap: 'wrap',
           }}>
             <a
-              href={m4bUrl}
-              download
+              href={`/api/books/${bookId}/download?asset=audiobook_m4b`}
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px',
                 padding: '11px 20px', borderRadius: '10px',
@@ -398,8 +397,7 @@ export default function ListenClient({
               <DownloadIcon /> Download M4B
             </a>
             <a
-              href={mp3Url}
-              download
+              href={`/api/books/${bookId}/download?asset=audiobook_mp3`}
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px',
                 padding: '11px 20px', borderRadius: '10px',

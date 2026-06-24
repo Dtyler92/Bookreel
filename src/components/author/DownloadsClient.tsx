@@ -58,18 +58,32 @@ interface DownloadItemProps {
 
 function DownloadItem({ icon, title, description, available, formats, bookId }: DownloadItemProps) {
   const [downloading, setDownloading] = useState<string | null>(null)
+  const [m4bUnavailable, setM4bUnavailable] = useState(false)
 
   const handleDownload = async (asset: string, label: string) => {
     setDownloading(label)
-    // Trigger via anchor redirect — just open the download URL
-    const a = document.createElement('a')
-    a.href = `/api/books/${bookId}/download?asset=${asset}`
-    a.style.display = 'none'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    // Reset after a moment
-    setTimeout(() => setDownloading(null), 2500)
+    try {
+      const res = await fetch(`/api/books/${bookId}/download?asset=${asset}`)
+      if (res.ok || res.redirected) {
+        // Success — trigger via anchor
+        const a = document.createElement('a')
+        a.href = `/api/books/${bookId}/download?asset=${asset}`
+        a.style.display = 'none'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      } else {
+        const data = await res.json().catch(() => ({})) as { error?: string; fallback?: string }
+        if (data.fallback === 'audiobook_mp3') {
+          setM4bUnavailable(true)
+        } else {
+          alert(data.error ?? 'Download failed. Please try again.')
+        }
+      }
+    } catch {
+      alert('Download failed. Please try again.')
+    }
+    setTimeout(() => setDownloading(null), 1500)
   }
 
   return (
@@ -123,7 +137,8 @@ function DownloadItem({ icon, title, description, available, formats, bookId }: 
 
       {/* Download buttons */}
       {available && (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {formats.map(fmt => (
             <button
               key={fmt.asset}
@@ -168,6 +183,18 @@ function DownloadItem({ icon, title, description, available, formats, bookId }: 
               )}
             </button>
           ))}
+          </div>
+          {/* M4B unavailable notice */}
+          {m4bUnavailable && (
+            <div style={{
+              padding: '10px 14px', borderRadius: 8,
+              background: '#FFFBEB', border: '1px solid #FDE68A',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 12, color: '#92400E', lineHeight: 1.5,
+            }}>
+              ⚠️ <strong>M4B not available</strong> for this audiobook — it was generated before M4B support was added. Please use <strong>Download MP3</strong> instead.
+            </div>
+          )}
         </div>
       )}
 
