@@ -512,7 +512,6 @@ function BookCard({
   const [trailerStatus, setTrailerStatus] = useState<TrailerStatus | null>(book.trailerStatus)
   const [coverUrl, setCoverUrl] = useState<string | null | undefined>(book.coverImageUrl)
   const [retryHover, setRetryHover] = useState(false)
-  const [playHover, setPlayHover] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const isGenerating = trailerStatus === 'pending' || trailerStatus === 'processing' || trailerStatus === 'generating'
   const isFailed = trailerStatus === 'failed'
@@ -656,12 +655,8 @@ function BookCard({
 
     if (isComplete && book.trailerStatus === 'complete') {
       return (
-        /* ── Complete State: cover image + play button overlay ── */
-        <div
-          style={{ position: 'relative', width: '100%', height: '100%' }}
-          onMouseEnter={() => setPlayHover(true)}
-          onMouseLeave={() => setPlayHover(false)}
-        >
+        /* ── Complete State: cover image only ── */
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={coverUrl} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -679,44 +674,6 @@ function BookCard({
               📖
             </div>
           )}
-          {/* Dark scrim + play button on hover */}
-          <div
-            onClick={(e) => {
-              if (book.trailerVideoUrl) {
-                e.preventDefault()
-                e.stopPropagation()
-                onPlayVideo(book)
-              }
-            }}
-            style={{
-            position: 'absolute',
-            inset: 0,
-            background: playHover ? 'rgba(13,13,11,0.35)' : 'rgba(13,13,11,0)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'background 200ms ease',
-            cursor: book.trailerVideoUrl ? 'pointer' : 'default',
-          }}>
-            <div style={{
-              width: 48,
-              height: 48,
-              borderRadius: '50%',
-              background: '#FFFFFF',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(13,13,11,0.25)',
-              transform: playHover ? 'scale(1.05)' : 'scale(1)',
-              opacity: playHover ? 1 : 0,
-              transition: 'opacity 200ms ease, transform 200ms ease',
-            }}>
-              {/* Vermillion play triangle */}
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <polygon points="6,4 14,9 6,14" fill="#C8402F" />
-              </svg>
-            </div>
-          </div>
         </div>
       )
     }
@@ -958,7 +915,7 @@ function BookCard({
                   ;(e.currentTarget as HTMLAnchorElement).style.color = '#5C5751'
                 }}
               >
-                {label}{!abDone && !abInProgress && <span style={{ fontSize: '10px', color: '#B0A89E' }}>1500 cr</span>}
+                {label}
               </Link>
               )
             })()}

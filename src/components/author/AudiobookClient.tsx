@@ -1568,22 +1568,22 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                       src={bookCover}
                       alt={bookTitle}
                       width={260}
-                      height={156}
+                      height={390}
                       style={{
-                        width: '100%', height: 140,
+                        width: '100%', height: 'auto', aspectRatio: '2/3',
                         objectFit: 'cover', borderRadius: 8,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.10)',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
                       }}
                     />
                   </div>
                 ) : (
                   <div style={{
-                    width: '100%', height: 120, borderRadius: 8,
-                    background: '#F4F1EB', border: `1px solid ${border}`,
+                    width: '100%', aspectRatio: '2/3', borderRadius: 8,
+                    background: 'linear-gradient(145deg, #C8402F 0%, #8A1C10 100%)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 36, marginBottom: 18,
+                    color: 'rgba(255,255,255,0.25)', fontSize: 48, marginBottom: 18,
                   }}>
-                    📚
+                    📖
                   </div>
                 )}
 
