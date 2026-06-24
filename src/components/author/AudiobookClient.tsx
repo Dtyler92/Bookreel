@@ -373,17 +373,16 @@ function CharacterCard({
     <div style={{
       background: card,
       border: `1px solid ${isOpen ? red : border}`,
-      borderRadius: 12, overflow: 'hidden',
+      borderRadius: 10, overflow: 'hidden',
       transition: 'border-color 150ms ease, box-shadow 150ms ease',
-      boxShadow: isOpen ? '0 2px 16px rgba(200,64,47,0.08)' : 'none',
-      marginBottom: 10,
+      boxShadow: isOpen ? '0 2px 12px rgba(200,64,47,0.08)' : 'none',
     }}>
       {/* Header row */}
       <div
         onClick={onToggle}
         style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          padding: '14px 18px',
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 12px',
           cursor: 'pointer',
           background: isOpen ? 'rgba(200,64,47,0.018)' : 'transparent',
           userSelect: 'none',
@@ -391,79 +390,77 @@ function CharacterCard({
       >
         {/* Speaker colour dot */}
         <div style={{
-          width: 10, height: 10, borderRadius: '50%',
+          width: 8, height: 8, borderRadius: '50%',
           background: speakerColor, flexShrink: 0,
           boxShadow: `0 0 0 2px ${speakerColor}28`,
         }} />
 
         {/* Name + badges */}
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
             <span style={{
               fontFamily: 'var(--font-playfair), serif',
-              fontSize: 15, fontWeight: 700, color: dark,
+              fontSize: 13, fontWeight: 700, color: dark,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              maxWidth: '100%',
             }}>
               {speaker === 'NARRATOR' ? 'Narrator' : speaker}
             </span>
             {isNarrator && (
               <span style={{
-                fontSize: 10, fontWeight: 700, padding: '2px 7px',
+                fontSize: 9, fontWeight: 700, padding: '1px 5px',
                 borderRadius: 100, background: '#F4F1EB',
                 color: muted, letterSpacing: '0.04em',
                 fontFamily: 'var(--font-inter), sans-serif',
-                textTransform: 'uppercase',
+                textTransform: 'uppercase', flexShrink: 0,
               }}>
                 Narrator
               </span>
             )}
             {lineCount !== undefined && (
               <span style={{
-                fontSize: 10, fontWeight: 600, padding: '2px 7px',
+                fontSize: 9, fontWeight: 600, padding: '1px 5px',
                 borderRadius: 100, background: '#F0F9FF',
                 color: '#0369A1', letterSpacing: '0.03em',
-                fontFamily: 'var(--font-inter), sans-serif',
+                fontFamily: 'var(--font-inter), sans-serif', flexShrink: 0,
               }}>
-                {lineCount} lines
+                {lineCount}
               </span>
             )}
             {/* Shared voice warning */}
             {!isNarrator && voiceKey && voiceKey !== 'default' &&
               Object.entries(voiceUsageMap).some(([k, v]) => k === voiceKey && v !== speaker) && (
               <span style={{
-                fontSize: 10, fontWeight: 600, padding: '2px 7px',
+                fontSize: 9, fontWeight: 600, padding: '1px 5px',
                 borderRadius: 100, background: '#FEF3C7',
                 color: '#B45309', letterSpacing: '0.03em',
-                fontFamily: 'var(--font-inter), sans-serif',
+                fontFamily: 'var(--font-inter), sans-serif', flexShrink: 0,
               }}>
-                ⚠ shared voice
+                ⚠ shared
               </span>
             )}
           </div>
-        </div>
-
-        {/* Selected voice pill */}
-        {voice && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '4px 10px', borderRadius: 100,
-            background: isNarrator
-              ? '#F4F1EB'
-              : isOpen
-              ? 'rgba(200,64,47,0.08)'
-              : 'rgba(200,64,47,0.05)',
-            border: `1px solid ${isNarrator ? border : 'rgba(200,64,47,0.2)'}`,
-            flexShrink: 0,
-          }}>
-            <span style={{
+          {/* Selected voice shown below name when collapsed */}
+          {voice && !isOpen && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <span style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 11, color: isNarrator ? muted : red, fontWeight: 500,
+              }}>
+                {voice.label}
+              </span>
+              <GenderBadge gender={voice.gender} />
+            </div>
+          )}
+          {!voice && !isOpen && (
+            <div style={{
               fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: 12, fontWeight: 600,
-              color: isNarrator ? muted : red,
+              fontSize: 11, color: muted, fontStyle: 'italic', marginTop: 2,
             }}>
-              {voice.label}
-            </span>
-            <GenderBadge gender={voice.gender} />
-          </div>
-        )}
+              No voice assigned
+            </div>
+          )}
+        </div>
 
         {/* Chevron */}
         <svg
@@ -1717,7 +1714,8 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
               </button>
             )}
 
-            {/* Character cards — sorted by line count */}
+            {/* Character cards — 2-column grid, sorted by line count */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
             {sortedSpeakers.map(speaker => (
               <CharacterCard
                 key={speaker}
@@ -1734,6 +1732,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                 voiceUsageMap={voiceUsageMap}
               />
             ))}
+            </div>
 
 
             {/* ── Collapsible dialogue preview ── */}
