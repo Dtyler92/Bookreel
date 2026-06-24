@@ -101,7 +101,7 @@ export default function LoginPage() {
           marginBottom: '8px',
           lineHeight: 1.3,
         }}>
-          Welcome back, author.
+          Welcome back.
         </h1>
         <p style={{
           fontFamily: 'var(--font-inter), sans-serif',
