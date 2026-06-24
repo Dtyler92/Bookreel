@@ -616,6 +616,20 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
               </span>
               <div style={{ flex: 1, height: 1, background: '#E8E2D5' }} />
             </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <Link
+                href={`/downloads/${book.id}`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  textDecoration: 'none', transition: 'all 150ms ease',
+                  background: '#F7F4EF', color: '#0D0D0B',
+                  border: '1.5px solid #E8E2D5',
+                }}
+              >
+                ⬇️ Downloads
+              </Link>
             <Link
               href={`/trailer-wizard/${book.id}`}
               style={{
@@ -629,6 +643,7 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
             >
               + Generate New
             </Link>
+            </div>
           </div>
 
           {liveTrailers.length === 0 ? (

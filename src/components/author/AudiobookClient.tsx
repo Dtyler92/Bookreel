@@ -1398,6 +1398,19 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
               >
                 🎧 Listen Now
               </a>
+              <a
+                href={`/downloads/${bookId}`}
+                style={{
+                  display: 'block', padding: '14px 28px',
+                  background: card, color: dark,
+                  border: `1.5px solid ${border}`,
+                  borderRadius: 12, textDecoration: 'none',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 14, fontWeight: 600,
+                }}
+              >
+                ⬇️ Downloads
+              </a>
               <button
                 onClick={() => router.push('/dashboard')}
                 style={{
