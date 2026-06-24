@@ -63,7 +63,28 @@ export async function POST(
     let audiobookId: string
 
     if (existing?.id) {
-      // Reset existing row
+      // Check current status — if already parsed, don't wipe it
+      const { data: current } = await sb
+        .from('audiobooks')
+        .select('status, segments_json, speakers_json, voice_map_json, word_count, chapter_markers_json, character_count')
+        .eq('id', existing.id)
+        .single()
+
+      if (current?.status === 'parsed' && current?.segments_json) {
+        // Already parsed — return existing data so client can skip straight to voice assign
+        console.log(`[audiobook/parse] Already parsed — returning existing data for ${existing.id}`)
+        return Response.json({
+          status:    'parsed',
+          audiobookId: existing.id,
+          segments:  JSON.parse(current.segments_json || '[]'),
+          speakers:  JSON.parse(current.speakers_json || '[]'),
+          voiceMap:  JSON.parse(current.voice_map_json || '{}'),
+          wordCount: current.word_count ?? 0,
+          characterCount: current.character_count ?? 0,
+        })
+      }
+
+      // Reset existing row for re-parse
       const { error: updateErr } = await sb
         .from('audiobooks')
         .update({

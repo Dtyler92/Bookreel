@@ -637,6 +637,17 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
           setStep('error')
           return
         }
+
+        // ── Already parsed — skip straight to voice assign ──────────────────
+        if (kickoffData.status === 'parsed') {
+          setSegments(kickoffData.segments     ?? [])
+          setSpeakers(kickoffData.speakers     ?? [])
+          setVoiceMap(kickoffData.voiceMap     ?? {})
+          setWordCount(kickoffData.wordCount   ?? 0)
+          setEstMins(Math.round((kickoffData.wordCount ?? 0) / 150))
+          setStep('assign')
+          return
+        }
       } catch (e) {
         setError(String(e))
         setStep('error')
