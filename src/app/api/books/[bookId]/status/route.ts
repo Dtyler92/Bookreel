@@ -22,6 +22,13 @@ export async function GET(
 
     const supabase = getServiceClient()
 
+    // Fetch book metadata (title + cover)
+    const { data: book } = await supabase
+      .from('books')
+      .select('title, cover_image_url')
+      .eq('id', bookId)
+      .single()
+
     const { data: trailer, error } = await supabase
       .from('trailers')
       .select('id, status, final_video_url, thumbnail_url, created_at')
@@ -31,13 +38,19 @@ export async function GET(
       .single()
 
     if (error || !trailer) {
-      return Response.json({ status: null, trailerUrl: null, errorMessage: null })
+      return Response.json({
+        status: null, trailerUrl: null, errorMessage: null,
+        title: book?.title ?? null,
+        cover_image_url: book?.cover_image_url ?? null,
+      })
     }
 
     return Response.json({
       status: trailer.status ?? null,
       trailerUrl: trailer.final_video_url ?? null,
       errorMessage: trailer.status === 'failed' ? 'Trailer generation failed. Please try again.' : null,
+      title: book?.title ?? null,
+      cover_image_url: book?.cover_image_url ?? null,
     })
   } catch (err) {
     console.error('[books/[bookId]/status] Error:', err)

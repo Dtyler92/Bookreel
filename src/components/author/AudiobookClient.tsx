@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { VOICE_ROSTER, VoiceOption } from '@/lib/voiceRoster'
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -1438,14 +1437,15 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
             {/* Cover / icon */}
             {bookCover ? (
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 26 }}>
-                <Image
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={bookCover}
                   alt={bookTitle}
-                  width={80}
-                  height={110}
                   style={{
+                    width: 80, height: 110,
                     borderRadius: 8, objectFit: 'cover',
                     boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
+                    display: 'block',
                   }}
                 />
               </div>
@@ -1564,15 +1564,15 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                 {/* Cover */}
                 {bookCover ? (
                   <div style={{ marginBottom: 18 }}>
-                    <Image
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
                       src={bookCover}
                       alt={bookTitle}
-                      width={260}
-                      height={390}
                       style={{
                         width: '100%', height: 'auto', aspectRatio: '2/3',
                         objectFit: 'cover', borderRadius: 8,
                         boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                        display: 'block',
                       }}
                     />
                   </div>
