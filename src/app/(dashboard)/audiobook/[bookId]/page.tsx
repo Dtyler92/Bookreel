@@ -536,20 +536,59 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
   // cleanup on unmount
   useEffect(() => () => { audioRef.current?.pause() }, [])
 
-  // ── Parse on mount ───────────────────────────────────────────────────────────
+  // ── Parse on mount: thin kickoff + poll parse-status ─────────────────────
   useEffect(() => {
-    fetch(`/api/audiobook/${bookId}/parse`, { method: 'POST' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) { setError(data.error); setStep('error'); return }
-        setSegments(data.segments)
-        setSpeakers(data.speakers)
-        setVoiceMap(data.voiceMap)
-        setWordCount(data.wordCount)
-        setEstMins(data.estimatedMinutes)
-        setStep('assign')
-      })
-      .catch(e => { setError(String(e)); setStep('error') })
+    let stopped = false
+
+    async function kickoffAndPoll() {
+      // Step 1: fire the thin kickoff (fast — just inserts a DB row)
+      try {
+        const kickoffRes  = await fetch(`/api/audiobook/${bookId}/parse`, { method: 'POST' })
+        const kickoffData = await kickoffRes.json()
+        if (kickoffData.error) {
+          setError(kickoffData.error)
+          setStep('error')
+          return
+        }
+      } catch (e) {
+        setError(String(e))
+        setStep('error')
+        return
+      }
+
+      // Step 2: poll parse-status every 5s until parsed or parse_failed
+      const poll = async () => {
+        if (stopped) return
+        try {
+          const res  = await fetch(`/api/audiobook/${bookId}/parse-status`)
+          const data = await res.json()
+          if (stopped) return
+
+          if (data.status === 'parsed') {
+            setSegments(data.segments     ?? [])
+            setSpeakers(data.speakers     ?? [])
+            setVoiceMap(data.voiceMap     ?? {})
+            setWordCount(data.wordCount   ?? 0)
+            setEstMins(data.estimatedMinutes ?? 0)
+            setStep('assign')
+          } else if (data.status === 'parse_failed') {
+            setError(data.error || 'Parse failed — please try again.')
+            setStep('error')
+          } else {
+            // still 'parsing' — check again in 5s
+            if (!stopped) setTimeout(poll, 5_000)
+          }
+        } catch {
+          // swallow network hiccups; retry
+          if (!stopped) setTimeout(poll, 5_000)
+        }
+      }
+
+      // First poll immediately (the worker is fast on short books)
+      poll()
+    }
+
+    kickoffAndPoll()
 
     // Fetch book metadata (title + optional cover)
     fetch(`/api/books/${bookId}/status`)
@@ -559,6 +598,8 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
         setBookCover(d?.cover_image_url || null)
       })
       .catch(() => {})
+
+    return () => { stopped = true }
   }, [bookId])
 
   // ── Poll generating status ───────────────────────────────────────────────────
@@ -651,7 +692,7 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
               fontSize: 28, fontWeight: 700, color: dark,
               margin: '0 0 10px', letterSpacing: '-0.02em',
             }}>
-              Reading your manuscript…
+              Sending manuscript to production studio…
             </h2>
             {bookTitle && (
               <div style={{
@@ -667,7 +708,7 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
               fontSize: 14, color: muted, lineHeight: 1.7,
               maxWidth: 460, margin: '0 auto 36px',
             }}>
-              Claude is parsing your chapters, identifying every speaker, and assembling your full cast. This usually takes 15–30 seconds.
+              Reading your manuscript chapter by chapter, identifying every speaker, and assembling your full cast. This usually takes 1–3 minutes for a full novel.
             </p>
             <div style={{ maxWidth: 340, margin: '0 auto' }}>
               <ShimmerBar height={5} />

@@ -29,15 +29,22 @@ export async function GET(request: Request) {
 
   const supabase = getServiceClient()
 
-  // Fetch audiobooks that are 'pending', or stuck mid-processing for >30 min.
+  // Fetch audiobooks that are:
+  //   - 'pending'   (generate jobs waiting to start)
+  //   - 'processing' stuck >30 min (generate recovery)
+  //   - 'parsing'   (parse jobs waiting to start)
+  //   - 'parsing' stuck >5 min   (parse recovery)
   const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+  const fiveMinutesAgo   = new Date(Date.now() -  5 * 60 * 1000).toISOString()
 
   const { data: pendingJobs, error } = await supabase
     .from('audiobooks')
-    .select('id, book_id, narrator_voice, segments_json, word_count, status, processing_started_at, created_at')
+    .select('id, book_id, narrator_voice, segments_json, word_count, status, processing_started_at, parse_started_at, created_at')
     .or(
       `status.eq.pending,` +
-      `and(status.eq.processing,processing_started_at.lt.${thirtyMinutesAgo})`
+      `and(status.eq.processing,processing_started_at.lt.${thirtyMinutesAgo}),` +
+      `and(status.eq.parsing,parse_started_at.is.null),` +
+      `and(status.eq.parsing,parse_started_at.lt.${fiveMinutesAgo})`
     )
     .order('created_at', { ascending: true })
     .limit(3)
@@ -51,27 +58,56 @@ export async function GET(request: Request) {
     return Response.json({ jobs: [] })
   }
 
-  // Atomically claim jobs by updating status to 'processing' and setting processing_started_at
-  const jobIds = pendingJobs.map(j => j.id)
+  // Separate parse jobs from generate jobs
+  const parseJobs    = pendingJobs.filter(j => j.status === 'parsing')
+  const generateJobs = pendingJobs.filter(j => j.status === 'pending' || j.status === 'processing')
+
   const now = new Date().toISOString()
 
-  const { error: claimError } = await supabase
-    .from('audiobooks')
-    .update({ status: 'processing', processing_started_at: now })
-    .in('id', jobIds)
-
-  if (claimError) {
-    console.error('[audiobook/queue] Claim error:', claimError)
-    return Response.json({ error: claimError.message }, { status: 500 })
+  // Claim generate jobs → 'processing'
+  if (generateJobs.length > 0) {
+    const generateIds = generateJobs.map(j => j.id)
+    const { error: claimErr } = await supabase
+      .from('audiobooks')
+      .update({ status: 'processing', processing_started_at: now })
+      .in('id', generateIds)
+    if (claimErr) {
+      console.error('[audiobook/queue] Claim error (generate):', claimErr)
+      return Response.json({ error: claimErr.message }, { status: 500 })
+    }
   }
 
-  const jobs = pendingJobs.map(job => ({
-    audiobookId: job.id,
-    bookId: job.book_id,
-    narratorVoice: job.narrator_voice,
-    segmentsJson: job.segments_json,
-    wordCount: job.word_count,
-  }))
+  // Claim parse jobs → stamp parse_started_at (keep status='parsing')
+  if (parseJobs.length > 0) {
+    const parseIds = parseJobs.map(j => j.id)
+    const { error: claimErr } = await supabase
+      .from('audiobooks')
+      .update({ parse_started_at: now })
+      .in('id', parseIds)
+    if (claimErr) {
+      console.error('[audiobook/queue] Claim error (parse):', claimErr)
+      return Response.json({ error: claimErr.message }, { status: 500 })
+    }
+  }
+
+  const jobs = pendingJobs.map(job => {
+    const isParseJob = job.status === 'parsing'
+    if (isParseJob) {
+      return {
+        audiobookId: job.id,
+        bookId:      job.book_id,
+        jobType:     'parse' as const,
+      }
+    }
+    return {
+      audiobookId:  job.id,
+      bookId:       job.book_id,
+      narratorVoice: job.narrator_voice,
+      segmentsJson:  job.segments_json,
+      wordCount:     job.word_count,
+      jobType:       'generate' as const,
+    }
+  })
 
   return Response.json({ jobs })
 }
@@ -83,14 +119,26 @@ export async function POST(request: Request) {
 
   const body = await request.json() as {
     audiobookId: string
-    status: 'processing' | 'complete' | 'failed'
+    status: 'processing' | 'complete' | 'failed' | 'parsed' | 'parse_failed'
     audioUrl?: string
     chaptersJson?: string
     durationSeconds?: number
     errorMessage?: string
+    // Parse-specific fields
+    segmentsJson?: string
+    speakersJson?: string
+    wordCount?: number
+    characterCount?: number
+    chapterMarkersJson?: string
+    voiceMapJson?: string
   }
 
-  const { audiobookId, status, audioUrl, chaptersJson, durationSeconds, errorMessage } = body
+  const {
+    audiobookId, status,
+    audioUrl, chaptersJson, durationSeconds, errorMessage,
+    segmentsJson, speakersJson, wordCount, characterCount,
+    chapterMarkersJson, voiceMapJson,
+  } = body
 
   if (!audiobookId || !status) {
     return Response.json({ error: 'audiobookId and status required' }, { status: 400 })
@@ -111,7 +159,17 @@ export async function POST(request: Request) {
     if (durationSeconds !== undefined) update.duration_seconds = durationSeconds
   }
 
-  if (status === 'failed' && errorMessage) {
+  if (status === 'parsed') {
+    update.parse_completed_at = new Date().toISOString()
+    if (segmentsJson !== undefined)      update.segments_json       = segmentsJson
+    if (speakersJson !== undefined)      update.speakers_json        = speakersJson
+    if (wordCount !== undefined)         update.word_count           = wordCount
+    if (characterCount !== undefined)    update.character_count      = characterCount
+    if (chapterMarkersJson !== undefined) update.chapter_markers_json = chapterMarkersJson
+    if (voiceMapJson !== undefined)      update.voice_map_json       = voiceMapJson
+  }
+
+  if ((status === 'failed' || status === 'parse_failed') && errorMessage) {
     update.error_message = errorMessage
   }
 

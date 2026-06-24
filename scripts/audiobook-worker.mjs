@@ -2,9 +2,11 @@
 /**
  * BookReel Audiobook Pipeline Worker
  *
- * Polls /api/audiobook/queue every 15s, picks up pending jobs, and renders
- * full audiobooks (M4B with chapter markers + MP3) from ElevenLabs v3 TTS
- * via fal.ai. Stitches segments with ffmpeg, uploads to Supabase storage.
+ * Polls /api/audiobook/queue every 15s, picks up pending jobs, and either:
+ *   - PARSE jobs  (status='parsing'):   downloads EPUB/PDF/DOCX, runs Claude to
+ *                                       extract segments, saves back to audiobooks row.
+ *   - GENERATE jobs (status='pending'): renders TTS audio segments, stitches into
+ *                                       M4B/MP3 with chapter markers, uploads to storage.
  *
  * Usage:
  *   node /root/bookreel/scripts/audiobook-worker.mjs
@@ -19,6 +21,7 @@
  *   PIPELINE_WORKER_SECRET  (must match what is set in Vercel)
  *   NEXT_PUBLIC_APP_URL     (e.g. https://bookreel-five.vercel.app)
  *   FAL_API_KEY             (ElevenLabs v3 TTS via fal.ai)
+ *   ANTHROPIC_API_KEY       (Claude for parse pipeline)
  */
 
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs'
@@ -42,6 +45,7 @@ const SUPABASE_URL              = getEnv('NEXT_PUBLIC_SUPABASE_URL')
 const SUPABASE_SERVICE_ROLE_KEY = getEnv('SUPABASE_SERVICE_ROLE_KEY')
 const PIPELINE_WORKER_SECRET    = getEnv('PIPELINE_WORKER_SECRET')
 const APP_URL                   = getEnv('NEXT_PUBLIC_APP_URL') || 'https://bookreel-five.vercel.app'
+const ANTHROPIC_API_KEY         = getEnv('ANTHROPIC_API_KEY')
 
 // FAL key: prefer .env.local; fall back to the provisioned key when .env.local has a placeholder.
 const FAL_API_KEY_ENV = getEnv('FAL_API_KEY')
@@ -62,6 +66,9 @@ if (!FAL_API_KEY) {
   console.error('[audiobook-worker] FATAL: FAL_API_KEY is not available')
   process.exit(1)
 }
+if (!ANTHROPIC_API_KEY) {
+  console.warn('[audiobook-worker] WARNING: ANTHROPIC_API_KEY not set — parse pipeline will fail')
+}
 
 const POLL_INTERVAL_MS = 15_000
 const TMP_BASE         = '/tmp/bookreel-audio'
@@ -76,7 +83,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 // Prevents duplicate processing across poll cycles while a long job is running.
 const activeJobs = new Set()
 
-// ── Chapter detection ─────────────────────────────────────────────────────────
+// ── Chapter detection (used by generate pipeline) ────────────────────────────
 /**
  * Returns true when the segment text looks like a chapter heading.
  * Heuristics:
@@ -179,12 +186,411 @@ async function generateSegmentAudio(seg, voice, stability, tmpDir) {
   return segPath
 }
 
-// ── Core pipeline for one audiobook job ──────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// PARSE PIPELINE
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Parse system prompt ───────────────────────────────────────────────────────
+const PARSE_SYSTEM_PROMPT = `You are a professional audiobook producer. Your job is to parse a book manuscript into a structured JSON array of narration/dialogue segments, ready for a full-cast text-to-speech audiobook render.
+
+Each segment is either:
+- NARRATOR: prose narration, scene description, action
+- A specific character name: dialogue spoken by that character
+
+RULES:
+1. Preserve the exact text of every word — do NOT summarize, paraphrase, or skip content.
+2. Split on speaker changes. Each time the speaker changes (narrator → character, character → narrator, character A → character B), start a new segment.
+3. Include dialogue attribution text (e.g. "he said", "she whispered") in the NARRATOR segment BEFORE the dialogue, not inside the character segment.
+4. Strip quotation marks from character dialogue segments — they will be spoken, not read.
+5. Keep segments a reasonable length — split very long narrator passages at paragraph breaks.
+6. Identify character names from the text exactly as they appear.
+7. Return ONLY a valid JSON array. No markdown, no code blocks, no explanation.
+
+Output format:
+[
+  { "index": 0, "speaker": "NARRATOR", "text": "It was a dark and stormy night." },
+  { "index": 1, "speaker": "NARRATOR", "text": "Jonathan looked up and said," },
+  { "index": 2, "speaker": "Jonathan", "text": "I must find the castle before nightfall." },
+  { "index": 3, "speaker": "NARRATOR", "text": "The old woman grabbed his arm." },
+  { "index": 4, "speaker": "Old Woman", "text": "Do not go there. He is not a man." }
+]`
+
+// ── Voice roster (mirrors voiceRoster.ts) ────────────────────────────────────
+const CHARACTER_VOICES = [
+  'George',    // deep_male
+  'Liam',      // male
+  'Charlotte', // female
+  'Alice',     // young_female
+  'Bill',      // old_male
+  'Charlie',   // default/neutral
+  'Roger',
+  'Aria',
+  'Sarah',
+  'Eric',
+]
+
+// ── Text extraction helpers ───────────────────────────────────────────────────
+
+/**
+ * Extract readable text from a Buffer given its filename.
+ * Supports: .txt, .docx, .rtf, .epub, .pdf (default)
+ */
+async function extractTextFromBuffer(buffer, filename) {
+  const nameLower = filename.toLowerCase()
+
+  // Plain text
+  if (nameLower.endsWith('.txt')) {
+    return buffer.toString('utf-8')
+  }
+
+  // DOCX via mammoth
+  if (nameLower.endsWith('.docx') || nameLower.endsWith('.rtf')) {
+    try {
+      const { default: mammoth } = await import('mammoth')
+      const result = await mammoth.extractRawText({ buffer })
+      return result.value || ''
+    } catch (err) {
+      console.error('[parse] mammoth error:', err.message)
+      return ''
+    }
+  }
+
+  // EPUB via JSZip
+  if (nameLower.endsWith('.epub')) {
+    try {
+      const { default: JSZip } = await import('jszip')
+      const zip = await JSZip.loadAsync(buffer)
+
+      const containerFile = zip.file('META-INF/container.xml')
+      if (!containerFile) throw new Error('No META-INF/container.xml in EPUB')
+      const containerXml = await containerFile.async('text')
+
+      const opfPathMatch = containerXml.match(/full-path=["']([^"']+\.opf)["']/)
+      const opfPath = opfPathMatch?.[1] ?? ''
+      if (!opfPath) throw new Error('Could not find OPF path in container.xml')
+
+      const opfDir = opfPath.includes('/')
+        ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1)
+        : ''
+      const opfXml = await zip.file(opfPath)?.async('text') ?? ''
+
+      const manifestItems = {}
+      const manifestRe = /<item[^>]+id=["']([^"']+)["'][^>]+href=["']([^"']+)["'][^>]*>/g
+      let m
+      while ((m = manifestRe.exec(opfXml)) !== null) manifestItems[m[1]] = m[2]
+      const manifestRe2 = /<item[^>]+href=["']([^"']+)["'][^>]+id=["']([^"']+)["'][^>]*>/g
+      while ((m = manifestRe2.exec(opfXml)) !== null) {
+        if (!manifestItems[m[2]]) manifestItems[m[2]] = m[1]
+      }
+
+      const spineIds = []
+      const spineRe = /<itemref[^>]+idref=["']([^"']+)["']/g
+      while ((m = spineRe.exec(opfXml)) !== null) spineIds.push(m[1])
+
+      const textParts = []
+      for (const id of spineIds) {
+        const href = manifestItems[id]
+        if (!href) continue
+        const fullPath = opfDir + href.split('#')[0]
+        const html = await zip.file(fullPath)?.async('text')
+          ?? await zip.file(decodeURIComponent(fullPath))?.async('text')
+          ?? ''
+        if (!html) continue
+        const plain = html
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"').replace(/&#\d+;/g, ' ')
+          .replace(/\s+/g, ' ').trim()
+        if (plain.length > 50) textParts.push(plain)
+      }
+      return textParts.join('\n\n')
+    } catch (err) {
+      console.error('[parse] EPUB error:', err.message)
+      return ''
+    }
+  }
+
+  // PDF via pdf-parse (default)
+  try {
+    const { default: pdfParse } = await import('pdf-parse')
+    const pdfData = await pdfParse(buffer)
+    return pdfData.text || ''
+  } catch (err) {
+    console.error('[parse] PDF error:', err.message)
+    return ''
+  }
+}
+
+// ── Chapter detection & chunking ──────────────────────────────────────────────
+
+const CHAPTER_HEADING_RE = /^(chapter|prologue|epilogue|part)\s*(\d+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten)?\s*[:\-–—]?\s*$/i
+const ALL_CAPS_HEADING_RE = /^[A-Z0-9\s\-–—:!?.,']+$/
+
+function isChapterHeading(line) {
+  const trimmed = line.trim()
+  if (!trimmed) return false
+  if (CHAPTER_HEADING_RE.test(trimmed)) return true
+  if (trimmed.length >= 3 && trimmed.length < 60 && ALL_CAPS_HEADING_RE.test(trimmed)) return true
+  return false
+}
+
+function splitIntoChapters(text) {
+  const lines = text.split('\n')
+  const chapters = []
+  let currentTitle = 'Beginning'
+  let currentLines = []
+
+  for (const line of lines) {
+    if (isChapterHeading(line)) {
+      const content = currentLines.join('\n').trim()
+      if (content.length > 200) {
+        chapters.push({ title: currentTitle, text: content })
+      }
+      currentTitle = line.trim()
+      currentLines = []
+    } else {
+      currentLines.push(line)
+    }
+  }
+
+  const content = currentLines.join('\n').trim()
+  if (content.length > 200) {
+    chapters.push({ title: currentTitle, text: content })
+  }
+
+  return chapters
+}
+
+function splitIntoChunks(text, targetSize = 15000) {
+  const paragraphs = text.split(/\n\n+/)
+  const chunks = []
+  let current = ''
+  let chunkIndex = 1
+
+  for (const para of paragraphs) {
+    if (current.length + para.length + 2 > targetSize && current.length > 0) {
+      chunks.push({ title: `Part ${chunkIndex}`, text: current.trim() })
+      chunkIndex++
+      current = para
+    } else {
+      current += (current ? '\n\n' : '') + para
+    }
+  }
+  if (current.trim().length > 200) {
+    chunks.push({ title: `Part ${chunkIndex}`, text: current.trim() })
+  }
+  return chunks
+}
+
+// ── Claude call for a single chunk ───────────────────────────────────────────
+async function parseChunkWithClaude(chunk, chapterLabel, bookTitle, charList) {
+  const userPrompt = `Book title: "${bookTitle}"
+Known characters: ${charList}
+${chapterLabel}
+
+Parse this manuscript section into dialogue segments:
+
+${chunk}`
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key':         ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type':      'application/json',
+    },
+    body: JSON.stringify({
+      model:      'claude-sonnet-4-5',
+      max_tokens: 8192,
+      system:     PARSE_SYSTEM_PROMPT,
+      messages:   [{ role: 'user', content: userPrompt }],
+    }),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`Anthropic API ${res.status}: ${errText.substring(0, 300)}`)
+  }
+
+  const data    = await res.json()
+  const rawJson = data.content?.[0]?.text?.trim() ?? ''
+
+  // Strip markdown code fences if model wrapped it
+  const cleaned = rawJson.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+
+  const segments = JSON.parse(cleaned)
+  if (!Array.isArray(segments)) throw new Error('Claude returned non-array')
+  return segments
+}
+
+// ── Main parse pipeline ───────────────────────────────────────────────────────
+async function runParsePipeline(job) {
+  const { audiobookId, bookId } = job
+  console.log(`\n[audiobook-worker] 📖 Starting PARSE job: audiobookId=${audiobookId} bookId=${bookId}`)
+
+  try {
+    // ── 1. Fetch book metadata ───────────────────────────────────────────────
+    const { data: bookData, error: bookErr } = await supabase
+      .from('books')
+      .select('id, title, author_id, pdf_url')
+      .eq('id', bookId)
+      .single()
+
+    if (bookErr || !bookData) {
+      throw new Error(`Book not found: ${bookErr?.message ?? 'no row'}`)
+    }
+    const book = bookData
+
+    if (!book.pdf_url) {
+      throw new Error('Book has no pdf_url — cannot parse')
+    }
+
+    // ── 2. Get a signed URL and download the manuscript ─────────────────────
+    console.log(`[audiobook-worker]    Signing URL for: ${book.pdf_url}`)
+    const { data: signedData, error: signedErr } = await supabase.storage
+      .from('books')
+      .createSignedUrl(book.pdf_url, 300) // 5-minute TTL
+
+    if (signedErr || !signedData?.signedUrl) {
+      throw new Error(`Failed to sign URL: ${signedErr?.message ?? 'unknown'}`)
+    }
+
+    const dlRes = await fetch(signedData.signedUrl)
+    if (!dlRes.ok) throw new Error(`Manuscript download failed: ${dlRes.status}`)
+    const manuscriptBuffer   = Buffer.from(await dlRes.arrayBuffer())
+    const manuscriptFilename = book.pdf_url.split('/').pop() || 'manuscript.pdf'
+    console.log(`[audiobook-worker]    Downloaded: ${manuscriptFilename} (${manuscriptBuffer.length} bytes)`)
+
+    // ── 3. Extract text ──────────────────────────────────────────────────────
+    let rawText = await extractTextFromBuffer(manuscriptBuffer, manuscriptFilename)
+    rawText = rawText
+      .replace(/\x00/g, '')
+      .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+
+    if (rawText.length < 500) {
+      throw new Error(
+        'Could not extract readable text from the manuscript. ' +
+        'Please ensure the file contains actual text (not scanned images).'
+      )
+    }
+    console.log(`[audiobook-worker]    Extracted text: ${rawText.length} chars`)
+
+    // ── 4. Fetch known characters ────────────────────────────────────────────
+    const { data: characters } = await supabase
+      .from('characters')
+      .select('name, role, voice_key')
+      .eq('book_id', bookId)
+
+    const charList = characters?.map(c => c.name).join(', ') || 'unknown'
+
+    // ── 5. Split into chapters / chunks ──────────────────────────────────────
+    let sections    = splitIntoChapters(rawText)
+    let usedChunking = false
+
+    if (sections.length <= 1) {
+      sections     = splitIntoChunks(rawText, 15000)
+      usedChunking = true
+      console.log(`[audiobook-worker]    No chapters detected. Split into ${sections.length} chunks.`)
+    } else {
+      console.log(`[audiobook-worker]    Detected ${sections.length} chapters.`)
+    }
+
+    // ── 6. Claude chunking loop ───────────────────────────────────────────────
+    const allSegments    = []
+    const chapterMarkers = []
+    let globalSegmentIndex = 0
+
+    for (let i = 0; i < sections.length; i++) {
+      const section = sections[i]
+      const label   = usedChunking
+        ? `Chunk ${i + 1} of ${sections.length}`
+        : `Chapter ${i + 1} of ${sections.length}: ${section.title}`
+
+      chapterMarkers.push({
+        chapterIndex:      i,
+        title:             section.title,
+        startSegmentIndex: globalSegmentIndex,
+      })
+
+      let chunkSegments = []
+      try {
+        chunkSegments = await parseChunkWithClaude(
+          section.text,
+          label,
+          book.title,
+          charList
+        )
+      } catch (err) {
+        console.error(`[audiobook-worker]    ⚠  Failed to parse ${label}: ${err.message}`)
+        // Continue with remaining sections rather than failing everything
+      }
+
+      const reindexed = chunkSegments.map((s, j) => ({
+        index:   globalSegmentIndex + j,
+        speaker: s.speaker || 'NARRATOR',
+        text:    s.text    || '',
+      }))
+
+      console.log(`[audiobook-worker]    ${label}: ${reindexed.length} segments`)
+      allSegments.push(...reindexed)
+      globalSegmentIndex += reindexed.length
+    }
+
+    if (allSegments.length === 0) {
+      throw new Error('Failed to parse manuscript — no segments produced.')
+    }
+
+    // ── 7. Build voice map ────────────────────────────────────────────────────
+    const speakers = [...new Set(allSegments.map(s => s.speaker).filter(s => s !== 'NARRATOR'))]
+
+    const voiceMap = { NARRATOR: 'narrator' }
+    for (const char of (characters || [])) {
+      if (char.voice_key) voiceMap[char.name] = char.voice_key
+    }
+    const unassigned = speakers.filter(s => !voiceMap[s])
+    unassigned.forEach((s, i) => {
+      voiceMap[s] = CHARACTER_VOICES[i % CHARACTER_VOICES.length]
+    })
+
+    const wordCount      = rawText.split(/\s+/).length
+    const characterCount = rawText.length
+
+    console.log(
+      `[audiobook-worker]    Parse complete: ${allSegments.length} segments | ` +
+      `${speakers.length} characters | ${sections.length} chapters | ${wordCount} words`
+    )
+
+    // ── 8. Persist to audiobooks row ─────────────────────────────────────────
+    await updateStatus(audiobookId, 'parsed', {
+      segmentsJson:       JSON.stringify(allSegments),
+      speakersJson:       JSON.stringify(speakers),
+      wordCount,
+      characterCount,
+      chapterMarkersJson: JSON.stringify(chapterMarkers),
+      voiceMapJson:       JSON.stringify(voiceMap),
+    })
+
+    console.log(`[audiobook-worker] ✅ Parse job complete: audiobookId=${audiobookId}`)
+
+  } catch (err) {
+    console.error(`[audiobook-worker] ❌ Parse job ${audiobookId} failed: ${err.message}`)
+    await updateStatus(audiobookId, 'parse_failed', { errorMessage: err.message })
+    throw err
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GENERATE PIPELINE (TTS → ffmpeg → M4B upload)
+// ════════════════════════════════════════════════════════════════════════════
+
 async function processJob(job) {
   const { audiobookId, bookId, narratorVoice, segmentsJson: segments } = job
   const segCount = Array.isArray(segments) ? segments.length : 0
 
-  console.log(`\n[audiobook-worker] 🎙  Starting job: audiobookId=${audiobookId} bookId=${bookId}`)
+  console.log(`\n[audiobook-worker] 🎙  Starting GENERATE job: audiobookId=${audiobookId} bookId=${bookId}`)
   console.log(`[audiobook-worker]    Segments: ${segCount} | narratorVoice: ${narratorVoice || 'Daniel'}`)
 
   // Belt-and-suspenders: GET endpoint already claimed the job as 'processing',
@@ -356,7 +762,7 @@ async function processJob(job) {
     }
 
     // ── 7. Mark job complete via queue API ─────────────────────────────────
-    const cost = (totalChars / 1000) * TTS_PER_1K_CHARS
+    const cost    = (totalChars / 1000) * TTS_PER_1K_CHARS
     const segsDone = renderedSegments.filter(r => !r.isSilence).length
     console.log(
       `[audiobook-worker] ✅ Audiobook complete: ${durationSeconds}s | ` +
@@ -409,7 +815,11 @@ async function pollLoop() {
       Promise.allSettled(
         newJobs.map(async (job) => {
           try {
-            await processJob(job)
+            if (job.jobType === 'parse') {
+              await runParsePipeline(job)
+            } else {
+              await processJob(job)
+            }
           } finally {
             activeJobs.delete(job.audiobookId)
           }
@@ -417,7 +827,7 @@ async function pollLoop() {
       ).then(results => {
         for (const result of results) {
           if (result.status === 'rejected') {
-            // processJob already called updateStatus('failed') and logged the error
+            // processJob / runParsePipeline already called updateStatus('failed') and logged
             console.error(
               '[audiobook-worker] Batch rejection (already handled):',
               result.reason?.message
@@ -444,6 +854,7 @@ console.log(`[audiobook-worker] Poll interval: ${POLL_INTERVAL_MS / 1000}s`)
 console.log(`[audiobook-worker] Temp dir:      ${TMP_BASE}/<audiobookId>/`)
 console.log(`[audiobook-worker] FAL_API_KEY:   ${FAL_API_KEY.substring(0, 8)}…`)
 console.log(`[audiobook-worker] Supabase URL:  ${SUPABASE_URL?.substring(0, 40)}…`)
+console.log(`[audiobook-worker] Anthropic:     ${ANTHROPIC_API_KEY ? ANTHROPIC_API_KEY.substring(0, 8) + '…' : 'NOT SET ⚠'}`)
 console.log('')
 
 mkdirSync(TMP_BASE, { recursive: true })
