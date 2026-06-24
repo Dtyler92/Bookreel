@@ -534,6 +534,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
   const [voiceMap, setVoiceMap]       = useState<Record<string, string>>({})
   const [wordCount, setWordCount]     = useState(0)
   const [estimatedMins, setEstMins]   = useState(0)
+  const [estCredits, setEstCredits]   = useState(0)
   const [bookTitle, setBookTitle]     = useState('')
   const [bookCover, setBookCover]         = useState<string | null>(null)
   const [narratorVoice, setNarratorVoice] = useState<string>('daniel')
@@ -666,6 +667,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
           setVoiceMap(statusData.voiceMap     ?? {})
           setWordCount(statusData.wordCount   ?? 0)
           setEstMins(statusData.estimatedMinutes ?? 0)
+          setEstCredits(statusData.estimatedCredits ?? 0)
           setStep('assign')
           return
         }
@@ -695,6 +697,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
             setVoiceMap(data.voiceMap     ?? {})
             setWordCount(data.wordCount   ?? 0)
             setEstMins(data.estimatedMinutes ?? 0)
+            setEstCredits(data.estimatedCredits ?? 0)
             setStep('assign')
           } else if (data.status === 'parse_failed') {
             setError(data.error || 'Parse failed — please try again.')
@@ -727,6 +730,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
           setVoiceMap(kickoffData.voiceMap     ?? {})
           setWordCount(kickoffData.wordCount   ?? 0)
           setEstMins(Math.round((kickoffData.wordCount ?? 0) / 150))
+          setEstCredits(kickoffData.estimatedCredits ?? 0)
           setStep('assign')
           return
         }
@@ -1510,7 +1514,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                 transition: 'background 150ms ease',
               }}
             >
-              {generating ? 'Starting generation…' : '🎙️ Generate Audiobook — 1,500 credits'}
+              {generating ? 'Starting generation…' : `🎙️ Generate Audiobook — ${(estCredits || 1500).toLocaleString()} credits`}
             </button>
 
             {/* Cancel */}

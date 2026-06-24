@@ -72,6 +72,11 @@ export async function POST(
 
       if (current?.status === 'parsed' && current?.segments_json) {
         // Already parsed — return existing data so client can skip straight to voice assign
+        const charCount = current.character_count ?? 0
+        const estimatedCredits = charCount < 100_000 ? 800
+          : charCount < 500_000 ? 1200
+          : charCount < 1_000_000 ? 1500
+          : 1700
         console.log(`[audiobook/parse] Already parsed — returning existing data for ${existing.id}`)
         return Response.json({
           status:    'parsed',
@@ -80,7 +85,8 @@ export async function POST(
           speakers:  JSON.parse(current.speakers_json || '[]'),
           voiceMap:  JSON.parse(current.voice_map_json || '{}'),
           wordCount: current.word_count ?? 0,
-          characterCount: current.character_count ?? 0,
+          characterCount: charCount,
+          estimatedCredits,
         })
       }
 
