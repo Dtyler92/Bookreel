@@ -13,7 +13,7 @@ interface Segment {
   text: string
 }
 
-type WizardStep = 'loading' | 'assign' | 'confirm' | 'generating' | 'done' | 'error'
+type WizardStep = 'loading' | 'tier' | 'assign' | 'confirm' | 'generating' | 'done' | 'error'
 
 // ─── Design tokens ──────────────────────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ const WIZARD_STEPS = [
 
 function getStepStatus(wizardId: number, current: WizardStep): 'done' | 'active' | 'upcoming' {
   const map: Record<WizardStep, number> = {
-    loading: 1, assign: 2, confirm: 3, generating: 3, done: 4, error: 0,
+    loading: 1, tier: 1, assign: 2, confirm: 3, generating: 3, done: 4, error: 0,
   }
   const active = map[current]
   if (wizardId < active) return 'done'
@@ -539,8 +539,9 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
   const [wordCount, setWordCount]     = useState(0)
   const [estimatedMins, setEstMins]   = useState(0)
   const [bookTitle, setBookTitle]     = useState('')
-  const [bookCover, setBookCover]     = useState<string | null>(null)
+  const [bookCover, setBookCover]         = useState<string | null>(null)
   const [narratorVoice, setNarratorVoice] = useState<string>('daniel')
+  const [characterCount, setCharacterCount] = useState<number>(0)
 
   // ── UI toggles ───────────────────────────────────────────────────────────────
   const [activePicker, setActivePicker] = useState<string | null>(null)
@@ -623,8 +624,27 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
   // cleanup on unmount
   useEffect(() => () => { audioRef.current?.pause() }, [])
 
+  // ── Mount: fetch book metadata + scan character count ────────────────────
+  useEffect(() => {
+    fetch(`/api/books/${bookId}/status`)
+      .then(r => r.json())
+      .then(d => { setBookTitle(d?.title || ''); setBookCover(d?.cover_image_url || null) })
+      .catch(() => {})
+
+    fetch(`/api/audiobook/${bookId}/scan`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.characterCount) setCharacterCount(d.characterCount)
+        // If already parsed, kickoff will handle jumping to assign
+        // Just show tier screen for now — kickoff effect runs when step hits 'loading'
+        if (step === 'loading') setStep('tier')
+      })
+      .catch(() => { if (step === 'loading') setStep('tier') })
+  }, [bookId])
+
   // ── Parse on mount: thin kickoff + poll parse-status ─────────────────────
   useEffect(() => {
+    if (step !== 'loading') return
     let stopped = false
 
     async function kickoffAndPoll() {
@@ -687,15 +707,6 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
     }
 
     kickoffAndPoll()
-
-    // Fetch book metadata (title + optional cover)
-    fetch(`/api/books/${bookId}/status`)
-      .then(r => r.json())
-      .then(d => {
-        setBookTitle(d?.title || '')
-        setBookCover(d?.cover_image_url || null)
-      })
-      .catch(() => {})
 
     return () => { stopped = true }
   }, [bookId])
@@ -816,6 +827,165 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
       </div>
     </div>
   )
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STEP: TIER — show pricing tier before parsing
+  // ════════════════════════════════════════════════════════════════════════════
+  if (step === 'tier') {
+    const tiers = [
+      {
+        label: 'Short Story',
+        range: 'Under 100K characters',
+        min: 0, max: 100_000,
+        credits: 400,
+        time: '5–10 min parse',
+        color: '#10B981', bg: '#ECFDF5', border: '#6EE7B7',
+      },
+      {
+        label: 'Novella',
+        range: '100K – 500K characters',
+        min: 100_001, max: 500_000,
+        credits: 800,
+        time: '15–30 min parse',
+        color: '#3B82F6', bg: '#EFF6FF', border: '#BFDBFE',
+      },
+      {
+        label: 'Novel',
+        range: '500K – 1M characters',
+        min: 500_001, max: 1_000_000,
+        credits: 1200,
+        time: '30–60 min parse',
+        color: '#8B5CF6', bg: '#F5F3FF', border: '#DDD6FE',
+      },
+      {
+        label: 'Epic Novel',
+        range: '1M – 1.5M characters',
+        min: 1_000_001, max: 1_500_000,
+        credits: 1500,
+        time: '60–90 min parse',
+        color: '#EF4444', bg: '#FEF2F2', border: '#FECACA',
+      },
+    ]
+    const activeTier = tiers.find(t => characterCount >= t.min && characterCount <= t.max)
+      ?? (characterCount > 1_500_000 ? tiers[3] : tiers[0])
+
+    return (
+      <div style={{ background: cream, minHeight: '100vh' }}>
+        <StepIndicator current={step} />
+        <div style={{ maxWidth: 560, margin: '0 auto', padding: '48px 24px' }}>
+          {/* Header */}
+          <div style={{ textAlign: 'center', marginBottom: 36 }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🎙</div>
+            <h1 style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontSize: 28, fontWeight: 700, color: dark,
+              margin: '0 0 10px', letterSpacing: '-0.01em',
+            }}>
+              {bookTitle || 'Your Audiobook'}
+            </h1>
+            {characterCount > 0 && (
+              <p style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 13, color: muted, margin: 0,
+              }}>
+                {characterCount.toLocaleString()} characters detected
+              </p>
+            )}
+          </div>
+
+          {/* Tier cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
+            {tiers.map(tier => {
+              const isActive = tier === activeTier
+              return (
+                <div
+                  key={tier.label}
+                  style={{
+                    border: `2px solid ${isActive ? tier.color : border}`,
+                    borderRadius: 14,
+                    padding: '16px 20px',
+                    background: isActive ? tier.bg : card,
+                    transition: 'all 150ms ease',
+                    position: 'relative',
+                    opacity: isActive ? 1 : 0.55,
+                  }}
+                >
+                  {isActive && (
+                    <div style={{
+                      position: 'absolute', top: -11, left: 20,
+                      background: tier.color, color: '#fff',
+                      fontSize: 10, fontWeight: 700,
+                      padding: '2px 10px', borderRadius: 100,
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                    }}>
+                      Your Book
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                        <span style={{
+                          fontFamily: 'var(--font-playfair), serif',
+                          fontSize: 16, fontWeight: 700,
+                          color: isActive ? tier.color : dark,
+                        }}>
+                          {tier.label}
+                        </span>
+                      </div>
+                      <div style={{
+                        fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: 12, color: muted,
+                      }}>
+                        {tier.range} · {tier.time}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{
+                        fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: 20, fontWeight: 700,
+                        color: isActive ? tier.color : dark,
+                      }}>
+                        {tier.credits.toLocaleString()}
+                      </div>
+                      <div style={{
+                        fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: 11, color: muted,
+                      }}>
+                        credits
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Start button */}
+          <button
+            onClick={() => setStep('loading')}
+            style={{
+              width: '100%', padding: '16px',
+              background: red, color: '#fff',
+              border: 'none', borderRadius: 12,
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 15, fontWeight: 700,
+              cursor: 'pointer', letterSpacing: '0.01em',
+            }}
+          >
+            Start Production — {activeTier.credits.toLocaleString()} Credits
+          </button>
+          <p style={{
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: 12, color: muted, textAlign: 'center',
+            margin: '12px 0 0', lineHeight: 1.5,
+          }}>
+            Credits are only deducted when audio generation begins, not during parsing.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   // ════════════════════════════════════════════════════════════════════════════
   // STEP: ERROR
