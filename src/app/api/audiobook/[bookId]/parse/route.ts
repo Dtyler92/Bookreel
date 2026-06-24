@@ -285,16 +285,23 @@ export async function POST(
       manuscriptFilename = uploadedFile.name
       console.log(`[audiobook/parse] Using uploaded file: ${manuscriptFilename} (${manuscriptBuffer.length} bytes)`)
     } else if (book.pdf_url) {
-      // Fall back to stored PDF URL
-      const pdfRes = await fetch(book.pdf_url)
+      // pdf_url is stored as a bare Supabase storage path — resolve to public URL first
+      let manuscriptUrl: string
+      if (book.pdf_url.startsWith('http')) {
+        manuscriptUrl = book.pdf_url
+      } else {
+        const { data: publicData } = sb.storage.from('books').getPublicUrl(book.pdf_url)
+        manuscriptUrl = publicData.publicUrl
+      }
+      console.log(`[audiobook/parse] Fetching stored manuscript: ${manuscriptUrl}`)
+      const pdfRes = await fetch(manuscriptUrl)
       if (!pdfRes.ok) {
-        return Response.json({ error: 'Could not fetch stored manuscript' }, { status: 500 })
+        return Response.json({ error: `Could not fetch stored manuscript (${pdfRes.status})` }, { status: 500 })
       }
       manuscriptBuffer = Buffer.from(await pdfRes.arrayBuffer())
-      // Infer filename extension from URL
-      const urlPath = new URL(book.pdf_url).pathname
-      manuscriptFilename = urlPath.split('/').pop() || 'manuscript.pdf'
-      console.log(`[audiobook/parse] Using stored pdf_url: ${manuscriptFilename} (${manuscriptBuffer.length} bytes)`)
+      // Infer filename from the storage path (not the full URL)
+      manuscriptFilename = book.pdf_url.split('/').pop() || 'manuscript.pdf'
+      console.log(`[audiobook/parse] Fetched stored manuscript: ${manuscriptFilename} (${manuscriptBuffer.length} bytes)`)
     } else {
       return Response.json(
         { error: 'No manuscript available. Please upload a manuscript file.' },
