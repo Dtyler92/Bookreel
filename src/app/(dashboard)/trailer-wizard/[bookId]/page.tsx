@@ -19,13 +19,13 @@ export default async function TrailerWizardPage({
 
   const [
     { data: book },
-    { data: trailer },
+    { data: trailers },
     { data: characters },
     { data: items },
     { data: scenes },
   ] = await Promise.all([
     supabase.from('books').select('*').eq('id', bookId).eq('author_id', user.id).single(),
-    supabase.from('trailers').select('*').eq('book_id', bookId).maybeSingle(),
+    supabase.from('trailers').select('id, status').eq('book_id', bookId),
     supabase
       .from('characters')
       .select(
@@ -45,6 +45,13 @@ export default async function TrailerWizardPage({
 
   if (!book) redirect('/dashboard')
 
+  // isRegenerate = author has at least one existing trailer (complete or failed)
+  const hasExistingTrailer = (trailers ?? []).some(
+    t => t.status === 'complete' || t.status === 'failed'
+  )
+  // Latest trailer record for the wizard (keep backward compat)
+  const trailer = trailers && trailers.length > 0 ? trailers[trailers.length - 1] : null
+
   return (
     <TrailerWizardClient
       book={book}
@@ -53,6 +60,7 @@ export default async function TrailerWizardPage({
       initialItems={items ?? []}
       initialScenes={scenes ?? []}
       userId={user.id}
+      isRegenerate={hasExistingTrailer}
     />
   )
 }

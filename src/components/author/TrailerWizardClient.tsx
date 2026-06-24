@@ -14,6 +14,7 @@ interface Props {
   initialItems: any[]
   initialScenes: any[]
   userId: string
+  isRegenerate?: boolean
 }
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ const STEPS = [
   { key: 'confirm',    label: 'Generate'   },
 ]
 
-function StepBar({ stepIndex }: { stepIndex: number }) {
+function StepBar({ stepIndex, isRegenerate }: { stepIndex: number; isRegenerate: boolean }) {
   return (
     <div style={{
       position: 'sticky', top: 64, zIndex: 40,
@@ -47,7 +48,7 @@ function StepBar({ stepIndex }: { stepIndex: number }) {
           textTransform: 'uppercase', color: '#8A8278',
           marginRight: 24,
         }}>
-          Trailer Wizard
+          {isRegenerate ? 'Review & Generate' : 'Trailer Wizard'}
         </span>
 
         {/* Steps */}
@@ -118,6 +119,7 @@ export default function TrailerWizardClient({
   initialItems,
   initialScenes,
   userId,
+  isRegenerate = false,
 }: Props) {
   const router = useRouter()
 
@@ -125,6 +127,8 @@ export default function TrailerWizardClient({
   const allImagesApproved  = initialCharacters.length > 0 && initialCharacters.every((c: any) => c.author_approved)
 
   const getInitialStep = (): WizardStep => {
+    // When regenerating a new trailer, always start at screenplay review
+    if (isRegenerate) return 'screenplay'
     if (allScenesApproved && allImagesApproved) return 'confirm'
     if (allScenesApproved) return 'images'
     return 'screenplay'
@@ -164,7 +168,7 @@ export default function TrailerWizardClient({
   return (
     <div style={{ minHeight: '100vh', background: '#FAFAF7' }}>
 
-      <StepBar stepIndex={stepIndex} />
+      <StepBar stepIndex={stepIndex} isRegenerate={isRegenerate} />
 
       {/* Screenplay step */}
       {step === 'screenplay' && (
@@ -243,14 +247,16 @@ export default function TrailerWizardClient({
               fontSize: 32, fontWeight: 700, color: '#0D0D0B',
               letterSpacing: '-0.02em', lineHeight: 1.2,
             }}>
-              Ready to generate
+              {isRegenerate ? 'Ready to generate new trailer' : 'Ready to generate'}
             </h2>
             <p style={{
               margin: 0,
               fontFamily: 'var(--font-inter), sans-serif',
               fontSize: 15, lineHeight: 1.65, color: '#8A8278',
             }}>
-              Your screenplay and character images are approved. Our cinematic engine will craft your trailer — usually ready in 15–20 minutes.
+              {isRegenerate
+                ? 'Your screenplay and character images have been reviewed. A new cinematic trailer will be created — usually ready in 15–20 minutes.'
+                : 'Your screenplay and character images are approved. Our cinematic engine will craft your trailer — usually ready in 15–20 minutes.'}
             </p>
           </div>
 
