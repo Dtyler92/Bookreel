@@ -101,7 +101,7 @@ export async function GET(
     } else if (asset === 'trailer') {
       const { data: tr } = await sb
         .from('trailers')
-        .select('final_video_url')
+        .select('id, final_video_url, in_reel')
         .eq('book_id', bookId)
         .eq('status', 'complete')
         .order('created_at', { ascending: false })
@@ -114,6 +114,14 @@ export async function GET(
 
       storagePath = extractPath(tr.final_video_url)
       filename = `${safeTitle}-trailer.mp4`
+
+      // Mark trailer as in_reel on first download — this is how it enters the public feed
+      if (!tr.in_reel) {
+        await sb
+          .from('trailers')
+          .update({ in_reel: true, reel_added_at: new Date().toISOString() })
+          .eq('id', tr.id)
+      }
 
     } else {
       return Response.json({ error: 'Invalid asset type' }, { status: 400 })

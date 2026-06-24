@@ -93,6 +93,7 @@ export default async function BrowsePage({
             <span style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 900, fontSize: '20px', color: '#C8402F', fontStyle: 'italic' }}>Reel</span>
           </Link>
           <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+            <Link href="/reel" style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: '#C8402F', fontWeight: 600, textDecoration: 'none' }}>The Reel</Link>
             <Link href="/login" style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: '#8A8278', textDecoration: 'none' }}>Sign In</Link>
             <Link href="/signup" style={{ background: '#C8402F', color: '#FFFFFF', padding: '8px 18px', borderRadius: '6px', fontSize: '14px', fontWeight: 600, textDecoration: 'none', fontFamily: 'var(--font-inter), sans-serif' }}>
               For Authors →

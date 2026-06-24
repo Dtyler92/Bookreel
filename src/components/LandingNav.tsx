@@ -59,6 +59,9 @@ export default function LandingNav() {
           <a href="#how-it-works" className="text-sm font-medium" style={{ color: 'var(--color-text-heading)', textDecoration: 'none' }}>
             How It Works
           </a>
+          <Link href="/reel" className="text-sm font-medium" style={{ color: 'var(--color-text-heading)', textDecoration: 'none' }}>
+            The Reel
+          </Link>
           <Link href="/pricing" className="text-sm font-medium" style={{ color: 'var(--color-text-heading)', textDecoration: 'none' }}>
             Pricing
           </Link>
@@ -152,7 +155,8 @@ export default function LandingNav() {
           }}
         >
           {[
-            { label: 'How It Works', href: '#how-it-works' },
+            { label: 'The Reel', href: '/reel' },
+          { label: 'How It Works', href: '#how-it-works' },
             { label: 'Pricing', href: '/pricing' },
             { label: 'For Authors', href: '/for-authors' },
             { label: 'Login', href: '/login' },
