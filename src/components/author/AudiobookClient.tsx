@@ -880,7 +880,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                     fontFamily: 'var(--font-inter), sans-serif',
                     textTransform: 'uppercase', letterSpacing: '0.05em',
                   }}>
-                    Recommended
+                    Recommended for highest accuracy
                   </span>
                 </div>
                 <div style={{
@@ -917,6 +917,14 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                     fontSize: 18, fontWeight: 700, color: dark,
                   }}>
                     Multilingual
+                  </span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 8px',
+                    borderRadius: 100, background: '#EDE9FE', color: '#7C3AED',
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    textTransform: 'uppercase', letterSpacing: '0.05em',
+                  }}>
+                    Recommended for books with multiple languages
                   </span>
                 </div>
                 <div style={{
