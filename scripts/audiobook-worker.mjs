@@ -299,11 +299,17 @@ async function extractTextFromBuffer(buffer, filename) {
         const plain = html
           .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
           .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-          .replace(/<[^>]+>/g, ' ')
+          // Block-level tags → paragraph breaks
+          .replace(/<\/?(p|div|section|article|h[1-6]|br|li|tr|blockquote)[^>]*>/gi, '\n\n')
+          .replace(/<[^>]+>/g, '')
           .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
           .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"').replace(/&#\d+;/g, ' ')
-          .replace(/\s+/g, ' ').trim()
+          .replace(/&quot;/g, '"').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n))
+          // Collapse runs of spaces (but not newlines)
+          .replace(/[ \t]+/g, ' ')
+          // Collapse 3+ newlines to 2
+          .replace(/\n{3,}/g, '\n\n')
+          .trim()
         if (plain.length > 50) textParts.push(plain)
       }
       return textParts.join('\n\n')
@@ -364,7 +370,7 @@ function splitIntoChapters(text) {
   return chapters
 }
 
-function splitIntoChunks(text, targetSize = 15000) {
+function splitIntoChunks(text, targetSize = 6000) {
   const paragraphs = text.split(/\n\n+/)
   const chunks = []
   let current = ''
@@ -385,6 +391,54 @@ function splitIntoChunks(text, targetSize = 15000) {
   return chunks
 }
 
+// ── JSON repair helper ────────────────────────────────────────────────────────
+let _jsonrepair = null
+async function safeJsonParse(text) {
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+    // Try jsonrepair for truncated/malformed JSON
+    if (!_jsonrepair) {
+      const mod = await import('jsonrepair')
+      _jsonrepair = mod.jsonrepair
+    }
+    try {
+      const repaired = _jsonrepair(text)
+      const parsed = JSON.parse(repaired)
+      console.log(`[audiobook-worker]    ⚠  JSON repaired (${e.message})`)
+      return parsed
+    } catch (e2) {
+      throw new Error(`JSON parse failed even after repair: ${e.message}`)
+    }
+  }
+}
+
+// ── Fetch with retry ─────────────────────────────────────────────────────────
+async function fetchWithRetry(url, options, maxAttempts = 3, timeoutMs = 180000) {
+  let lastErr
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal })
+      clearTimeout(timer)
+      return res
+    } catch (e) {
+      clearTimeout(timer)
+      lastErr = e
+      const reason = e.name === 'AbortError' ? `timeout after ${timeoutMs/1000}s` : e.message
+      if (attempt < maxAttempts) {
+        const delay = attempt * 3000
+        console.log(`[audiobook-worker]    ⚠  fetch failed (attempt ${attempt}/${maxAttempts}: ${reason}), retrying in ${delay/1000}s…`)
+        await new Promise(r => setTimeout(r, delay))
+      } else {
+        console.error(`[audiobook-worker]    ✗  fetch failed after ${maxAttempts} attempts: ${reason}`)
+      }
+    }
+  }
+  throw lastErr
+}
+
 // ── Claude call for a single chunk ───────────────────────────────────────────
 async function parseChunkWithClaude(chunk, chapterLabel, bookTitle, charList) {
   const userPrompt = `Book title: "${bookTitle}"
@@ -395,7 +449,7 @@ Parse this manuscript section into dialogue segments:
 
 ${chunk}`
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'x-api-key':         ANTHROPIC_API_KEY,
@@ -404,11 +458,11 @@ ${chunk}`
     },
     body: JSON.stringify({
       model:      'claude-sonnet-4-5',
-      max_tokens: 8192,
+      max_tokens: 16000,
       system:     PARSE_SYSTEM_PROMPT,
       messages:   [{ role: 'user', content: userPrompt }],
     }),
-  })
+  }, 3)
 
   if (!res.ok) {
     const errText = await res.text()
@@ -421,7 +475,7 @@ ${chunk}`
   // Strip markdown code fences if model wrapped it
   const cleaned = rawJson.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
 
-  const segments = JSON.parse(cleaned)
+  const segments = await safeJsonParse(cleaned)
   if (!Array.isArray(segments)) throw new Error('Claude returned non-array')
   return segments
 }
@@ -491,11 +545,29 @@ async function runParsePipeline(job) {
     let usedChunking = false
 
     if (sections.length <= 1) {
-      sections     = splitIntoChunks(rawText, 15000)
+      sections     = splitIntoChunks(rawText, 6000)
       usedChunking = true
       console.log(`[audiobook-worker]    No chapters detected. Split into ${sections.length} chunks.`)
     } else {
       console.log(`[audiobook-worker]    Detected ${sections.length} chapters.`)
+      // Sub-split any chapter that's too large for a single Claude call
+      const MAX_CHUNK = 6000
+      const expanded = []
+      for (const sec of sections) {
+        if (sec.text.length > MAX_CHUNK) {
+          const subChunks = splitIntoChunks(sec.text, MAX_CHUNK)
+          subChunks.forEach((c, i) => expanded.push({
+            title: subChunks.length > 1 ? `${sec.title} (part ${i + 1})` : sec.title,
+            text:  c.text,
+          }))
+        } else {
+          expanded.push(sec)
+        }
+      }
+      if (expanded.length !== sections.length) {
+        console.log(`[audiobook-worker]    Sub-split large chapters → ${expanded.length} total chunks.`)
+      }
+      sections = expanded
     }
 
     // ── 6. Claude chunking loop ───────────────────────────────────────────────

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { VOICE_ROSTER, VoiceOption } from '@/lib/voiceRoster'
@@ -194,9 +194,10 @@ interface VoiceCardHProps {
   playing: boolean
   onPlay: () => void
   onStop: () => void
+  usedBy?: string | null   // name of character already using this voice
 }
 
-function VoiceCardH({ voice, selected, onSelect, playing, onPlay, onStop }: VoiceCardHProps) {
+function VoiceCardH({ voice, selected, onSelect, playing, onPlay, onStop, usedBy }: VoiceCardHProps) {
   const [hov, setHov] = useState(false)
 
   return (
@@ -263,6 +264,23 @@ function VoiceCardH({ voice, selected, onSelect, playing, onPlay, onStop }: Voic
       }}>
         {voice.style}
       </div>
+
+      {/* "Used by" indicator */}
+      {usedBy && !selected && (
+        <div style={{
+          fontFamily: 'var(--font-inter), sans-serif',
+          fontSize: 10, fontWeight: 600,
+          color: '#B45309',
+          background: '#FEF3C7',
+          border: '1px solid #FDE68A',
+          borderRadius: 6,
+          padding: '2px 6px',
+          lineHeight: 1.4,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          ← {usedBy}
+        </div>
+      )}
     </div>
   )
 }
@@ -276,9 +294,10 @@ interface VoicePickerHProps {
   playingKey: string | null
   onPlay: (voice: VoiceOption) => void
   onStop: () => void
+  voiceUsageMap?: Record<string, string>  // voiceKey → character name using it
 }
 
-function VoicePickerH({ value, onChange, excludeKey, playingKey, onPlay, onStop }: VoicePickerHProps) {
+function VoicePickerH({ value, onChange, excludeKey, playingKey, onPlay, onStop, voiceUsageMap = {} }: VoicePickerHProps) {
   const filtered = (voices: VoiceOption[]) =>
     excludeKey ? voices.filter(v => v.key !== excludeKey) : voices
 
@@ -311,6 +330,7 @@ function VoicePickerH({ value, onChange, excludeKey, playingKey, onPlay, onStop 
               playing={playingKey === v.key}
               onPlay={() => onPlay(v)}
               onStop={onStop}
+              usedBy={voiceUsageMap[v.key] || null}
             />
           ))}
         </div>
@@ -340,11 +360,13 @@ interface CharacterCardProps {
   onPlay: (voice: VoiceOption) => void
   onStop: () => void
   isNarrator?: boolean
+  lineCount?: number
+  voiceUsageMap?: Record<string, string>
 }
 
 function CharacterCard({
   speaker, speakerColor, voiceKey, isOpen, onToggle, onVoiceChange,
-  playingKey, onPlay, onStop, isNarrator,
+  playingKey, onPlay, onStop, isNarrator, lineCount, voiceUsageMap = {},
 }: CharacterCardProps) {
   const voice = VOICE_ROSTER.find(v => v.key === voiceKey)
 
@@ -359,11 +381,11 @@ function CharacterCard({
     }}>
       {/* Header row */}
       <div
-        onClick={isNarrator ? undefined : onToggle}
+        onClick={onToggle}
         style={{
           display: 'flex', alignItems: 'center', gap: 12,
           padding: '14px 18px',
-          cursor: isNarrator ? 'default' : 'pointer',
+          cursor: 'pointer',
           background: isOpen ? 'rgba(200,64,47,0.018)' : 'transparent',
           userSelect: 'none',
         }}
@@ -375,7 +397,7 @@ function CharacterCard({
           boxShadow: `0 0 0 2px ${speakerColor}28`,
         }} />
 
-        {/* Name + badge */}
+        {/* Name + badges */}
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{
@@ -392,7 +414,17 @@ function CharacterCard({
                 fontFamily: 'var(--font-inter), sans-serif',
                 textTransform: 'uppercase',
               }}>
-                Default
+                Narrator
+              </span>
+            )}
+            {lineCount !== undefined && (
+              <span style={{
+                fontSize: 10, fontWeight: 600, padding: '2px 7px',
+                borderRadius: 100, background: '#F0F9FF',
+                color: '#0369A1', letterSpacing: '0.03em',
+                fontFamily: 'var(--font-inter), sans-serif',
+              }}>
+                {lineCount} lines
               </span>
             )}
           </div>
@@ -423,24 +455,22 @@ function CharacterCard({
         )}
 
         {/* Chevron */}
-        {!isNarrator && (
-          <svg
-            width={16} height={16} viewBox="0 0 24 24" fill="none"
-            stroke={isOpen ? red : muted}
-            strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-            style={{
-              transform: isOpen ? 'rotate(180deg)' : 'none',
-              transition: 'transform 200ms ease, stroke 150ms ease',
-              flexShrink: 0,
-            }}
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        )}
+        <svg
+          width={16} height={16} viewBox="0 0 24 24" fill="none"
+          stroke={isOpen ? red : muted}
+          strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+          style={{
+            transform: isOpen ? 'rotate(180deg)' : 'none',
+            transition: 'transform 200ms ease, stroke 150ms ease',
+            flexShrink: 0,
+          }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
       </div>
 
       {/* Expanded voice picker */}
-      {isOpen && !isNarrator && (
+      {isOpen && (
         <div style={{
           borderTop: `1px solid ${border}`,
           padding: '4px 18px 18px',
@@ -449,10 +479,10 @@ function CharacterCard({
           <VoicePickerH
             value={voiceKey}
             onChange={key => { onVoiceChange(key); onToggle() }}
-            excludeKey="narrator"
             playingKey={playingKey}
             onPlay={onPlay}
             onStop={onStop}
+            voiceUsageMap={voiceUsageMap}
           />
         </div>
       )}
@@ -498,6 +528,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
   const [estimatedMins, setEstMins]   = useState(0)
   const [bookTitle, setBookTitle]     = useState('')
   const [bookCover, setBookCover]     = useState<string | null>(null)
+  const [narratorVoice, setNarratorVoice] = useState<string>('narrator')
 
   // ── UI toggles ───────────────────────────────────────────────────────────────
   const [activePicker, setActivePicker] = useState<string | null>(null)
@@ -515,6 +546,51 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
   // ── Global audio preview state ───────────────────────────────────────────────
   const [playingKey, setPlayingKey] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  // ── Derived: line counts per speaker ─────────────────────────────────────────
+  const lineCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const seg of segments) {
+      counts[seg.speaker] = (counts[seg.speaker] || 0) + 1
+    }
+    return counts
+  }, [segments])
+
+  // ── Derived: speakers sorted by line count desc ───────────────────────────────
+  const sortedSpeakers = useMemo(() =>
+    [...speakers].sort((a, b) => (lineCounts[b] || 0) - (lineCounts[a] || 0)),
+    [speakers, lineCounts]
+  )
+
+  // ── Derived: voiceUsageMap — which voice is used by which character ───────────
+  const voiceUsageMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    // narrator
+    map[narratorVoice] = 'Narrator'
+    for (const sp of speakers) {
+      const key = voiceMap[sp]
+      if (key && !map[key]) map[key] = sp
+    }
+    return map
+  }, [narratorVoice, speakers, voiceMap])
+
+  // ── Auto-fill remaining unassigned characters ─────────────────────────────────
+  const handleAutoFill = () => {
+    const usedKeys = new Set(Object.values(voiceUsageMap))
+    const available = VOICE_ROSTER.filter(v => !usedKeys.has(v.key))
+    const unassigned = sortedSpeakers.filter(sp => !voiceMap[sp] || voiceMap[sp] === 'default')
+    const updates: Record<string, string> = {}
+    let idx = 0
+    for (const sp of unassigned) {
+      if (idx >= available.length) break
+      updates[sp] = available[idx].key
+      idx++
+    }
+    if (Object.keys(updates).length > 0) {
+      setVoiceMap(prev => ({ ...prev, ...updates }))
+    }
+  }
+
 
   const handlePlayVoice = (voice: VoiceOption) => {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
@@ -639,7 +715,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
       const res = await fetch(`/api/audiobook/${bookId}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ segments, voiceMap, narratorVoice: 'Daniel', wordCount }),
+        body: JSON.stringify({ segments, voiceMap, narratorVoice: VOICE_ROSTER.find(v => v.key === narratorVoice)?.name ?? 'Daniel', wordCount }),
       })
       const data = await res.json()
       if (!res.ok || !data.audiobookId) throw new Error(data.error || 'Failed to start audiobook')
@@ -1247,26 +1323,54 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                 fontFamily: 'var(--font-inter), sans-serif',
                 fontSize: 13, color: muted, margin: 0, lineHeight: 1.5,
               }}>
-                Assign a voice to each character. Click a card to expand the voice picker.
+                Assign a voice to each character. Sorted by most lines. Click a card to pick a voice.
               </p>
             </div>
 
-            {/* Narrator (locked) */}
+            {/* Narrator (selectable) */}
             <CharacterCard
               speaker="NARRATOR"
               speakerColor={NARRATOR_COLOR}
-              voiceKey="narrator"
-              isOpen={false}
-              onToggle={() => {}}
-              onVoiceChange={() => {}}
+              voiceKey={narratorVoice}
+              isOpen={activePicker === 'NARRATOR'}
+              onToggle={() => setActivePicker(activePicker === 'NARRATOR' ? null : 'NARRATOR')}
+              onVoiceChange={key => { setNarratorVoice(key); setActivePicker(null) }}
               playingKey={playingKey}
               onPlay={handlePlayVoice}
               onStop={handleStopVoice}
               isNarrator
+              lineCount={lineCounts['NARRATOR']}
+              voiceUsageMap={voiceUsageMap}
             />
 
-            {/* Character cards */}
-            {speakers.map(speaker => (
+            {/* Auto-fill button */}
+            {sortedSpeakers.some(sp => !voiceMap[sp] || voiceMap[sp] === 'default') && (
+              <button
+                onClick={handleAutoFill}
+                style={{
+                  width: '100%', padding: '11px 18px',
+                  background: 'rgba(200,64,47,0.06)',
+                  border: `1.5px dashed rgba(200,64,47,0.35)`,
+                  borderRadius: 10, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  marginBottom: 4,
+                  transition: 'background 150ms ease',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,64,47,0.1)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(200,64,47,0.06)')}
+              >
+                <span style={{ fontSize: 15 }}>✨</span>
+                <span style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 13, fontWeight: 600, color: red,
+                }}>
+                  Auto-fill remaining characters
+                </span>
+              </button>
+            )}
+
+            {/* Character cards — sorted by line count */}
+            {sortedSpeakers.map(speaker => (
               <CharacterCard
                 key={speaker}
                 speaker={speaker}
@@ -1278,8 +1382,11 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                 playingKey={playingKey}
                 onPlay={handlePlayVoice}
                 onStop={handleStopVoice}
+                lineCount={lineCounts[speaker]}
+                voiceUsageMap={voiceUsageMap}
               />
             ))}
+
 
             {/* ── Collapsible dialogue preview ── */}
             {segments.length > 0 && (

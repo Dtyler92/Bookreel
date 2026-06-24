@@ -23,6 +23,7 @@
     "epub2": "^3.0.2",
     "epubjs": "^0.3.93",
     "fluent-ffmpeg": "^2.1.3",
+    "jsonrepair": "^3.14.0",
     "jszip": "^3.10.1",
     "lucide-react": "^1.18.0",
     "mammoth": "^1.12.0",
