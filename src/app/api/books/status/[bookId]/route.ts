@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 
@@ -10,10 +11,15 @@ function getServiceClient() {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ bookId: string }> }
 ) {
   try {
+    // Auth check
+    const authClient = await createServerClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
     const { bookId } = await params
 
     if (!bookId) {
@@ -21,6 +27,10 @@ export async function GET(
     }
 
     const supabase = getServiceClient()
+
+    // Verify book ownership
+    const { data: book } = await supabase.from('books').select('author_id').eq('id', bookId).single()
+    if (!book || book.author_id !== user.id) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
     const { data: trailer, error } = await supabase
       .from('trailers')

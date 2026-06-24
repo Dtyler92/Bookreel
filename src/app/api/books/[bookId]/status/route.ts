@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-
-export const runtime = 'nodejs'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 
 function getServiceClient() {
   return createClient(
@@ -10,10 +9,15 @@ function getServiceClient() {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ bookId: string }> }
 ) {
   try {
+    // Auth check
+    const authClient = await createServerClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
     const { bookId } = await params
 
     if (!bookId) {
@@ -22,12 +26,9 @@ export async function GET(
 
     const supabase = getServiceClient()
 
-    // Fetch book metadata (title + cover)
-    const { data: book } = await supabase
-      .from('books')
-      .select('title, cover_image_url')
-      .eq('id', bookId)
-      .single()
+    // Verify book ownership
+    const { data: book } = await supabase.from('books').select('author_id, title, cover_image_url').eq('id', bookId).single()
+    if (!book || book.author_id !== user.id) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
     const { data: trailer, error } = await supabase
       .from('trailers')

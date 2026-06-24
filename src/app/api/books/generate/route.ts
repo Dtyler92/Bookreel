@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { getVideoConfig } from '@/lib/tierGate'
 import { PlanName } from '@/lib/stripe'
@@ -13,8 +14,15 @@ function getServiceClient() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { bookId: string; userId?: string }
-    const { bookId, userId } = body
+    // Auth check — derive userId from session only (never from request body)
+    const authClient = await createServerClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const userId = user.id
+
+    const body = await request.json() as { bookId: string }
+    const { bookId } = body
 
     if (!bookId) {
       return Response.json({ error: 'bookId is required' }, { status: 400 })
@@ -22,53 +30,55 @@ export async function POST(request: Request) {
 
     const supabase = getServiceClient()
 
+    // Verify book ownership
+    const { data: bookOwnerCheck } = await supabase.from('books').select('author_id').eq('id', bookId).single()
+    if (!bookOwnerCheck || bookOwnerCheck.author_id !== userId) return Response.json({ error: 'Forbidden' }, { status: 403 })
+
     // --- Tier gate: check subscription ---
-    if (userId) {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('subscription_tier')
-        .eq('id', userId)
-        .single()
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('subscription_tier')
+      .eq('id', userId)
+      .single()
 
-      if (profileError) {
-        console.error('Profile fetch error:', profileError)
-        return Response.json({ error: 'Failed to fetch user profile' }, { status: 500 })
-      }
-
-      const tier = (profile?.subscription_tier || 'free') as PlanName
-
-      if (tier === 'free') {
-        return NextResponse.json({ 
-          error: 'Trailer generation requires an Author or Pro subscription. Upgrade your plan to create trailers.',
-          upgradeRequired: true
-        }, { status: 403 })
-      }
-
-      // --- Credit gate ---
-      // Has this book's trailer already consumed a credit? (retry of a paid generation is free)
-      const { data: existingTrailer } = await supabase
-        .from('trailers')
-        .select('credit_consumed')
-        .eq('book_id', bookId)
-        .maybeSingle()
-
-      const alreadyConsumed = existingTrailer?.credit_consumed ?? false
-
-      if (!alreadyConsumed) {
-        const creditState = await getCreditState(userId)
-        if (!creditState || creditState.credits < 1) {
-          return NextResponse.json({
-            error: 'You have no trailer credits left. Your next free credit arrives on your monthly reset date — or you can buy a redo credit now.',
-            outOfCredits: true,
-            resetAt: creditState?.resetAt ?? null,
-          }, { status: 402 })
-        }
-      }
-
-      // Get model config based on tier
-      const modelConfig = getVideoConfig(tier as 'standard' | 'premium')
-      console.log(`Generating trailer for tier "${tier}" using config:`, modelConfig)
+    if (profileError) {
+      console.error('Profile fetch error:', profileError)
+      return Response.json({ error: 'Failed to fetch user profile' }, { status: 500 })
     }
+
+    const tier = (profile?.subscription_tier || 'free') as PlanName
+
+    if (tier === 'free') {
+      return NextResponse.json({ 
+        error: 'Trailer generation requires an Author or Pro subscription. Upgrade your plan to create trailers.',
+        upgradeRequired: true
+      }, { status: 403 })
+    }
+
+    // --- Credit gate ---
+    // Has this book's trailer already consumed a credit? (retry of a paid generation is free)
+    const { data: existingTrailer } = await supabase
+      .from('trailers')
+      .select('credit_consumed')
+      .eq('book_id', bookId)
+      .maybeSingle()
+
+    const alreadyConsumed = existingTrailer?.credit_consumed ?? false
+
+    if (!alreadyConsumed) {
+      const creditState = await getCreditState(userId)
+      if (!creditState || creditState.credits < 1) {
+        return NextResponse.json({
+          error: 'You have no trailer credits left. Your next free credit arrives on your monthly reset date — or you can buy a redo credit now.',
+          outOfCredits: true,
+          resetAt: creditState?.resetAt ?? null,
+        }, { status: 402 })
+      }
+    }
+
+    // Get model config based on tier
+    const modelConfig = getVideoConfig(tier as 'standard' | 'premium')
+    console.log(`Generating trailer for tier "${tier}" using config:`, modelConfig)
 
     // Verify images have been approved before generating video
     const { data: trailer, error: trailerFetchError } = await supabase
@@ -157,37 +167,32 @@ export async function POST(request: Request) {
     }
 
     // --- Consume a credit (once per book trailer; retries are free) ---
-    if (userId) {
-      const { data: t } = await supabase
-        .from('trailers')
-        .select('credit_consumed')
-        .eq('book_id', bookId)
-        .maybeSingle()
+    const { data: t } = await supabase
+      .from('trailers')
+      .select('credit_consumed')
+      .eq('book_id', bookId)
+      .maybeSingle()
 
-      if (!t?.credit_consumed) {
-        const consumed = await consumeCredit(userId, bookId)
-        if (consumed) {
-          await supabase
-            .from('trailers')
-            .update({ credit_consumed: true })
-            .eq('book_id', bookId)
-          console.log(`[generate] Consumed 1 trailer credit for user ${userId}, book ${bookId}`)
-        }
+    if (!t?.credit_consumed) {
+      const consumed = await consumeCredit(userId, bookId)
+      if (consumed) {
+        await supabase
+          .from('trailers')
+          .update({ credit_consumed: true })
+          .eq('book_id', bookId)
+        console.log(`[generate] Consumed 1 trailer credit for user ${userId}, book ${bookId}`)
       }
     }
 
     // Determine the author's tier for pipeline configuration
-    // We need to re-fetch it here if userId was provided, otherwise default to 'author'
     let pipelineTier: 'author' | 'pro' = 'author'
-    if (userId) {
-      const { data: tierProfile } = await supabase
-        .from('profiles')
-        .select('subscription_tier')
-        .eq('id', userId)
-        .single()
-      if (tierProfile?.subscription_tier === 'pro') {
-        pipelineTier = 'pro'
-      }
+    const { data: tierProfile } = await supabase
+      .from('profiles')
+      .select('subscription_tier')
+      .eq('id', userId)
+      .single()
+    if (tierProfile?.subscription_tier === 'pro') {
+      pipelineTier = 'pro'
     }
 
     // Log for debugging

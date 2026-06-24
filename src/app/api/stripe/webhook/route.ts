@@ -32,6 +32,26 @@ export async function POST(request: Request) {
 
   const supabase = getServiceClient()
 
+  // Idempotency check: skip already-processed events.
+  // Requires a 'processed_webhooks' table: CREATE TABLE processed_webhooks (event_id TEXT PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT now());
+  try {
+    const { data: existing } = await supabase
+      .from('processed_webhooks')
+      .select('event_id')
+      .eq('event_id', event.id)
+      .maybeSingle()
+
+    if (existing) {
+      console.log(`[webhook] Duplicate event ${event.id} — skipping`)
+      return Response.json({ received: true, duplicate: true })
+    }
+
+    await supabase.from('processed_webhooks').insert({ event_id: event.id })
+  } catch (idempotencyErr) {
+    // If the table doesn't exist yet, log and continue processing anyway
+    console.warn('[webhook] Idempotency check skipped (table may not exist yet):', idempotencyErr)
+  }
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {

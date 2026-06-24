@@ -1,5 +1,6 @@
 import { stripe } from '@/lib/stripe'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 
 function getServiceClient() {
   return createClient(
@@ -32,14 +33,20 @@ function getPriceId(
 
 export async function POST(request: Request) {
   try {
+    // Auth check — derive userId from session only (never from request body)
+    const authClient = await createServerClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const userId = user.id
+
     const body = await request.json() as {
       planId: 'author' | 'pro'
       interval: 'month' | 'year'
       isBeta: boolean
-      userId?: string
     }
 
-    const { planId, interval, isBeta, userId } = body
+    const { planId, interval, isBeta } = body
 
     if (!planId || !interval) {
       return Response.json({ error: 'planId and interval are required' }, { status: 400 })
@@ -53,19 +60,17 @@ export async function POST(request: Request) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
-    // Look up existing Stripe customer if userId provided
+    // Look up existing Stripe customer using the authenticated userId
     let customerId: string | undefined
-    if (userId) {
-      const supabase = getServiceClient()
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('stripe_customer_id')
-        .eq('id', userId)
-        .single()
+    const supabase = getServiceClient()
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('stripe_customer_id')
+      .eq('id', userId)
+      .single()
 
-      if (profile?.stripe_customer_id) {
-        customerId = profile.stripe_customer_id
-      }
+    if (profile?.stripe_customer_id) {
+      customerId = profile.stripe_customer_id
     }
 
     const sessionParams: Parameters<typeof stripe.checkout.sessions.create>[0] = {
@@ -79,7 +84,7 @@ export async function POST(request: Request) {
       success_url: `${appUrl}/dashboard?upgraded=true`,
       cancel_url: `${appUrl}/pricing`,
       metadata: {
-        userId: userId || '',
+        userId,
         planId,
       },
     }

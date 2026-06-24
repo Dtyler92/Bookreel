@@ -1,5 +1,6 @@
 import { fal } from '@fal-ai/client'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -19,6 +20,11 @@ interface IdeogramResult {
 
 export async function POST(request: Request) {
   try {
+    // Auth check
+    const authClient = await createServerClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
     const body = await request.json() as {
       bookId?: string
       title?: string
@@ -36,16 +42,18 @@ export async function POST(request: Request) {
     let description = bodyDescription ?? ''
     let authorName = bodyAuthorName ?? ''
 
-    // If bookId is provided, fetch book details from Supabase
+    const supabase = getServiceClient()
+
+    // If bookId is provided, verify ownership and fetch book details
     if (bookId) {
-      const supabase = getServiceClient()
       const { data: book, error: bookError } = await supabase
         .from('books')
-        .select('title, genre, description')
+        .select('title, genre, description, author_id')
         .eq('id', bookId)
         .single()
 
       if (!bookError && book) {
+        if (book.author_id !== user.id) return Response.json({ error: 'Forbidden' }, { status: 403 })
         title = book.title ?? title
         genre = book.genre ?? genre
         description = book.description ?? description
@@ -100,7 +108,6 @@ export async function POST(request: Request) {
     }
 
     // Download all images from fal.ai and re-upload to Supabase so URLs don't expire
-    const supabase = getServiceClient()
     const urls: string[] = []
 
     for (let i = 0; i < falImages.length; i++) {

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 
 function getServiceClient() {
   return createClient(
@@ -9,6 +10,11 @@ function getServiceClient() {
 
 export async function PATCH(request: Request) {
   try {
+    // Auth check
+    const supabase = await createServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
     const body = await request.json() as {
       type: 'character' | 'scene'
       id: string
@@ -38,15 +44,22 @@ export async function PATCH(request: Request) {
       )
     }
 
-    const supabase = getServiceClient()
+    const sb = getServiceClient()
 
+    // Verify ownership: look up the record to get book_id, then check book author_id
     const table = type === 'character' ? 'characters' : 'scenes'
+    const { data: record } = await sb.from(table).select('book_id').eq('id', id).single()
+    if (!record) return Response.json({ error: 'Record not found' }, { status: 404 })
+
+    const { data: book } = await sb.from('books').select('author_id').eq('id', record.book_id).single()
+    if (!book || book.author_id !== user.id) return Response.json({ error: 'Forbidden' }, { status: 403 })
+
     const updatePayload: Record<string, unknown> = {
       author_approved: approved,
       ...(updates || {})
     }
 
-    const { error } = await supabase
+    const { error } = await sb
       .from(table)
       .update(updatePayload)
       .eq('id', id)

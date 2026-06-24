@@ -1,5 +1,6 @@
 import { stripe } from '@/lib/stripe'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 
 function getServiceClient() {
   return createClient(
@@ -10,12 +11,12 @@ function getServiceClient() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { userId?: string }
-    const { userId } = body
+    // Auth check — derive userId from session only (never from request body)
+    const authClient = await createServerClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (!userId) {
-      return Response.json({ error: 'userId is required' }, { status: 400 })
-    }
+    const userId = user.id
 
     const supabase = getServiceClient()
 

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { fal } from '@fal-ai/client'
 import { IMAGE_NEGATIVE_PROMPT, sanitizeAppearanceDescription } from '@/lib/contentPolicy'
 import { NextResponse } from 'next/server'
@@ -29,8 +30,15 @@ interface FalImageResult {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { bookId: string; tier?: string; userId?: string }
-    const { bookId, tier = 'standard', userId } = body
+    // Auth check — derive userId from session only (never from request body)
+    const authClient = await createServerClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const userId = user.id
+
+    const body = await request.json() as { bookId: string; tier?: string }
+    const { bookId, tier = 'standard' } = body
 
     if (!bookId) {
       return Response.json({ error: 'bookId is required' }, { status: 400 })
@@ -39,29 +47,27 @@ export async function POST(request: Request) {
     const supabase = getServiceClient()
 
     // --- Tier gate: free users cannot generate images ---
-    if (userId) {
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('subscription_tier')
-        .eq('id', userId)
-        .single()
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('subscription_tier')
+      .eq('id', userId)
+      .single()
 
-      if (profileError) {
-        console.error('[generate-images] Profile fetch error:', profileError)
-        return Response.json({ error: 'Failed to fetch user profile' }, { status: 500 })
-      }
-
-      const userTier = (profile?.subscription_tier || 'free') as PlanName
-
-      if (userTier === 'free') {
-        return NextResponse.json({
-          error: 'Image generation requires an Author or Pro subscription. Upgrade your plan to generate images.',
-          upgradeRequired: true
-        }, { status: 403 })
-      }
+    if (profileError) {
+      console.error('[generate-images] Profile fetch error:', profileError)
+      return Response.json({ error: 'Failed to fetch user profile' }, { status: 500 })
     }
 
-    // Fetch book
+    const userTier = (profile?.subscription_tier || 'free') as PlanName
+
+    if (userTier === 'free') {
+      return NextResponse.json({
+        error: 'Image generation requires an Author or Pro subscription. Upgrade your plan to generate images.',
+        upgradeRequired: true
+      }, { status: 403 })
+    }
+
+    // Fetch book and verify ownership
     const { data: book, error: bookError } = await supabase
       .from('books')
       .select('id, title, genre, author_id')
@@ -70,6 +76,10 @@ export async function POST(request: Request) {
 
     if (bookError || !book) {
       return Response.json({ error: 'Book not found' }, { status: 404 })
+    }
+
+    if (book.author_id !== userId) {
+      return Response.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const genre = book.genre ?? 'general fiction'

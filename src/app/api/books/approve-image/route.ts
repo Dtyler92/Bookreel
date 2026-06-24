@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { fal } from '@fal-ai/client'
 import { sanitizeAppearanceDescription, IMAGE_NEGATIVE_PROMPT } from '@/lib/contentPolicy'
 
@@ -20,6 +21,11 @@ interface FalImageResult {
 
 export async function PATCH(request: Request) {
   try {
+    // Auth check
+    const authClient = await createServerClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
     const body = await request.json() as {
       type: 'character' | 'item'
       id: string
@@ -41,6 +47,12 @@ export async function PATCH(request: Request) {
 
     const supabase = getServiceClient()
     const table = type === 'character' ? 'characters' : 'items'
+
+    // Verify ownership
+    const { data: ownerRecord } = await supabase.from(table).select('book_id').eq('id', id).single()
+    if (!ownerRecord) return Response.json({ error: 'Record not found' }, { status: 404 })
+    const { data: bookOwnership } = await supabase.from('books').select('author_id').eq('id', ownerRecord.book_id).single()
+    if (!bookOwnership || bookOwnership.author_id !== user.id) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
     let newImageUrl: string | undefined
     let newFaceUrl: string | undefined
