@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { VOICE_ROSTER, VoiceOption } from '@/lib/voiceRoster'
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface Segment {
   index: number
@@ -10,36 +13,181 @@ interface Segment {
   text: string
 }
 
+type WizardStep = 'loading' | 'assign' | 'confirm' | 'generating' | 'done' | 'error'
+
+// ─── Design tokens ──────────────────────────────────────────────────────────────
+
 const red    = '#C8402F'
 const dark   = '#0D0D0B'
 const muted  = '#8A8278'
 const border = '#E8E2D5'
 const cream  = '#FAFAF7'
+const card   = '#FFFFFF'
 
-// Group voices by gender
+// ─── Speaker colour palette ─────────────────────────────────────────────────────
+
+const SPEAKER_PALETTE = [
+  '#1565C0', '#2D6A4F', '#6A1E55', '#7B3F00',
+  '#1A237E', '#4A148C', '#B45309', '#0F766E',
+]
+const NARRATOR_COLOR = '#5C5751'
+
+// ─── Voice roster slices ────────────────────────────────────────────────────────
+
 const maleVoices    = VOICE_ROSTER.filter(v => v.gender === 'male')
 const femaleVoices  = VOICE_ROSTER.filter(v => v.gender === 'female')
 const neutralVoices = VOICE_ROSTER.filter(v => v.gender === 'neutral')
 
+// ─── Global CSS keyframes (injected once) ────────────────────────────────────────
+
+const KEYFRAMES = `
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.85); }
+}
+@keyframes playPulse {
+  0%, 100% { box-shadow: 0 0 0 0px rgba(200,64,47,0.45); }
+  60%       { box-shadow: 0 0 0 7px rgba(200,64,47,0); }
+}
+`
+
+// ─── ShimmerBar ─────────────────────────────────────────────────────────────────
+
+function ShimmerBar({ height = 4 }: { height?: number }) {
+  return (
+    <div style={{
+      width: '100%', height,
+      background: '#EDE9E0', borderRadius: 2,
+      overflow: 'hidden', position: 'relative',
+    }}>
+      <div style={{
+        position: 'absolute', inset: 0, width: '55%',
+        background: 'linear-gradient(90deg, transparent 0%, #C8402F 40%, #E8735F 65%, transparent 100%)',
+        animation: 'shimmer 1.7s ease-in-out infinite',
+      }} />
+    </div>
+  )
+}
+
+// ─── Step indicator ─────────────────────────────────────────────────────────────
+
+const WIZARD_STEPS = [
+  { id: 1, label: 'Parse' },
+  { id: 2, label: 'Cast Voices' },
+  { id: 3, label: 'Generate' },
+]
+
+function getStepStatus(wizardId: number, current: WizardStep): 'done' | 'active' | 'upcoming' {
+  const map: Record<WizardStep, number> = {
+    loading: 1, assign: 2, confirm: 3, generating: 3, done: 4, error: 0,
+  }
+  const active = map[current]
+  if (wizardId < active) return 'done'
+  if (wizardId === active) return 'active'
+  return 'upcoming'
+}
+
+function StepIndicator({ current }: { current: WizardStep }) {
+  if (current === 'error') return null
+  return (
+    <div style={{
+      position: 'sticky', top: 64, zIndex: 20,
+      background: card, borderBottom: `1px solid ${border}`,
+      padding: '0 24px',
+    }}>
+      <div style={{
+        maxWidth: 900, margin: '0 auto',
+        display: 'flex', alignItems: 'center', height: 58,
+      }}>
+        {WIZARD_STEPS.flatMap((step, i) => {
+          const status = getStepStatus(step.id, current)
+          const prevDone = i > 0 && getStepStatus(WIZARD_STEPS[i - 1].id, current) === 'done'
+          const items = []
+
+          if (i > 0) {
+            items.push(
+              <div
+                key={`line-${i}`}
+                style={{
+                  flex: 1, height: 1.5,
+                  background: prevDone ? '#16A34A' : '#E8E2D5',
+                  margin: '0 10px',
+                  transition: 'background 300ms ease',
+                }}
+              />
+            )
+          }
+
+          items.push(
+            <div
+              key={`step-${step.id}`}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}
+            >
+              {/* Pill */}
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 12, fontWeight: 700,
+                transition: 'all 250ms ease',
+                background:
+                  status === 'done'   ? '#16A34A' :
+                  status === 'active' ? red : '#EDE9E0',
+                color: status === 'upcoming' ? muted : '#fff',
+                boxShadow: status === 'active' ? `0 0 0 3px rgba(200,64,47,0.18)` : 'none',
+              }}>
+                {status === 'done' ? '✓' : step.id}
+              </div>
+              {/* Label */}
+              <span style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 13,
+                fontWeight: status === 'active' ? 700 : 500,
+                color:
+                  status === 'done'   ? '#16A34A' :
+                  status === 'active' ? dark : muted,
+                transition: 'color 250ms ease',
+              }}>
+                {step.label}
+              </span>
+            </div>
+          )
+
+          return items
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── GenderBadge ────────────────────────────────────────────────────────────────
+
 function GenderBadge({ gender }: { gender: VoiceOption['gender'] }) {
-  const map: Record<string, { label: string; bg: string; color: string }> = {
+  const cfg: Record<string, { label: string; bg: string; color: string }> = {
     male:    { label: 'M', bg: '#E8F0FE', color: '#1565C0' },
     female:  { label: 'F', bg: '#FCE4EC', color: '#880E4F' },
-    neutral: { label: 'N', bg: '#F3E5F5', color: '#4A148C' },
+    neutral: { label: 'N', bg: '#F3E5F5', color: '#6A1E8C' },
   }
-  const cfg = map[gender]
+  const c = cfg[gender]
   return (
     <span style={{
-      fontSize: '10px', fontWeight: 700, padding: '2px 6px',
-      borderRadius: '4px', background: cfg.bg, color: cfg.color,
+      fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
+      padding: '2px 5px', borderRadius: 4,
+      background: c.bg, color: c.color,
       fontFamily: 'var(--font-inter), sans-serif',
     }}>
-      {cfg.label}
+      {c.label}
     </span>
   )
 }
 
-interface VoiceCardProps {
+// ─── VoiceCardH (horizontal compact card) ──────────────────────────────────────
+
+interface VoiceCardHProps {
   voice: VoiceOption
   selected: boolean
   onSelect: () => void
@@ -48,91 +196,330 @@ interface VoiceCardProps {
   onStop: () => void
 }
 
-function VoiceCard({ voice, selected, onSelect, playing, onPlay, onStop }: VoiceCardProps) {
+function VoiceCardH({ voice, selected, onSelect, playing, onPlay, onStop }: VoiceCardHProps) {
+  const [hov, setHov] = useState(false)
+
   return (
     <div
       onClick={onSelect}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
-        display: 'flex', alignItems: 'center', gap: '10px',
-        padding: '10px 12px', borderRadius: '10px', cursor: 'pointer',
-        border: `1.5px solid ${selected ? red : border}`,
-        background: selected ? 'rgba(200,64,47,0.04)' : '#fff',
-        transition: 'border-color 0.15s, background 0.15s',
-        marginBottom: '6px',
+        flexShrink: 0, width: 138,
+        padding: '12px 12px 10px',
+        borderRadius: 10, cursor: 'pointer',
+        border: `1.5px solid ${selected ? red : hov ? 'rgba(200,64,47,0.4)' : border}`,
+        background: selected ? 'rgba(200,64,47,0.04)' : hov ? '#FDFCFB' : card,
+        transition: 'all 150ms ease',
+        position: 'relative',
+        display: 'flex', flexDirection: 'column', gap: 7,
       }}
     >
-      {/* Play/Stop button */}
+      {/* Selected checkmark */}
+      {selected && (
+        <div style={{
+          position: 'absolute', top: 8, right: 8,
+          width: 17, height: 17, borderRadius: '50%',
+          background: red, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <span style={{ color: '#fff', fontSize: 9, fontWeight: 700, lineHeight: 1 }}>✓</span>
+        </div>
+      )}
+
+      {/* Play / Stop button */}
       <button
-        onClick={e => {
-          e.stopPropagation()
-          playing ? onStop() : onPlay()
-        }}
+        onClick={e => { e.stopPropagation(); playing ? onStop() : onPlay() }}
         style={{
-          flexShrink: 0, width: '30px', height: '30px',
-          borderRadius: '50%', border: `1.5px solid ${playing ? red : border}`,
-          background: playing ? red : '#fff',
+          alignSelf: 'flex-start', flexShrink: 0,
+          width: 30, height: 30, borderRadius: '50%',
+          border: `1.5px solid ${playing ? red : border}`,
+          background: playing ? red : '#F7F4EF',
           color: playing ? '#fff' : muted,
-          cursor: 'pointer', fontSize: '11px',
+          cursor: 'pointer', fontSize: 11,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          transition: 'all 0.15s',
+          transition: 'all 150ms ease',
+          animation: playing ? 'playPulse 1.2s ease-in-out infinite' : 'none',
         }}
         title={playing ? 'Stop preview' : 'Play preview'}
       >
         {playing ? '■' : '▶'}
       </button>
 
-      {/* Voice info */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-          <span style={{
-            fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px',
-            fontWeight: 600, color: dark, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {voice.label}
-          </span>
-          <GenderBadge gender={voice.gender} />
-        </div>
-        <div style={{
-          fontFamily: 'var(--font-inter), sans-serif', fontSize: '11px',
-          color: muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      {/* Name + badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+        <span style={{
+          fontFamily: 'var(--font-inter), sans-serif',
+          fontSize: 12, fontWeight: 700, color: dark,
         }}>
-          {voice.style}
-        </div>
+          {voice.label}
+        </span>
+        <GenderBadge gender={voice.gender} />
       </div>
 
-      {/* Selected indicator */}
-      {selected && (
+      {/* Style tagline */}
+      <div style={{
+        fontFamily: 'var(--font-inter), sans-serif',
+        fontSize: 11, color: muted, lineHeight: 1.3,
+      }}>
+        {voice.style}
+      </div>
+    </div>
+  )
+}
+
+// ─── VoicePickerH (horizontal rows by gender) ──────────────────────────────────
+
+interface VoicePickerHProps {
+  value: string
+  onChange: (key: string) => void
+  excludeKey?: string
+  playingKey: string | null
+  onPlay: (voice: VoiceOption) => void
+  onStop: () => void
+}
+
+function VoicePickerH({ value, onChange, excludeKey, playingKey, onPlay, onStop }: VoicePickerHProps) {
+  const filtered = (voices: VoiceOption[]) =>
+    excludeKey ? voices.filter(v => v.key !== excludeKey) : voices
+
+  const GenderRow = ({ label, voices }: { label: string; voices: VoiceOption[] }) => {
+    const fv = filtered(voices)
+    if (!fv.length) return null
+    return (
+      <div style={{ marginBottom: 14 }}>
         <div style={{
-          flexShrink: 0, width: '16px', height: '16px',
-          borderRadius: '50%', background: red,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font-inter), sans-serif',
+          fontSize: 10, fontWeight: 700, color: muted,
+          textTransform: 'uppercase', letterSpacing: '0.07em',
+          marginBottom: 8,
         }}>
-          <span style={{ color: '#fff', fontSize: '9px', fontWeight: 700 }}>✓</span>
+          {label}
+        </div>
+        <div style={{
+          display: 'flex', gap: 8,
+          overflowX: 'auto', paddingBottom: 4,
+          /* thin scrollbar */
+          scrollbarWidth: 'thin',
+          scrollbarColor: `${border} transparent`,
+        }}>
+          {fv.map(v => (
+            <VoiceCardH
+              key={v.key}
+              voice={v}
+              selected={value === v.key}
+              onSelect={() => onChange(v.key)}
+              playing={playingKey === v.key}
+              onPlay={() => onPlay(v)}
+              onStop={onStop}
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ paddingTop: 14 }}>
+      <GenderRow label="Male voices"    voices={maleVoices} />
+      <GenderRow label="Female voices"  voices={femaleVoices} />
+      <GenderRow label="Neutral voices" voices={neutralVoices} />
+    </div>
+  )
+}
+
+// ─── CharacterCard ──────────────────────────────────────────────────────────────
+
+interface CharacterCardProps {
+  speaker: string
+  speakerColor: string
+  voiceKey: string
+  isOpen: boolean
+  onToggle: () => void
+  onVoiceChange: (key: string) => void
+  playingKey: string | null
+  onPlay: (voice: VoiceOption) => void
+  onStop: () => void
+  isNarrator?: boolean
+}
+
+function CharacterCard({
+  speaker, speakerColor, voiceKey, isOpen, onToggle, onVoiceChange,
+  playingKey, onPlay, onStop, isNarrator,
+}: CharacterCardProps) {
+  const voice = VOICE_ROSTER.find(v => v.key === voiceKey)
+
+  return (
+    <div style={{
+      background: card,
+      border: `1px solid ${isOpen ? red : border}`,
+      borderRadius: 12, overflow: 'hidden',
+      transition: 'border-color 150ms ease, box-shadow 150ms ease',
+      boxShadow: isOpen ? '0 2px 16px rgba(200,64,47,0.08)' : 'none',
+      marginBottom: 10,
+    }}>
+      {/* Header row */}
+      <div
+        onClick={isNarrator ? undefined : onToggle}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '14px 18px',
+          cursor: isNarrator ? 'default' : 'pointer',
+          background: isOpen ? 'rgba(200,64,47,0.018)' : 'transparent',
+          userSelect: 'none',
+        }}
+      >
+        {/* Speaker colour dot */}
+        <div style={{
+          width: 10, height: 10, borderRadius: '50%',
+          background: speakerColor, flexShrink: 0,
+          boxShadow: `0 0 0 2px ${speakerColor}28`,
+        }} />
+
+        {/* Name + badge */}
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontSize: 15, fontWeight: 700, color: dark,
+            }}>
+              {speaker === 'NARRATOR' ? 'Narrator' : speaker}
+            </span>
+            {isNarrator && (
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: '2px 7px',
+                borderRadius: 100, background: '#F4F1EB',
+                color: muted, letterSpacing: '0.04em',
+                fontFamily: 'var(--font-inter), sans-serif',
+                textTransform: 'uppercase',
+              }}>
+                Default
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Selected voice pill */}
+        {voice && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '4px 10px', borderRadius: 100,
+            background: isNarrator
+              ? '#F4F1EB'
+              : isOpen
+              ? 'rgba(200,64,47,0.08)'
+              : 'rgba(200,64,47,0.05)',
+            border: `1px solid ${isNarrator ? border : 'rgba(200,64,47,0.2)'}`,
+            flexShrink: 0,
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 12, fontWeight: 600,
+              color: isNarrator ? muted : red,
+            }}>
+              {voice.label}
+            </span>
+            <GenderBadge gender={voice.gender} />
+          </div>
+        )}
+
+        {/* Chevron */}
+        {!isNarrator && (
+          <svg
+            width={16} height={16} viewBox="0 0 24 24" fill="none"
+            stroke={isOpen ? red : muted}
+            strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+            style={{
+              transform: isOpen ? 'rotate(180deg)' : 'none',
+              transition: 'transform 200ms ease, stroke 150ms ease',
+              flexShrink: 0,
+            }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        )}
+      </div>
+
+      {/* Expanded voice picker */}
+      {isOpen && !isNarrator && (
+        <div style={{
+          borderTop: `1px solid ${border}`,
+          padding: '4px 18px 18px',
+          background: '#FDFCFB',
+        }}>
+          <VoicePickerH
+            value={voiceKey}
+            onChange={key => { onVoiceChange(key); onToggle() }}
+            excludeKey="narrator"
+            playingKey={playingKey}
+            onPlay={onPlay}
+            onStop={onStop}
+          />
         </div>
       )}
     </div>
   )
 }
 
-interface VoicePickerProps {
-  value: string
-  onChange: (key: string) => void
-  excludeKey?: string  // exclude narrator from character picker
+// ─── Stat chip ──────────────────────────────────────────────────────────────────
+
+function StatChip({ value, label }: { value: string; label: string }) {
+  return (
+    <div style={{
+      background: cream, border: `1px solid ${border}`,
+      borderRadius: 10, padding: '13px 10px', textAlign: 'center',
+    }}>
+      <div style={{
+        fontFamily: 'var(--font-playfair), serif',
+        fontSize: 19, fontWeight: 700, color: dark,
+      }}>
+        {value}
+      </div>
+      <div style={{
+        fontFamily: 'var(--font-inter), sans-serif',
+        fontSize: 11, color: muted, marginTop: 3,
+      }}>
+        {label}
+      </div>
+    </div>
+  )
 }
 
-function VoicePicker({ value, onChange, excludeKey }: VoicePickerProps) {
+// ─── Main page component ────────────────────────────────────────────────────────
+
+export default function AudiobookPage({ params }: { params: { bookId: string } }) {
+  const { bookId } = params
+  const router = useRouter()
+
+  // ── Step & data ──────────────────────────────────────────────────────────────
+  const [step, setStep]               = useState<WizardStep>('loading')
+  const [segments, setSegments]       = useState<Segment[]>([])
+  const [speakers, setSpeakers]       = useState<string[]>([])
+  const [voiceMap, setVoiceMap]       = useState<Record<string, string>>({})
+  const [wordCount, setWordCount]     = useState(0)
+  const [estimatedMins, setEstMins]   = useState(0)
+  const [bookTitle, setBookTitle]     = useState('')
+  const [bookCover, setBookCover]     = useState<string | null>(null)
+
+  // ── UI toggles ───────────────────────────────────────────────────────────────
+  const [activePicker, setActivePicker] = useState<string | null>(null)
+  const [previewOpen, setPreviewOpen]   = useState(false)
+
+  // ── Generation ───────────────────────────────────────────────────────────────
+  const [generating, setGenerating]     = useState(false)
+  const [errorMsg, setError]            = useState<string | null>(null)
+  const [pollProgress, setPollProgress] = useState(0)
+  const [doneData, setDoneData]         = useState<{
+    durationSeconds?: number
+    chapterCount?: number
+  } | null>(null)
+
+  // ── Global audio preview state ───────────────────────────────────────────────
   const [playingKey, setPlayingKey] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const handlePlay = (voice: VoiceOption) => {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current = null
-    }
-    if (playingKey === voice.key) {
-      setPlayingKey(null)
-      return
-    }
+  const handlePlayVoice = (voice: VoiceOption) => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    if (playingKey === voice.key) { setPlayingKey(null); return }
     const audio = new Audio(voice.previewUrl)
     audio.onended = () => setPlayingKey(null)
     audio.onerror = () => setPlayingKey(null)
@@ -141,104 +528,15 @@ function VoicePicker({ value, onChange, excludeKey }: VoicePickerProps) {
     setPlayingKey(voice.key)
   }
 
-  const handleStop = () => {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current = null
-    }
+  const handleStopVoice = () => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
     setPlayingKey(null)
   }
 
-  // Cleanup on unmount
+  // cleanup on unmount
   useEffect(() => () => { audioRef.current?.pause() }, [])
 
-  const filtered = (voices: VoiceOption[]) =>
-    excludeKey ? voices.filter(v => v.key !== excludeKey) : voices
-
-  const SectionLabel = ({ label }: { label: string }) => (
-    <div style={{
-      fontFamily: 'var(--font-inter), sans-serif', fontSize: '10px', fontWeight: 700,
-      color: muted, textTransform: 'uppercase', letterSpacing: '0.07em',
-      margin: '12px 0 6px',
-    }}>
-      {label}
-    </div>
-  )
-
-  return (
-    <div style={{ maxHeight: '340px', overflowY: 'auto', paddingRight: '4px' }}>
-      {filtered(maleVoices).length > 0 && (
-        <>
-          <SectionLabel label="Male" />
-          {filtered(maleVoices).map(v => (
-            <VoiceCard
-              key={v.key}
-              voice={v}
-              selected={value === v.key}
-              onSelect={() => onChange(v.key)}
-              playing={playingKey === v.key}
-              onPlay={() => handlePlay(v)}
-              onStop={handleStop}
-            />
-          ))}
-        </>
-      )}
-      {filtered(femaleVoices).length > 0 && (
-        <>
-          <SectionLabel label="Female" />
-          {filtered(femaleVoices).map(v => (
-            <VoiceCard
-              key={v.key}
-              voice={v}
-              selected={value === v.key}
-              onSelect={() => onChange(v.key)}
-              playing={playingKey === v.key}
-              onPlay={() => handlePlay(v)}
-              onStop={handleStop}
-            />
-          ))}
-        </>
-      )}
-      {filtered(neutralVoices).length > 0 && (
-        <>
-          <SectionLabel label="Neutral" />
-          {filtered(neutralVoices).map(v => (
-            <VoiceCard
-              key={v.key}
-              voice={v}
-              selected={value === v.key}
-              onSelect={() => onChange(v.key)}
-              playing={playingKey === v.key}
-              onPlay={() => handlePlay(v)}
-              onStop={handleStop}
-            />
-          ))}
-        </>
-      )}
-    </div>
-  )
-}
-
-export default function AudiobookPage({ params }: { params: { bookId: string } }) {
-  const { bookId } = params
-  const router = useRouter()
-
-  const [step, setStep]               = useState<'loading' | 'assign' | 'confirm' | 'generating' | 'done' | 'error'>('loading')
-  const [segments, setSegments]       = useState<Segment[]>([])
-  const [speakers, setSpeakers]       = useState<string[]>([])
-  const [voiceMap, setVoiceMap]       = useState<Record<string, string>>({})
-  const [wordCount, setWordCount]     = useState(0)
-  const [estimatedMins, setEstMins]   = useState(0)
-  const [generating, setGenerating]   = useState(false)
-  const [errorMsg, setError]          = useState<string | null>(null)
-  const [audiobookId, setAudiobookId] = useState<string | null>(null)
-  const [bookTitle, setBookTitle]     = useState('')
-  const [pollProgress, setPollProgress] = useState(0)
-  const [doneData, setDoneData]       = useState<{ durationSeconds?: number; chapterCount?: number } | null>(null)
-
-  // Active character for inline voice picker (speaker name)
-  const [activePicker, setActivePicker] = useState<string | null>(null)
-
+  // ── Parse on mount ───────────────────────────────────────────────────────────
   useEffect(() => {
     fetch(`/api/audiobook/${bookId}/parse`, { method: 'POST' })
       .then(r => r.json())
@@ -253,14 +551,17 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
       })
       .catch(e => { setError(String(e)); setStep('error') })
 
-    // Fetch book title
+    // Fetch book metadata (title + optional cover)
     fetch(`/api/books/${bookId}/status`)
       .then(r => r.json())
-      .then(d => setBookTitle(d?.title || ''))
+      .then(d => {
+        setBookTitle(d?.title || '')
+        setBookCover(d?.cover_image_url || null)
+      })
       .catch(() => {})
   }, [bookId])
 
-  // Polling for 'generating' step
+  // ── Poll generating status ───────────────────────────────────────────────────
   useEffect(() => {
     if (step !== 'generating') return
     let stopped = false
@@ -270,9 +571,7 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
         const res  = await fetch(`/api/audiobook/${bookId}/status`)
         const data = await res.json()
         if (stopped) return
-
         if (typeof data.progress === 'number') setPollProgress(data.progress)
-
         if (data.status === 'complete') {
           const chapters = data.chaptersJson
           setDoneData({
@@ -284,14 +583,15 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
           setError(data.errorMessage || 'Audiobook generation failed.')
           setStep('error')
         }
-      } catch {}
+      } catch { /* swallow */ }
     }
 
-    poll() // immediate first check
+    poll()
     const id = setInterval(poll, 10_000)
     return () => { stopped = true; clearInterval(id) }
   }, [step, bookId])
 
+  // ── Generate handler ─────────────────────────────────────────────────────────
   const handleGenerate = async () => {
     setGenerating(true)
     setError(null)
@@ -303,7 +603,6 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
       })
       const data = await res.json()
       if (!res.ok || !data.audiobookId) throw new Error(data.error || 'Failed to start audiobook')
-      setAudiobookId(data.audiobookId)
       setStep('generating')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -311,402 +610,772 @@ export default function AudiobookPage({ params }: { params: { bookId: string } }
     }
   }
 
-  // Speaker color palette for visual distinction
-  const speakerColors: Record<string, string> = {}
-  const palette = ['#2D6A4F', '#1565C0', '#6A1E55', '#7B3F00', '#1A237E', '#4A148C']
-  speakers.forEach((s, i) => { speakerColors[s] = palette[i % palette.length] })
-  speakerColors['NARRATOR'] = '#5C5751'
+  // ── Derived data ─────────────────────────────────────────────────────────────
+  const speakerColors: Record<string, string> = { NARRATOR: NARRATOR_COLOR }
+  speakers.forEach((s, i) => { speakerColors[s] = SPEAKER_PALETTE[i % SPEAKER_PALETTE.length] })
 
-  function formatDuration(secs: number) {
+  // Estimate chapter count from narrator lines that look like chapter headings
+  const chapterCount = segments.filter(s =>
+    s.speaker === 'NARRATOR' && /^chapter\s+\d+/i.test(s.text.trim())
+  ).length || null
+
+  function fmtDuration(secs: number) {
     const h = Math.floor(secs / 3600)
     const m = Math.floor((secs % 3600) / 60)
-    if (h > 0) return `${h}h ${m}m`
-    return `${m}m`
+    return h > 0 ? `${h}h ${m}m` : `${m}m`
   }
 
-  // ── Step: Loading ───────────────────────────────────────────────────────────
+  // ── Shared page shell ─────────────────────────────────────────────────────────
+  // (just inlines background + paddingTop for each branch below)
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STEP: LOADING
+  // ════════════════════════════════════════════════════════════════════════════
   if (step === 'loading') return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'var(--font-inter), sans-serif', color: muted }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '32px', marginBottom: '16px' }}>📖</div>
-        <div>Parsing your manuscript…</div>
-        <div style={{ fontSize: '13px', marginTop: '8px', color: '#B0A89E' }}>Claude is reading every line and identifying who speaks what.</div>
-      </div>
-    </div>
-  )
+    <div style={{ background: cream, minHeight: '100vh', paddingTop: 64 }}>
+      <style>{KEYFRAMES}</style>
+      <StepIndicator current="loading" />
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '44px 24px' }}>
+        <div style={{
+          background: card, border: `1px solid ${border}`,
+          borderRadius: 12, overflow: 'hidden',
+        }}>
+          {/* Amber accent + shimmer */}
+          <div style={{ height: 3, background: '#D97706' }} />
+          <ShimmerBar height={2} />
 
-  // ── Step: Error ─────────────────────────────────────────────────────────────
-  if (step === 'error') return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'var(--font-inter), sans-serif', color: red, padding: '32px', textAlign: 'center' }}>
-      <div>
-        <div style={{ fontSize: '32px', marginBottom: '16px' }}>⚠️</div>
-        <div style={{ fontWeight: 700, marginBottom: '8px' }}>Something went wrong</div>
-        <div style={{ color: muted, fontSize: '14px', maxWidth: '400px' }}>{errorMsg}</div>
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '24px' }}>
-          <button
-            onClick={() => { setError(null); setStep('loading') }}
-            style={{ padding: '10px 20px', background: red, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'var(--font-inter), sans-serif', fontWeight: 600 }}
-          >
-            Retry
-          </button>
-          <button
-            onClick={() => router.push('/dashboard')}
-            style={{ padding: '10px 20px', background: dark, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'var(--font-inter), sans-serif' }}
-          >
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-
-  // ── Step: Generating ────────────────────────────────────────────────────────
-  if (step === 'generating') return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'var(--font-inter), sans-serif', color: dark, padding: '32px', textAlign: 'center' }}>
-      <div style={{ maxWidth: '480px', width: '100%' }}>
-        <div style={{ fontSize: '48px', marginBottom: '20px' }}>🎙️</div>
-        <h2 style={{ fontFamily: 'var(--font-playfair), serif', fontSize: '28px', margin: '0 0 12px' }}>
-          Your audiobook is being created
-        </h2>
-        <p style={{ color: muted, lineHeight: 1.6, margin: '0 auto 28px' }}>
-          Each line is being voiced by its assigned character. This takes 10–30 minutes depending on book length.
-          We'll notify you when it's ready.
-        </p>
-
-        {/* Progress bar */}
-        <div style={{ background: '#EDE9E0', borderRadius: '999px', height: '8px', overflow: 'hidden', marginBottom: '8px' }}>
-          <div style={{
-            height: '100%', borderRadius: '999px', background: red,
-            width: `${pollProgress}%`, transition: 'width 1s ease',
-          }} />
-        </div>
-        <div style={{ fontSize: '12px', color: muted, marginBottom: '28px' }}>
-          {pollProgress > 0 ? `${pollProgress}% complete` : 'Queued — starting soon…'}
-        </div>
-
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-          <button
-            onClick={() => router.push('/dashboard')}
-            style={{ padding: '12px 28px', background: dark, color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontFamily: 'var(--font-inter), sans-serif', fontWeight: 600 }}
-          >
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-
-  // ── Step: Done ──────────────────────────────────────────────────────────────
-  if (step === 'done') return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'var(--font-inter), sans-serif', color: dark, padding: '32px', textAlign: 'center' }}>
-      <div style={{ maxWidth: '440px', width: '100%' }}>
-        <div style={{ fontSize: '56px', marginBottom: '16px' }}>🎧</div>
-        <h2 style={{ fontFamily: 'var(--font-playfair), serif', fontSize: '30px', margin: '0 0 10px' }}>
-          Your audiobook is ready!
-        </h2>
-
-        {/* Stats */}
-        {doneData && (
-          <div style={{ display: 'flex', gap: '24px', justifyContent: 'center', margin: '16px 0 28px' }}>
-            {doneData.durationSeconds !== undefined && (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: 'var(--font-playfair), serif', fontSize: '22px', fontWeight: 700, color: red }}>
-                  {formatDuration(doneData.durationSeconds)}
-                </div>
-                <div style={{ fontSize: '12px', color: muted, marginTop: '2px' }}>Duration</div>
+          <div style={{ padding: '56px 40px 60px', textAlign: 'center' }}>
+            <div style={{ fontSize: 52, marginBottom: 22 }}>📖</div>
+            <h2 style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontSize: 28, fontWeight: 700, color: dark,
+              margin: '0 0 10px', letterSpacing: '-0.02em',
+            }}>
+              Reading your manuscript…
+            </h2>
+            {bookTitle && (
+              <div style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 14, color: red, fontWeight: 600,
+                margin: '0 0 12px',
+              }}>
+                {bookTitle}
               </div>
             )}
-            {doneData.chapterCount !== undefined && (
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: 'var(--font-playfair), serif', fontSize: '22px', fontWeight: 700, color: red }}>
-                  {doneData.chapterCount}
-                </div>
-                <div style={{ fontSize: '12px', color: muted, marginTop: '2px' }}>Chapters</div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <p style={{ color: muted, lineHeight: 1.6, margin: '0 0 28px' }}>
-          {bookTitle ? `"${bookTitle}" is` : 'Your book is'} fully voiced and ready to listen to.
-        </p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <a
-            href={`/listen/${bookId}`}
-            style={{
-              display: 'block', padding: '15px 28px', background: red, color: '#fff',
-              border: 'none', borderRadius: '12px', cursor: 'pointer',
-              fontFamily: 'var(--font-inter), sans-serif', fontSize: '16px', fontWeight: 700,
-              textDecoration: 'none',
-            }}
-          >
-            🎧 Listen Now
-          </a>
-          <button
-            onClick={() => router.push('/dashboard')}
-            style={{
-              padding: '13px 28px', background: cream, border: `1.5px solid ${border}`,
-              borderRadius: '12px', cursor: 'pointer',
-              fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: muted,
-            }}
-          >
-            Back to Book Hub
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-
-  // ── Steps: Assign / Confirm ─────────────────────────────────────────────────
-  return (
-    <div style={{ background: '#FDFCF9', minHeight: '100vh' }}>
-      {/* Header */}
-      <div style={{
-        background: '#fff', borderBottom: `1px solid ${border}`,
-        padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        position: 'sticky', top: 0, zIndex: 10,
-      }}>
-        <div>
-          <div style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: '22px', color: dark }}>
-            Full-Cast Audiobook
-          </div>
-          {bookTitle && (
-            <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', color: muted, marginTop: '2px' }}>
-              {bookTitle} · ~{estimatedMins} min listen · {wordCount.toLocaleString()} words
+            <p style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 14, color: muted, lineHeight: 1.7,
+              maxWidth: 460, margin: '0 auto 36px',
+            }}>
+              Claude is parsing your chapters, identifying every speaker, and assembling your full cast. This usually takes 15–30 seconds.
+            </p>
+            <div style={{ maxWidth: 340, margin: '0 auto' }}>
+              <ShimmerBar height={5} />
             </div>
-          )}
+          </div>
         </div>
-        <button
-          onClick={() => setStep('confirm')}
-          disabled={generating}
-          style={{
-            background: red, color: '#fff', border: 'none',
-            padding: '12px 28px', borderRadius: '10px',
-            fontFamily: 'var(--font-inter), sans-serif', fontSize: '15px', fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          Generate Audiobook — 1500 credits
-        </button>
       </div>
+    </div>
+  )
 
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '32px 24px', display: 'grid', gridTemplateColumns: '300px 1fr', gap: '32px' }}>
+  // ════════════════════════════════════════════════════════════════════════════
+  // STEP: ERROR
+  // ════════════════════════════════════════════════════════════════════════════
+  if (step === 'error') return (
+    <div style={{ background: cream, minHeight: '100vh', paddingTop: 64 }}>
+      <style>{KEYFRAMES}</style>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '44px 24px' }}>
+        <div style={{
+          background: card, border: '1px solid #FECACA',
+          borderRadius: 12, overflow: 'hidden',
+        }}>
+          <div style={{ height: 3, background: '#DC2626' }} />
+          <div style={{ padding: '56px 40px', textAlign: 'center' }}>
+            <div style={{ fontSize: 48, marginBottom: 18 }}>⚠️</div>
+            <h2 style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontSize: 26, fontWeight: 700, color: dark,
+              margin: '0 0 10px',
+            }}>
+              Something went wrong
+            </h2>
+            <p style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 14, color: muted, lineHeight: 1.6,
+              maxWidth: 440, margin: '0 auto 32px',
+            }}>
+              {errorMsg}
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                onClick={() => { setError(null); setStep('loading') }}
+                style={{
+                  padding: '12px 26px', background: red, color: '#fff',
+                  border: 'none', borderRadius: 10, cursor: 'pointer',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 14, fontWeight: 700,
+                }}
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => router.push('/dashboard')}
+                style={{
+                  padding: '12px 26px', background: cream,
+                  border: `1.5px solid ${border}`, borderRadius: 10,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 14, color: muted,
+                }}
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 
-        {/* Left — Voice Assignment Panel */}
-        <div>
-          <div style={{
-            background: '#fff', border: `1.5px solid ${border}`,
-            borderRadius: '16px', padding: '24px', position: 'sticky', top: '88px',
-          }}>
-            <h3 style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: '18px', color: dark, margin: '0 0 6px' }}>
-              Assign Voices
-            </h3>
-            <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', color: muted, margin: '0 0 20px', lineHeight: 1.5 }}>
-              Choose who voices each character. Narrator is always Daniel.
+  // ════════════════════════════════════════════════════════════════════════════
+  // STEP: GENERATING
+  // ════════════════════════════════════════════════════════════════════════════
+  if (step === 'generating') return (
+    <div style={{ background: cream, minHeight: '100vh', paddingTop: 64 }}>
+      <style>{KEYFRAMES}</style>
+      <StepIndicator current="generating" />
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '44px 24px' }}>
+        <div style={{
+          background: card, border: '1px solid #FDE68A',
+          borderRadius: 12, overflow: 'hidden',
+        }}>
+          <div style={{ height: 3, background: '#D97706' }} />
+          <div style={{ padding: '56px 40px', textAlign: 'center' }}>
+            <div style={{ fontSize: 56, marginBottom: 22 }}>🎙️</div>
+            <h2 style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontSize: 30, fontWeight: 700, color: dark,
+              margin: '0 0 12px', letterSpacing: '-0.02em',
+            }}>
+              Your audiobook is being produced
+            </h2>
+            {bookTitle && (
+              <div style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 14, color: red, fontWeight: 600,
+                margin: '0 0 14px',
+              }}>
+                {bookTitle}
+              </div>
+            )}
+            <p style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 14, color: muted, lineHeight: 1.7,
+              maxWidth: 460, margin: '0 auto 36px',
+            }}>
+              Each line is being voiced by its assigned character. Usually ready in{' '}
+              <strong style={{ color: dark }}>20–40 minutes</strong>.
+              We&apos;ll notify you when it&apos;s ready.
             </p>
 
-            {/* Narrator — locked */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '11px', fontWeight: 700, color: muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
-                NARRATOR
-              </div>
+            {/* Progress bar */}
+            <div style={{ maxWidth: 480, margin: '0 auto 10px' }}>
               <div style={{
-                background: '#F7F4EF', borderRadius: '10px', padding: '10px 14px',
-                fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', color: dark, fontWeight: 600,
-                display: 'flex', alignItems: 'center', gap: '8px',
+                background: '#EDE9E0', borderRadius: 999,
+                height: 9, overflow: 'hidden', position: 'relative',
               }}>
-                <span>🎙</span>
-                <span>Daniel</span>
-                <GenderBadge gender="male" />
-                <span style={{ color: muted, fontWeight: 400, fontSize: '12px' }}>Deep & Cinematic</span>
+                {pollProgress > 0 ? (
+                  <div style={{
+                    height: '100%', borderRadius: 999,
+                    background: `linear-gradient(90deg, ${red}, #E8735F)`,
+                    width: `${pollProgress}%`, transition: 'width 1.2s ease',
+                  }} />
+                ) : (
+                  <ShimmerBar height={9} />
+                )}
               </div>
             </div>
+            <div style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 12, color: muted, marginBottom: 36,
+            }}>
+              {pollProgress > 0 ? `${pollProgress}% complete` : 'Queued — starting soon…'}
+            </div>
 
-            {/* Character voice pickers */}
-            {speakers.map(speaker => (
-              <div key={speaker} style={{ marginBottom: '16px' }}>
-                <button
-                  onClick={() => setActivePicker(activePicker === speaker ? null : speaker)}
-                  style={{
-                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '10px 12px', borderRadius: '10px', cursor: 'pointer',
-                    border: `1.5px solid ${activePicker === speaker ? red : border}`,
-                    background: activePicker === speaker ? 'rgba(200,64,47,0.03)' : '#fff',
+            {/* Stats row */}
+            <div style={{
+              display: 'flex', gap: 28, justifyContent: 'center',
+              marginBottom: 36,
+            }}>
+              {[
+                { v: segments.length.toString(), l: 'Segments' },
+                { v: `~${estimatedMins}m`, l: 'Est. runtime' },
+                ...(chapterCount ? [{ v: chapterCount.toString(), l: 'Chapters' }] : []),
+              ].map(s => (
+                <div key={s.l} style={{ textAlign: 'center' }}>
+                  <div style={{
+                    fontFamily: 'var(--font-playfair), serif',
+                    fontSize: 24, fontWeight: 700, color: dark,
+                  }}>
+                    {s.v}
+                  </div>
+                  <div style={{
                     fontFamily: 'var(--font-inter), sans-serif',
-                  }}
-                >
-                  <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: speakerColors[speaker] || muted, marginBottom: '2px' }}>
-                      {speaker}
+                    fontSize: 12, color: muted, marginTop: 2,
+                  }}>
+                    {s.l}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => router.push('/dashboard')}
+              style={{
+                padding: '12px 28px', background: cream,
+                border: `1.5px solid ${border}`, borderRadius: 10,
+                cursor: 'pointer',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 14, color: muted,
+              }}
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STEP: DONE
+  // ════════════════════════════════════════════════════════════════════════════
+  if (step === 'done') return (
+    <div style={{ background: cream, minHeight: '100vh', paddingTop: 64 }}>
+      <style>{KEYFRAMES}</style>
+      <StepIndicator current="done" />
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '44px 24px' }}>
+        <div style={{
+          background: card, border: '1px solid #BBF7D0',
+          borderRadius: 12, overflow: 'hidden',
+        }}>
+          <div style={{ height: 3, background: '#16A34A' }} />
+          <div style={{ padding: '60px 40px', textAlign: 'center' }}>
+            <div style={{ fontSize: 60, marginBottom: 18 }}>🎧</div>
+            <h2 style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontSize: 34, fontWeight: 700, color: dark,
+              margin: '0 0 12px', letterSpacing: '-0.02em',
+            }}>
+              Your audiobook is ready!
+            </h2>
+            <p style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 15, color: muted, lineHeight: 1.7,
+              margin: '0 0 32px',
+            }}>
+              {bookTitle ? `"${bookTitle}" is` : 'Your book is'} fully voiced and ready to listen to.
+            </p>
+
+            {/* Stats */}
+            {doneData && (
+              <div style={{
+                display: 'flex', gap: 36, justifyContent: 'center',
+                margin: '0 0 40px',
+              }}>
+                {doneData.durationSeconds !== undefined && (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{
+                      fontFamily: 'var(--font-playfair), serif',
+                      fontSize: 28, fontWeight: 700, color: red,
+                    }}>
+                      {fmtDuration(doneData.durationSeconds)}
                     </div>
-                    <div style={{ fontSize: '12px', color: dark }}>
-                      {(() => {
-                        const v = VOICE_ROSTER.find(v => v.key === (voiceMap[speaker] || 'default'))
-                        return v ? `${v.label} — ${v.style}` : '—'
-                      })()}
+                    <div style={{
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      fontSize: 12, color: muted, marginTop: 4,
+                    }}>
+                      Duration
                     </div>
                   </div>
-                  <span style={{ fontSize: '12px', color: muted }}>{activePicker === speaker ? '▲' : '▼'}</span>
-                </button>
-
-                {activePicker === speaker && (
-                  <div style={{
-                    marginTop: '8px', border: `1.5px solid ${border}`,
-                    borderRadius: '12px', padding: '12px',
-                    background: cream,
-                  }}>
-                    <VoicePicker
-                      value={voiceMap[speaker] || 'default'}
-                      onChange={key => {
-                        setVoiceMap(prev => ({ ...prev, [speaker]: key }))
-                        setActivePicker(null)
-                      }}
-                      excludeKey="narrator"
-                    />
+                )}
+                {doneData.chapterCount !== undefined && (
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{
+                      fontFamily: 'var(--font-playfair), serif',
+                      fontSize: 28, fontWeight: 700, color: red,
+                    }}>
+                      {doneData.chapterCount}
+                    </div>
+                    <div style={{
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      fontSize: 12, color: muted, marginTop: 4,
+                    }}>
+                      Chapters
+                    </div>
                   </div>
                 )}
               </div>
-            ))}
+            )}
 
-            {/* Legend */}
-            <div style={{ marginTop: '24px', padding: '12px', background: cream, borderRadius: '8px' }}>
-              <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', color: muted, marginBottom: '8px', fontWeight: 600 }}>
-                COLOUR LEGEND
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: speakerColors['NARRATOR'] }} />
-                  <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', color: muted }}>Narrator</span>
-                </div>
-                {speakers.map(s => (
-                  <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: speakerColors[s] }} />
-                    <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '12px', color: muted }}>{s}</span>
-                  </div>
-                ))}
-              </div>
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: 12,
+              maxWidth: 340, margin: '0 auto',
+            }}>
+              <a
+                href={`/listen/${bookId}`}
+                style={{
+                  display: 'block', padding: '17px 28px',
+                  background: red, color: '#fff',
+                  borderRadius: 12, textDecoration: 'none',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 16, fontWeight: 700,
+                }}
+              >
+                🎧 Listen Now
+              </a>
+              <button
+                onClick={() => router.push('/dashboard')}
+                style={{
+                  padding: '14px 28px', background: cream,
+                  border: `1.5px solid ${border}`, borderRadius: 12,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 14, color: muted,
+                }}
+              >
+                Back to Book Hub
+              </button>
             </div>
           </div>
         </div>
-
-        {/* Right — Dialogue Preview */}
-        <div>
-          <div style={{ marginBottom: '16px' }}>
-            <h3 style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: '20px', color: dark, margin: '0 0 6px' }}>
-              Manuscript Dialogue
-            </h3>
-            <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', color: muted, margin: 0 }}>
-              {segments.length} segments parsed · colours show who speaks each line
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {segments.map(seg => {
-              const isNarrator = seg.speaker === 'NARRATOR'
-              const color = speakerColors[seg.speaker] || muted
-              return (
-                <div
-                  key={seg.index}
-                  style={{
-                    background: '#fff',
-                    border: `1px solid ${border}`,
-                    borderLeft: `4px solid ${color}`,
-                    borderRadius: '8px',
-                    padding: '12px 16px',
-                    display: 'flex',
-                    gap: '12px',
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <div style={{
-                    fontFamily: 'var(--font-inter), sans-serif', fontSize: '11px', fontWeight: 700,
-                    color, textTransform: 'uppercase', letterSpacing: '0.06em',
-                    minWidth: '90px', paddingTop: '2px', flexShrink: 0,
-                  }}>
-                    {isNarrator ? 'Narrator' : seg.speaker}
-                  </div>
-                  <div style={{
-                    fontFamily: isNarrator ? 'var(--font-inter), sans-serif' : 'var(--font-playfair), serif',
-                    fontSize: '14px', color: isNarrator ? '#5C5751' : dark,
-                    lineHeight: 1.6,
-                    fontStyle: isNarrator ? 'italic' : 'normal',
-                  }}>
-                    {isNarrator ? seg.text : `"${seg.text}"`}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
       </div>
+    </div>
+  )
 
-      {/* Confirm modal */}
-      {step === 'confirm' && (
-        <div
-          onClick={() => setStep('assign')}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 100,
-            background: 'rgba(13,13,11,0.55)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '20px',
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: '#fff', borderRadius: '20px', padding: '36px',
-              maxWidth: '440px', width: '100%',
-              boxShadow: '0 24px 64px rgba(13,13,11,0.28)',
-            }}
-          >
-            <div style={{ fontSize: '36px', textAlign: 'center', marginBottom: '16px' }}>🎙️</div>
-            <h2 style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: '24px', color: dark, margin: '0 0 12px', textAlign: 'center' }}>
+  // ════════════════════════════════════════════════════════════════════════════
+  // STEP: CONFIRM
+  // ════════════════════════════════════════════════════════════════════════════
+  if (step === 'confirm') return (
+    <div style={{ background: cream, minHeight: '100vh', paddingTop: 64 }}>
+      <style>{KEYFRAMES}</style>
+      <StepIndicator current="confirm" />
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '44px 24px' }}>
+        <div style={{
+          background: card, border: `1px solid ${border}`,
+          borderRadius: 12, overflow: 'hidden',
+        }}>
+          <div style={{ height: 3, background: '#D97706' }} />
+          <div style={{
+            padding: '52px 40px 56px',
+            maxWidth: 540, margin: '0 auto', textAlign: 'center',
+          }}>
+
+            {/* Cover / icon */}
+            {bookCover ? (
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 26 }}>
+                <Image
+                  src={bookCover}
+                  alt={bookTitle}
+                  width={80}
+                  height={110}
+                  style={{
+                    borderRadius: 8, objectFit: 'cover',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
+                  }}
+                />
+              </div>
+            ) : (
+              <div style={{ fontSize: 44, marginBottom: 22 }}>🎙️</div>
+            )}
+
+            <h2 style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontSize: 28, fontWeight: 700, color: dark,
+              margin: '0 0 6px', letterSpacing: '-0.02em',
+            }}>
               Generate Audiobook?
             </h2>
-            <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: muted, lineHeight: 1.6, textAlign: 'center', margin: '0 0 24px' }}>
-              This will use <strong>1500 credits</strong> and render a full-cast audiobook
-              with {speakers.length + 1} voice{speakers.length !== 0 ? 's' : ''} across {segments.length} segments.
-              Estimated listen time: ~{estimatedMins} minutes.
-            </p>
+            {bookTitle && (
+              <div style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 14, color: muted, margin: '0 0 30px',
+              }}>
+                {bookTitle}
+              </div>
+            )}
 
+            {/* Stats grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: 10, marginBottom: 30,
+            }}>
+              <StatChip value={segments.length.toString()} label="Segments" />
+              <StatChip value={(speakers.length + 1).toString()} label="Characters" />
+              {chapterCount
+                ? <StatChip value={chapterCount.toString()} label="Chapters" />
+                : <StatChip value={`~${estimatedMins}m`} label="Est. runtime" />
+              }
+              <StatChip value={`~${estimatedMins}m`} label="Runtime" />
+              <StatChip value="1,500" label="Credits" />
+            </div>
+
+            {/* Error message */}
             {errorMsg && (
               <div style={{
-                background: 'rgba(200,64,47,0.06)', border: '1px solid rgba(200,64,47,0.25)',
-                borderRadius: '8px', padding: '12px 16px', marginBottom: '20px',
-                fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', color: red,
+                background: 'rgba(200,64,47,0.06)',
+                border: '1px solid rgba(200,64,47,0.25)',
+                borderRadius: 8, padding: '12px 16px', marginBottom: 22,
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 13, color: red, textAlign: 'left',
               }}>
                 {errorMsg}
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '12px' }}>
+            {/* Primary CTA */}
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              style={{
+                width: '100%', padding: '17px',
+                background: generating ? '#E8735F' : red,
+                color: '#fff', border: 'none', borderRadius: 12,
+                cursor: generating ? 'wait' : 'pointer',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 16, fontWeight: 700,
+                marginBottom: 16,
+                transition: 'background 150ms ease',
+              }}
+            >
+              {generating ? 'Starting generation…' : '🎙️ Generate Audiobook — 1,500 credits'}
+            </button>
+
+            {/* Cancel */}
+            <button
+              onClick={() => setStep('assign')}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: muted, fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 13, textDecoration: 'underline',
+              }}
+            >
+              ← Back to voice assignment
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STEP: ASSIGN  (the main layout)
+  // ════════════════════════════════════════════════════════════════════════════
+  return (
+    <div style={{ background: cream, minHeight: '100vh', paddingTop: 64 }}>
+      <style>{KEYFRAMES}</style>
+      <StepIndicator current="assign" />
+
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px 96px' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '300px 1fr',
+          gap: 28,
+          alignItems: 'start',
+        }}>
+
+          {/* ── SIDEBAR ── */}
+          <div>
+            <div style={{
+              background: card, border: `1px solid ${border}`,
+              borderRadius: 12, overflow: 'hidden',
+              position: 'sticky', top: 138,
+            }}>
+              {/* Accent strip */}
+              <div style={{ height: 3, background: '#D97706' }} />
+
+              <div style={{ padding: '22px 20px 24px' }}>
+
+                {/* Cover */}
+                {bookCover ? (
+                  <div style={{ marginBottom: 18 }}>
+                    <Image
+                      src={bookCover}
+                      alt={bookTitle}
+                      width={260}
+                      height={156}
+                      style={{
+                        width: '100%', height: 140,
+                        objectFit: 'cover', borderRadius: 8,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.10)',
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{
+                    width: '100%', height: 120, borderRadius: 8,
+                    background: '#F4F1EB', border: `1px solid ${border}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 36, marginBottom: 18,
+                  }}>
+                    📚
+                  </div>
+                )}
+
+                {/* Book title */}
+                <h3 style={{
+                  fontFamily: 'var(--font-playfair), serif',
+                  fontSize: 16, fontWeight: 700, color: dark,
+                  margin: '0 0 18px', lineHeight: 1.35,
+                }}>
+                  {bookTitle || 'Your Book'}
+                </h3>
+
+                {/* Stats list */}
+                <div style={{
+                  display: 'flex', flexDirection: 'column', gap: 9,
+                  marginBottom: 20,
+                }}>
+                  {[
+                    { icon: '📝', label: 'Words',       value: wordCount.toLocaleString() },
+                    { icon: '⏱',  label: 'Est. runtime', value: `~${estimatedMins} min` },
+                    { icon: '🎭', label: 'Characters',  value: (speakers.length + 1).toString() },
+                    ...(chapterCount ? [{ icon: '📖', label: 'Chapters', value: chapterCount.toString() }] : []),
+                    { icon: '💬', label: 'Segments',    value: segments.length.toString() },
+                  ].map(stat => (
+                    <div key={stat.label} style={{
+                      display: 'flex', alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}>
+                      <span style={{
+                        fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: 12, color: muted,
+                        display: 'flex', alignItems: 'center', gap: 6,
+                      }}>
+                        {stat.icon} {stat.label}
+                      </span>
+                      <span style={{
+                        fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: 12, fontWeight: 700, color: dark,
+                      }}>
+                        {stat.value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div style={{ borderTop: `1px solid ${border}`, marginBottom: 18 }} />
+
+                {/* Preview hint blurb */}
+                <div style={{
+                  background: '#FDF8F3', border: '1px solid #F0E8D8',
+                  borderRadius: 8, padding: '12px 14px',
+                }}>
+                  <div style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: 10, fontWeight: 700, color: '#B45309',
+                    textTransform: 'uppercase', letterSpacing: '0.07em',
+                    marginBottom: 6,
+                  }}>
+                    💡 Preview voices
+                  </div>
+                  <p style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: 12, color: muted, lineHeight: 1.6, margin: 0,
+                  }}>
+                    Click <strong>▶</strong> on any voice card to hear a sample before assigning it to a character.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── MAIN CONTENT ── */}
+          <div>
+            {/* Section heading */}
+            <div style={{ marginBottom: 22 }}>
+              <h2 style={{
+                fontFamily: 'var(--font-playfair), serif',
+                fontSize: 26, fontWeight: 700, color: dark,
+                margin: '0 0 6px', letterSpacing: '-0.01em',
+              }}>
+                Cast Your Characters
+              </h2>
+              <p style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 13, color: muted, margin: 0, lineHeight: 1.5,
+              }}>
+                Assign a voice to each character. Click a card to expand the voice picker.
+              </p>
+            </div>
+
+            {/* Narrator (locked) */}
+            <CharacterCard
+              speaker="NARRATOR"
+              speakerColor={NARRATOR_COLOR}
+              voiceKey="narrator"
+              isOpen={false}
+              onToggle={() => {}}
+              onVoiceChange={() => {}}
+              playingKey={playingKey}
+              onPlay={handlePlayVoice}
+              onStop={handleStopVoice}
+              isNarrator
+            />
+
+            {/* Character cards */}
+            {speakers.map(speaker => (
+              <CharacterCard
+                key={speaker}
+                speaker={speaker}
+                speakerColor={speakerColors[speaker] || muted}
+                voiceKey={voiceMap[speaker] || 'default'}
+                isOpen={activePicker === speaker}
+                onToggle={() => setActivePicker(activePicker === speaker ? null : speaker)}
+                onVoiceChange={key => setVoiceMap(prev => ({ ...prev, [speaker]: key }))}
+                playingKey={playingKey}
+                onPlay={handlePlayVoice}
+                onStop={handleStopVoice}
+              />
+            ))}
+
+            {/* ── Collapsible dialogue preview ── */}
+            {segments.length > 0 && (
+              <div style={{ marginTop: 30 }}>
+                <button
+                  onClick={() => setPreviewOpen(v => !v)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 18px',
+                    background: card,
+                    border: `1px solid ${border}`,
+                    borderRadius: previewOpen ? '12px 12px 0 0' : 12,
+                    cursor: 'pointer',
+                    transition: 'border-color 150ms ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 16 }}>💬</span>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{
+                        fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: 13, fontWeight: 700, color: dark,
+                      }}>
+                        Preview Dialogue
+                      </div>
+                      <div style={{
+                        fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: 11, color: muted, marginTop: 1,
+                      }}>
+                        First {Math.min(10, segments.length)} of {segments.length} segments · colour-coded by speaker
+                      </div>
+                    </div>
+                  </div>
+                  <svg
+                    width={16} height={16} viewBox="0 0 24 24" fill="none"
+                    stroke={muted} strokeWidth={2}
+                    strokeLinecap="round" strokeLinejoin="round"
+                    style={{
+                      transform: previewOpen ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 200ms ease',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+
+                {previewOpen && (
+                  <div style={{
+                    border: `1px solid ${border}`, borderTop: 'none',
+                    borderRadius: '0 0 12px 12px',
+                    background: '#FDFCFB',
+                    padding: '12px 14px 14px',
+                    display: 'flex', flexDirection: 'column', gap: 6,
+                  }}>
+                    {segments.slice(0, 10).map(seg => {
+                      const isNarr = seg.speaker === 'NARRATOR'
+                      const col    = speakerColors[seg.speaker] || muted
+                      return (
+                        <div
+                          key={seg.index}
+                          style={{
+                            background: card,
+                            border: `1px solid ${border}`,
+                            borderLeft: `4px solid ${col}`,
+                            borderRadius: 8,
+                            padding: '10px 14px',
+                            display: 'flex', gap: 12, alignItems: 'flex-start',
+                          }}
+                        >
+                          <div style={{
+                            fontFamily: 'var(--font-inter), sans-serif',
+                            fontSize: 10, fontWeight: 700,
+                            color: col, textTransform: 'uppercase',
+                            letterSpacing: '0.06em',
+                            minWidth: 76, paddingTop: 2, flexShrink: 0,
+                          }}>
+                            {isNarr ? 'Narrator' : seg.speaker}
+                          </div>
+                          <div style={{
+                            fontFamily: isNarr
+                              ? 'var(--font-inter), sans-serif'
+                              : 'var(--font-playfair), serif',
+                            fontSize: 13,
+                            color: isNarr ? '#5C5751' : dark,
+                            lineHeight: 1.6,
+                            fontStyle: isNarr ? 'italic' : 'normal',
+                          }}>
+                            {isNarr ? seg.text : `"${seg.text}"`}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {segments.length > 10 && (
+                      <div style={{
+                        fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: 12, color: muted,
+                        textAlign: 'center', paddingTop: 6,
+                      }}>
+                        + {segments.length - 10} more segments
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Continue CTA ── */}
+            <div style={{ marginTop: 32 }}>
               <button
-                onClick={() => setStep('assign')}
+                onClick={() => setStep('confirm')}
                 style={{
-                  flex: 1, padding: '13px', background: cream, border: `1.5px solid ${border}`,
-                  borderRadius: '10px', cursor: 'pointer',
-                  fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', color: muted,
+                  width: '100%', padding: '16px',
+                  background: red, color: '#fff', border: 'none',
+                  borderRadius: 12, cursor: 'pointer',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 15, fontWeight: 700,
+                  transition: 'background 150ms ease',
+                  display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', gap: 8,
                 }}
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerate}
-                disabled={generating}
-                style={{
-                  flex: 2, padding: '13px', background: red, border: 'none',
-                  borderRadius: '10px', cursor: generating ? 'wait' : 'pointer',
-                  fontFamily: 'var(--font-inter), sans-serif', fontSize: '14px', fontWeight: 700, color: '#fff',
-                  opacity: generating ? 0.7 : 1,
-                }}
-              >
-                {generating ? 'Starting…' : 'Confirm — 1500 credits'}
+                Continue to Generate
+                <svg width={16} height={16} viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth={2.5}
+                  strokeLinecap="round" strokeLinejoin="round"
+                >
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
               </button>
             </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
