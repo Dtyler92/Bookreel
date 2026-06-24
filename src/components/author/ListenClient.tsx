@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -249,7 +248,8 @@ export default function ListenClient({
           <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', marginBottom: '40px', flexWrap: 'wrap' }}>
             <div style={{ flexShrink: 0, width: '140px', height: '200px', borderRadius: '12px', overflow: 'hidden', background: '#EDE9E0', boxShadow: '0 8px 24px rgba(13,13,11,0.12)' }}>
               {coverUrl ? (
-                <Image src={coverUrl} alt={title} width={140} height={200} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={coverUrl} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px' }}>📖</div>
               )}

@@ -10,8 +10,8 @@ interface ChapterEntry {
   endSeconds?: number
 }
 
-export default async function ListenPage({ params }: { params: { bookId: string } }) {
-  const { bookId } = params
+export default async function ListenPage({ params }: { params: Promise<{ bookId: string }> }) {
+  const { bookId } = await params
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

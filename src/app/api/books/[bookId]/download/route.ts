@@ -69,13 +69,9 @@ export async function GET(
         return Response.json({ error: 'Audiobook not ready' }, { status: 404 })
       }
 
-      let url = ab.audio_url
-      // If they asked for a specific format, swap the extension
-      if (asset === 'audiobook_mp3') url = url.replace(/\.(m4b|wav)$/i, '.mp3')
-      if (asset === 'audiobook_m4b') url = url.replace(/\.(mp3|wav)$/i, '.m4b')
-
-      storagePath = extractPath(url)
-      const ext = storagePath?.split('.').pop() ?? 'mp3'
+      // Worker always saves to these exact paths regardless of the stored audio_url value
+      const ext = (asset === 'audiobook_m4b') ? 'm4b' : 'mp3'
+      storagePath = `audiobooks/${bookId}/audiobook.${ext}`
       filename = `${safeTitle}.${ext}`
 
     } else if (asset === 'trailer') {
