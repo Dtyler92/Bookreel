@@ -45,7 +45,13 @@ const SUPABASE_URL              = getEnv('NEXT_PUBLIC_SUPABASE_URL')
 const SUPABASE_SERVICE_ROLE_KEY = getEnv('SUPABASE_SERVICE_ROLE_KEY')
 const PIPELINE_WORKER_SECRET    = getEnv('PIPELINE_WORKER_SECRET')
 const APP_URL                   = getEnv('NEXT_PUBLIC_APP_URL') || 'https://bookreel-five.vercel.app'
-const ANTHROPIC_API_KEY         = getEnv('ANTHROPIC_API_KEY')
+const ANTHROPIC_API_KEY=getEnv('ANTHROPIC_API_KEY')
+
+// ElevenLabs key: prefer .env.local; fall back to provisioned key when placeholder
+const ELEVENLABS_API_KEY_ENV = getEnv('ELEVENLABS_API_KEY')
+const ELEVENLABS_API_KEY = isPlaceholder(ELEVENLABS_API_KEY_ENV)
+  ? 'sk_3b27883afc20ae085861532ae97f522ae84c1c9dbd57b0c1'
+  : ELEVENLABS_API_KEY_ENV
 
 // FAL key: prefer .env.local; fall back to the provisioned key when .env.local has a placeholder.
 const FAL_API_KEY_ENV = getEnv('FAL_API_KEY')
@@ -152,35 +158,55 @@ async function updateStatus(audiobookId, status, extra = {}) {
   }
 }
 
+// ── Voice ID lookup (ElevenLabs voice name → voice ID) ────────────────────────
+const ELEVENLABS_VOICE_IDS = {
+  'Roger':   'CwhRBWXzGAHq8TQ4Fs17',
+  'Sarah':   'EXAVITQu4vr4xnSDxMaL',
+  'Laura':   'FGY2WhTYpPnrIDTdsKH5',
+  'Charlie': 'IKne3meq5aSn9XLyUdCD',
+  'George':  'JBFqnCBsd6RMkjVDRZzb',
+  'Callum':  'N2lVS1w4EtoT3dr4eOWO',
+  'River':   'SAz9YHcvj6GT2YYXdXww',
+  'Harry':   'SOYHLrjzK2X1ezoPC6cr',
+  'Liam':    'TX3LPaxmHKxFdv7VOQHJ',
+  'Alice':   'Xb7hH8MSUJpSbSDYk0k2',
+  'Matilda': 'XrExE9yKIg1WjnnlVkGX',
+  'Will':    'bIHbv24MWmeRgasZH58o',
+  'Jessica': 'cgSgspJ2msm6clMCkdW9',
+  'Eric':    'cjVigY5qzO86Huf0OWal',
+  'Bella':   'hpp4J3VqNfWAUOO0d1Us',
+  'Chris':   'iP95p4xoKVk53GoZ742B',
+  'Brian':   'nPczCjzI2devNBz1zQrb',
+  'Daniel':  'onwK4e9ZLuTAKqWW03F9',
+  'Lily':    'pFZP5JQG7iQjIQuC4Bku',
+  'Adam':    'pNInz6obpgDQGcFmaJgB',
+  'Bill':    'pqHfZKP75CvOlQylNhV4',
+}
+
 // ── TTS: generate one segment's audio and save to tmpDir ─────────────────────
 async function generateSegmentAudio(seg, voice, stability, tmpDir) {
-  const res = await fetch('https://fal.run/fal-ai/elevenlabs/tts/eleven-v3', {
+  const voiceId = ELEVENLABS_VOICE_IDS[voice] || ELEVENLABS_VOICE_IDS['Daniel']
+  const res = await fetchWithRetry('https://api.elevenlabs.io/v1/text-to-speech/' + voiceId + '?output_format=mp3_44100_128', {
     method: 'POST',
     headers: {
-      'Authorization': `Key ${FAL_API_KEY}`,
-      'Content-Type': 'application/json',
+      'xi-api-key':    ELEVENLABS_API_KEY,
+      'Content-Type':  'application/json',
     },
     body: JSON.stringify({
-      text:          seg.text,
-      voice,
-      stability,
-      output_format: 'mp3_44100_128',
+      text:           seg.text,
+      model_id:       'eleven_multilingual_v2',
+      voice_settings: { stability: stability ?? 0.5, similarity_boost: 0.75 },
     }),
-  })
+  }, 3, 60000)
 
   if (!res.ok) {
     const err = await res.text()
     throw new Error(`TTS API ${res.status}: ${err.substring(0, 200)}`)
   }
 
-  const data     = await res.json()
-  const audioUrl = data.audio?.url || data.url
-  if (!audioUrl) throw new Error('TTS API returned no audio URL')
+  // Direct audio bytes returned (not a JSON wrapper with URL)
+  const audioBuffer = Buffer.from(await res.arrayBuffer())
 
-  const audioRes = await fetch(audioUrl)
-  if (!audioRes.ok) throw new Error(`Audio download failed: ${audioRes.status}`)
-
-  const audioBuffer = Buffer.from(await audioRes.arrayBuffer())
   const segPath     = join(tmpDir, `seg-${String(seg.index).padStart(5, '0')}.mp3`)
   writeFileSync(segPath, audioBuffer)
   return segPath
@@ -217,16 +243,9 @@ Output format:
 
 // ── Voice roster (mirrors voiceRoster.ts) ────────────────────────────────────
 const CHARACTER_VOICES = [
-  'George',    // deep_male
-  'Liam',      // male
-  'Charlotte', // female
-  'Alice',     // young_female
-  'Bill',      // old_male
-  'Charlie',   // default/neutral
-  'Roger',
-  'Aria',
-  'Sarah',
-  'Eric',
+  'George', 'Liam', 'Bill', 'Roger', 'Will', 'Eric', 'Chris', 'Brian', 'Callum', 'Adam', 'Harry',
+  'Charlotte', 'Alice', 'Sarah', 'Laura', 'Matilda', 'Jessica', 'Lily', 'Bella',
+  'Charlie', 'River',
 ]
 
 // ── Text extraction helpers ───────────────────────────────────────────────────

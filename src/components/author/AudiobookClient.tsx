@@ -427,6 +427,18 @@ function CharacterCard({
                 {lineCount} lines
               </span>
             )}
+            {/* Shared voice warning */}
+            {!isNarrator && voiceKey && voiceKey !== 'default' &&
+              Object.entries(voiceUsageMap).some(([k, v]) => k === voiceKey && v !== speaker) && (
+              <span style={{
+                fontSize: 10, fontWeight: 600, padding: '2px 7px',
+                borderRadius: 100, background: '#FEF3C7',
+                color: '#B45309', letterSpacing: '0.03em',
+                fontFamily: 'var(--font-inter), sans-serif',
+              }}>
+                ⚠ shared voice
+              </span>
+            )}
           </div>
         </div>
 
@@ -528,7 +540,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
   const [estimatedMins, setEstMins]   = useState(0)
   const [bookTitle, setBookTitle]     = useState('')
   const [bookCover, setBookCover]     = useState<string | null>(null)
-  const [narratorVoice, setNarratorVoice] = useState<string>('narrator')
+  const [narratorVoice, setNarratorVoice] = useState<string>('daniel')
 
   // ── UI toggles ───────────────────────────────────────────────────────────────
   const [activePicker, setActivePicker] = useState<string | null>(null)
