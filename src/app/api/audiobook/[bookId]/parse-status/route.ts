@@ -4,6 +4,13 @@ import { VOICE_ROSTER } from '@/lib/voiceRoster'
 
 export const runtime = 'nodejs'
 
+function getAudiobookCredits(characterCount: number): number {
+  if (characterCount < 100_000) return 800
+  if (characterCount < 500_000) return 1200
+  if (characterCount < 1_000_000) return 1500
+  return 1700
+}
+
 // GET /api/audiobook/[bookId]/parse-status
 //
 // Polls the current parse state for a book's audiobook row.
@@ -100,7 +107,7 @@ export async function GET(
         chapterMarkers:   chapterMarkers   ?? [],
         voiceRoster:      VOICE_ROSTER,
         wordCount,
-        estimatedCredits: 1500,
+        estimatedCredits: getAudiobookCredits((row.character_count as number | null) ?? 0),
         estimatedMinutes: estimatedMins,
         chapterCount,
       })

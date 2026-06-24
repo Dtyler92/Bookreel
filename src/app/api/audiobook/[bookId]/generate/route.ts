@@ -4,7 +4,14 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 export const runtime = 'nodejs'
 
 // POST /api/audiobook/[bookId]/generate
-// Saves voice assignments + segments, deducts 1500 credits, queues the audiobook job.
+// Saves voice assignments + segments, deducts tier-based credits, queues the audiobook job.
+
+function getAudiobookCredits(characterCount: number): number {
+  if (characterCount < 100_000) return 800
+  if (characterCount < 500_000) return 1200
+  if (characterCount < 1_000_000) return 1500
+  return 1700
+}
 
 export async function POST(
   request: Request,
@@ -44,8 +51,18 @@ export async function POST(
       return Response.json({ error: 'Book not found' }, { status: 404 })
     }
 
-    // Deduct 1500 credits for audiobook
-    const AUDIOBOOK_CREDITS = 1500
+    // Deduct tier-based credits for audiobook
+    // Look up character_count from existing audiobook/scan data
+    const { data: existingAb } = await sb
+      .from('audiobooks')
+      .select('character_count')
+      .eq('book_id', bookId)
+      .eq('author_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    const charCount = existingAb?.character_count ?? 0
+    const AUDIOBOOK_CREDITS = getAudiobookCredits(charCount)
     const { data: profile } = await sb
       .from('profiles')
       .select('trailer_credits')
