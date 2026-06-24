@@ -1597,13 +1597,29 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
       <style>{KEYFRAMES}</style>
       <StepIndicator current="assign" />
 
+      <style>{`
+        @media (max-width: 700px) {
+          .ab-assign-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .ab-assign-grid > div:first-child {
+            order: 1;
+          }
+          .ab-assign-grid > div:last-child {
+            order: 2;
+          }
+        }
+      `}</style>
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 24px 96px' }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '300px 1fr',
-          gap: 28,
-          alignItems: 'start',
-        }}>
+        <div
+          className="ab-assign-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '300px 1fr',
+            gap: 28,
+            alignItems: 'start',
+          }}
+        >
 
           {/* ── SIDEBAR ── */}
           <div>
