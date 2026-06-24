@@ -603,13 +603,14 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
           <div style={{
             flexShrink: 0, textAlign: 'center',
             background: '#F4F1EB', border: '1px solid #E8E2D5',
-            borderRadius: 10, padding: '16px 22px',
+            borderRadius: 8, padding: '8px 14px',
+            alignSelf: 'flex-start',
           }}>
-            <div style={{ fontFamily: 'var(--font-playfair), serif', fontSize: 30, fontWeight: 700, color: completedCount === 4 ? '#16A34A' : '#0D0D0B', lineHeight: 1 }}>
-              {completedCount}<span style={{ fontSize: 16, color: '#8A8278', fontWeight: 400 }}>/4</span>
+            <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, fontWeight: 700, color: completedCount === 4 ? '#16A34A' : '#0D0D0B', lineHeight: 1 }}>
+              {completedCount}<span style={{ fontSize: 12, color: '#8A8278', fontWeight: 400 }}>/4</span>
             </div>
-            <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 600, color: '#8A8278', marginTop: 5, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              Complete
+            <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 10, fontWeight: 600, color: '#8A8278', marginTop: 4, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Done
             </div>
           </div>
         </div>

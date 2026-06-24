@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LandingNav from "@/components/LandingNav";
 
 export default function Home() {
   return (
@@ -6,89 +7,7 @@ export default function Home() {
       className="flex flex-col min-h-full"
       style={{ backgroundColor: "var(--color-bg-primary)", color: "var(--color-text-body)", fontFamily: "var(--font-inter), sans-serif" }}
     >
-      {/* Nav */}
-      <header
-        className="flex items-center justify-between px-8 py-5"
-        style={{ backgroundColor: "var(--color-bg-primary)", borderBottom: "1px solid var(--color-border)" }}
-      >
-        {/* Logo */}
-        <span className="flex items-center gap-2 text-2xl select-none">
-          <span
-            style={{
-              color: "var(--color-text-heading)",
-              fontFamily: "var(--font-playfair), serif",
-              fontWeight: 900,
-            }}
-          >
-            Book
-          </span>
-          {/* Film-frame square separator */}
-          <span
-            style={{
-              display: "inline-block",
-              width: "11px",
-              height: "11px",
-              border: "2px solid var(--color-accent)",
-              outline: "1px solid var(--color-accent)",
-              outlineOffset: "2px",
-              backgroundColor: "var(--color-bg-primary)",
-            }}
-          />
-          <span
-            style={{
-              color: "var(--color-accent)",
-              fontFamily: "var(--font-playfair), serif",
-              fontWeight: 900,
-              fontStyle: "italic",
-            }}
-          >
-            Reel
-          </span>
-        </span>
-
-        {/* Nav links */}
-        <nav className="flex items-center gap-6">
-          <a
-            href="#how-it-works"
-            className="text-sm font-medium transition-colors"
-            style={{ color: "var(--color-text-heading)" }}
-          >
-            How It Works
-          </a>
-          <Link
-            href="/pricing"
-            className="text-sm font-medium transition-colors"
-            style={{ color: "var(--color-text-heading)" }}
-          >
-            Pricing
-          </Link>
-          <Link
-            href="/for-authors"
-            className="text-sm font-medium transition-colors"
-            style={{ color: "var(--color-text-heading)" }}
-          >
-            For Authors
-          </Link>
-          <Link
-            href="/login"
-            className="text-sm font-medium transition-colors"
-            style={{ color: "var(--color-text-heading)" }}
-          >
-            Login
-          </Link>
-          <Link
-            href="/signup"
-            className="px-5 py-2 text-sm font-semibold transition-colors"
-            style={{
-              backgroundColor: "var(--color-accent)",
-              color: "var(--color-text-inverse)",
-              borderRadius: "4px",
-            }}
-          >
-            Make My Trailer
-          </Link>
-        </nav>
-      </header>
+      <LandingNav />
 
       <main className="flex flex-col flex-1">
         {/* Hero */}
