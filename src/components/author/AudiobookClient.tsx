@@ -284,6 +284,57 @@ function VoiceCardH({ voice, selected, onSelect, playing, onPlay, onStop, usedBy
   )
 }
 
+// ─── GenderRow (stable module-level — must NOT be defined inside VoicePickerH
+//     or React will remount it on every render, resetting horizontal scroll) ─────
+
+interface GenderRowProps {
+  label: string
+  voices: VoiceOption[]
+  excludeKey?: string
+  value: string
+  onChange: (key: string) => void
+  playingKey: string | null
+  onPlay: (voice: VoiceOption) => void
+  onStop: () => void
+  voiceUsageMap: Record<string, string>
+}
+
+function GenderRow({ label, voices, excludeKey, value, onChange, playingKey, onPlay, onStop, voiceUsageMap }: GenderRowProps) {
+  const fv = excludeKey ? voices.filter(v => v.key !== excludeKey) : voices
+  if (!fv.length) return null
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{
+        fontFamily: 'var(--font-inter), sans-serif',
+        fontSize: 10, fontWeight: 700, color: muted,
+        textTransform: 'uppercase', letterSpacing: '0.07em',
+        marginBottom: 8,
+      }}>
+        {label}
+      </div>
+      <div style={{
+        display: 'flex', gap: 8,
+        overflowX: 'auto', paddingBottom: 4,
+        scrollbarWidth: 'thin',
+        scrollbarColor: `${border} transparent`,
+      }}>
+        {fv.map(v => (
+          <VoiceCardH
+            key={v.key}
+            voice={v}
+            selected={value === v.key}
+            onSelect={() => onChange(v.key)}
+            playing={playingKey === v.key}
+            onPlay={() => onPlay(v)}
+            onStop={onStop}
+            usedBy={voiceUsageMap[v.key] || null}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── VoicePickerH (horizontal rows by gender) ──────────────────────────────────
 
 interface VoicePickerHProps {
@@ -293,55 +344,94 @@ interface VoicePickerHProps {
   playingKey: string | null
   onPlay: (voice: VoiceOption) => void
   onStop: () => void
-  voiceUsageMap?: Record<string, string>  // voiceKey → character name using it
+  voiceUsageMap?: Record<string, string>
 }
 
 function VoicePickerH({ value, onChange, excludeKey, playingKey, onPlay, onStop, voiceUsageMap = {} }: VoicePickerHProps) {
-  const filtered = (voices: VoiceOption[]) =>
-    excludeKey ? voices.filter(v => v.key !== excludeKey) : voices
-
-  const GenderRow = ({ label, voices }: { label: string; voices: VoiceOption[] }) => {
-    const fv = filtered(voices)
-    if (!fv.length) return null
-    return (
-      <div style={{ marginBottom: 14 }}>
-        <div style={{
-          fontFamily: 'var(--font-inter), sans-serif',
-          fontSize: 10, fontWeight: 700, color: muted,
-          textTransform: 'uppercase', letterSpacing: '0.07em',
-          marginBottom: 8,
-        }}>
-          {label}
-        </div>
-        <div style={{
-          display: 'flex', gap: 8,
-          overflowX: 'auto', paddingBottom: 4,
-          /* thin scrollbar */
-          scrollbarWidth: 'thin',
-          scrollbarColor: `${border} transparent`,
-        }}>
-          {fv.map(v => (
-            <VoiceCardH
-              key={v.key}
-              voice={v}
-              selected={value === v.key}
-              onSelect={() => onChange(v.key)}
-              playing={playingKey === v.key}
-              onPlay={() => onPlay(v)}
-              onStop={onStop}
-              usedBy={voiceUsageMap[v.key] || null}
-            />
-          ))}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div style={{ paddingTop: 14 }}>
-      <GenderRow label="Male voices"    voices={maleVoices} />
-      <GenderRow label="Female voices"  voices={femaleVoices} />
-      <GenderRow label="Neutral voices" voices={neutralVoices} />
+      <GenderRow label="Male voices"    voices={maleVoices}    excludeKey={excludeKey} value={value} onChange={onChange} playingKey={playingKey} onPlay={onPlay} onStop={onStop} voiceUsageMap={voiceUsageMap} />
+      <GenderRow label="Female voices"  voices={femaleVoices}  excludeKey={excludeKey} value={value} onChange={onChange} playingKey={playingKey} onPlay={onPlay} onStop={onStop} voiceUsageMap={voiceUsageMap} />
+      <GenderRow label="Neutral voices" voices={neutralVoices} excludeKey={excludeKey} value={value} onChange={onChange} playingKey={playingKey} onPlay={onPlay} onStop={onStop} voiceUsageMap={voiceUsageMap} />
+    </div>
+  )
+}
+
+// ─── BottomSheetPicker (mobile voice selection) ─────────────────────────────────
+
+interface BottomSheetPickerProps {
+  speaker: string
+  speakerColor: string
+  voiceKey: string
+  onClose: () => void
+  onVoiceChange: (key: string) => void
+  playingKey: string | null
+  onPlay: (voice: VoiceOption) => void
+  onStop: () => void
+  voiceUsageMap: Record<string, string>
+}
+
+function BottomSheetPicker({ speaker, speakerColor, voiceKey, onClose, onVoiceChange, playingKey, onPlay, onStop, voiceUsageMap }: BottomSheetPickerProps) {
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.45)',
+        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: card,
+          borderRadius: '20px 20px 0 0',
+          maxHeight: '78vh',
+          display: 'flex', flexDirection: 'column',
+          paddingBottom: 'env(safe-area-inset-bottom, 16px)',
+          boxShadow: '0 -4px 32px rgba(0,0,0,0.18)',
+        }}
+      >
+        {/* Drag handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12, paddingBottom: 4, flexShrink: 0 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: border }} />
+        </div>
+
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '8px 20px 14px', flexShrink: 0,
+          borderBottom: `1px solid ${border}`,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: speakerColor, boxShadow: `0 0 0 2px ${speakerColor}28` }} />
+            <span style={{ fontFamily: 'var(--font-playfair), serif', fontSize: 17, fontWeight: 700, color: dark }}>
+              {speaker === 'NARRATOR' ? 'Narrator' : speaker}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: '#F4F1EB', border: 'none', cursor: 'pointer',
+              color: muted, width: 30, height: 30, borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 14, fontWeight: 700,
+            }}
+          >✕</button>
+        </div>
+
+        {/* Scrollable voice picker */}
+        <div style={{ overflowY: 'auto', padding: '0 16px 24px', flex: 1 }}>
+          <VoicePickerH
+            value={voiceKey}
+            onChange={key => { onVoiceChange(key); onClose() }}
+            playingKey={playingKey}
+            onPlay={onPlay}
+            onStop={onStop}
+            voiceUsageMap={voiceUsageMap}
+          />
+        </div>
+      </div>
     </div>
   )
 }
@@ -368,14 +458,36 @@ function CharacterCard({
   playingKey, onPlay, onStop, isNarrator, lineCount, voiceUsageMap = {},
 }: CharacterCardProps) {
   const voice = VOICE_ROSTER.find(v => v.key === voiceKey)
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 700)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   return (
+    <>
+    {/* Bottom sheet for mobile */}
+    {isMobile && isOpen && (
+      <BottomSheetPicker
+        speaker={speaker}
+        speakerColor={speakerColor}
+        voiceKey={voiceKey}
+        onClose={onToggle}
+        onVoiceChange={onVoiceChange}
+        playingKey={playingKey}
+        onPlay={onPlay}
+        onStop={onStop}
+        voiceUsageMap={voiceUsageMap}
+      />
+    )}
     <div style={{
       background: card,
-      border: `1px solid ${isOpen ? red : border}`,
+      border: `1px solid ${isOpen && !isMobile ? red : border}`,
       borderRadius: 10, overflow: 'hidden',
       transition: 'border-color 150ms ease, box-shadow 150ms ease',
-      boxShadow: isOpen ? '0 2px 12px rgba(200,64,47,0.08)' : 'none',
+      boxShadow: isOpen && !isMobile ? '0 2px 12px rgba(200,64,47,0.08)' : 'none',
     }}>
       {/* Header row */}
       <div
@@ -477,8 +589,8 @@ function CharacterCard({
         </svg>
       </div>
 
-      {/* Expanded voice picker */}
-      {isOpen && (
+      {/* Expanded voice picker — desktop only */}
+      {isOpen && !isMobile && (
         <div style={{
           borderTop: `1px solid ${border}`,
           padding: '4px 18px 18px',
@@ -495,6 +607,7 @@ function CharacterCard({
         </div>
       )}
     </div>
+    </>
   )
 }
 
