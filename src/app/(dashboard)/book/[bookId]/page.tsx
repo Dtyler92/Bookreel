@@ -61,6 +61,8 @@ export default async function BookHubPage({
     .from('audiobooks')
     .select('id, status, audio_url')
     .eq('book_id', bookId)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   return (
