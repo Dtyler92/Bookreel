@@ -18,6 +18,7 @@ interface BookWithStatus {
   trailerVideoUrl?: string | null
   viewCount: number
   coverImageUrl?: string | null
+  audiobookStatus?: string | null
 }
 
 interface DashboardClientProps {
@@ -922,9 +923,19 @@ function BookCard({
             {renderStatusSection()}
 
             {/* Audiobook button — only show when trailer is complete */}
-            {isComplete && (
+            {isComplete && (() => {
+              const abStatus = book.audiobookStatus
+              const abDone = abStatus === 'complete'
+              const abInProgress = abStatus === 'parsing' || abStatus === 'parsed' || abStatus === 'pending' || abStatus === 'processing'
+              const label = abDone
+                ? '🎙️ View Audiobook'
+                : abInProgress
+                ? '🎙️ View Audiobook Progress'
+                : '🎙️ Create Audiobook'
+              const href = abDone ? `/listen/${book.id}` : `/audiobook/${book.id}`
+              return (
               <Link
-                href={`/audiobook/${book.id}`}
+                href={href}
                 onClick={e => e.stopPropagation()}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
@@ -947,9 +958,10 @@ function BookCard({
                   ;(e.currentTarget as HTMLAnchorElement).style.color = '#5C5751'
                 }}
               >
-                🎙️ Create Audiobook <span style={{ fontSize: '10px', color: '#B0A89E' }}>1500 cr</span>
+                {label}{!abDone && !abInProgress && <span style={{ fontSize: '10px', color: '#B0A89E' }}>1500 cr</span>}
               </Link>
-            )}
+              )
+            })()}
           </div>
         </div>
       </div>

@@ -636,15 +636,82 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
       .then(r => r.json())
       .then(d => {
         if (d.characterCount) setCharacterCount(d.characterCount)
-        if (step === 'loading') setStep('language')
+        // Only go to language selection if we haven't already resumed into a further step
+        setStep(prev => prev === 'loading' ? 'language' : prev)
       })
-      .catch(() => { if (step === 'loading') setStep('language') })
+      .catch(() => { setStep(prev => prev === 'loading' ? 'language' : prev) })
   }, [bookId])
 
-  // ── Parse on mount: thin kickoff + poll parse-status ─────────────────────
+  // ── Parse on mount: check existing status → resume or kickoff ────────────
   useEffect(() => {
     if (step !== 'loading') return
     let stopped = false
+
+    async function checkAndResume() {
+      // First check if there's already an in-flight or complete audiobook row
+      try {
+        const statusRes = await fetch(`/api/audiobook/${bookId}/parse-status`)
+        const statusData = await statusRes.json()
+        if (stopped) return
+
+        // Already being generated or done — skip the whole wizard
+        if (statusData.status === 'pending' || statusData.status === 'processing') {
+          setStep('generating')
+          return
+        }
+        if (statusData.status === 'complete') {
+          setStep('done')
+          return
+        }
+        // Already parsed — go straight to voice assign
+        if (statusData.status === 'parsed') {
+          setSegments(statusData.segments     ?? [])
+          setSpeakers(statusData.speakers     ?? [])
+          setVoiceMap(statusData.voiceMap     ?? {})
+          setWordCount(statusData.wordCount   ?? 0)
+          setEstMins(statusData.estimatedMinutes ?? 0)
+          setStep('assign')
+          return
+        }
+        // Still parsing — jump straight to parsing screen and poll
+        if (statusData.status === 'parsing') {
+          setStep('loading') // stay on loading/parsing screen
+          pollParseStatus()
+          return
+        }
+        // No row yet or parse_failed — fall through to normal kickoff flow
+      } catch { /* no row yet — proceed normally */ }
+
+      // Normal flow: kickoff parse
+      await kickoffAndPoll()
+    }
+
+    async function pollParseStatus() {
+      const poll = async () => {
+        if (stopped) return
+        try {
+          const res  = await fetch(`/api/audiobook/${bookId}/parse-status`)
+          const data = await res.json()
+          if (stopped) return
+          if (data.status === 'parsed') {
+            setSegments(data.segments     ?? [])
+            setSpeakers(data.speakers     ?? [])
+            setVoiceMap(data.voiceMap     ?? {})
+            setWordCount(data.wordCount   ?? 0)
+            setEstMins(data.estimatedMinutes ?? 0)
+            setStep('assign')
+          } else if (data.status === 'parse_failed') {
+            setError(data.error || 'Parse failed — please try again.')
+            setStep('error')
+          } else {
+            if (!stopped) setTimeout(poll, 5_000)
+          }
+        } catch {
+          if (!stopped) setTimeout(poll, 5_000)
+        }
+      }
+      poll()
+    }
 
     async function kickoffAndPoll() {
       // Step 1: fire the thin kickoff (fast — just inserts a DB row)
@@ -674,38 +741,10 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
       }
 
       // Step 2: poll parse-status every 5s until parsed or parse_failed
-      const poll = async () => {
-        if (stopped) return
-        try {
-          const res  = await fetch(`/api/audiobook/${bookId}/parse-status`)
-          const data = await res.json()
-          if (stopped) return
-
-          if (data.status === 'parsed') {
-            setSegments(data.segments     ?? [])
-            setSpeakers(data.speakers     ?? [])
-            setVoiceMap(data.voiceMap     ?? {})
-            setWordCount(data.wordCount   ?? 0)
-            setEstMins(data.estimatedMinutes ?? 0)
-            setStep('assign')
-          } else if (data.status === 'parse_failed') {
-            setError(data.error || 'Parse failed — please try again.')
-            setStep('error')
-          } else {
-            // still 'parsing' — check again in 5s
-            if (!stopped) setTimeout(poll, 5_000)
-          }
-        } catch {
-          // swallow network hiccups; retry
-          if (!stopped) setTimeout(poll, 5_000)
-        }
-      }
-
-      // First poll immediately (the worker is fast on short books)
-      poll()
+      pollParseStatus()
     }
 
-    kickoffAndPoll()
+    checkAndResume()
 
     return () => { stopped = true }
   }, [bookId])

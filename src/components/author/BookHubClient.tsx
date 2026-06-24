@@ -445,7 +445,7 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
   const hasApproved = approvedChars.length > 0
   const hasScreenplay = scenes.length > 0 && scenes.some(s => s.screenplay_text)
   const hasAudiobook = !!(audiobook && (audiobook.status === 'complete' || !!audiobook.audio_url))
-  const audiobookInProgress = !!(audiobook && (audiobook.status === 'pending' || audiobook.status === 'processing'))
+  const audiobookInProgress = !!(audiobook && (audiobook.status === 'pending' || audiobook.status === 'processing' || audiobook.status === 'parsing' || audiobook.status === 'parsed'))
 
   const completedCount = [hasTrailer, hasApproved, hasScreenplay, hasAudiobook].filter(Boolean).length
 
@@ -488,9 +488,9 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
         ? 'Recording your audiobook — check back soon.'
         : 'Create a full-cast AI-narrated audiobook.',
       state: hasAudiobook ? 'complete' : audiobookInProgress ? 'in-progress' : 'empty',
-      ctaLabel: hasAudiobook ? 'Listen' : audiobookInProgress ? undefined : 'Create Audiobook',
-      ctaHref: hasAudiobook ? `/listen/${book.id}` : audiobookInProgress ? `/audiobook/${book.id}` : undefined,
-      onCtaClick: !hasAudiobook && !audiobookInProgress ? () => router.push(`/audiobook/${book.id}`) : undefined,
+      ctaLabel: hasAudiobook ? 'View Audiobook' : audiobookInProgress ? 'View Audiobook Progress' : 'Create Audiobook',
+      ctaHref: hasAudiobook ? `/listen/${book.id}` : `/audiobook/${book.id}`,
+      onCtaClick: undefined,
     },
     {
       icon: <IconSocial />,

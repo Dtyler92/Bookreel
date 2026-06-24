@@ -18,6 +18,7 @@ interface BookWithStatus {
   trailerVideoUrl: string | null
   viewCount: number
   coverImageUrl: string | null
+  audiobookStatus: string | null
 }
 
 export default async function DashboardPage() {
@@ -77,8 +78,30 @@ export default async function DashboardPage() {
       trailerVideoUrl: latest?.final_video_url ?? null,
       viewCount: latest?.view_count ?? 0,
       coverImageUrl: b.cover_image_url ?? null,
+      audiobookStatus: null, // filled in below
     }
   })
+
+  // Fetch latest audiobook status for each book in one query
+  const bookIds = books.map(b => b.id)
+  if (bookIds.length > 0) {
+    const { data: audiobooks } = await supabase
+      .from('audiobooks')
+      .select('book_id, status, created_at')
+      .in('book_id', bookIds)
+      .eq('author_id', user.id)
+      .order('created_at', { ascending: false })
+    if (audiobooks) {
+      // Keep only the latest row per book
+      const latestByBook = new Map<string, string>()
+      for (const ab of audiobooks) {
+        if (!latestByBook.has(ab.book_id)) latestByBook.set(ab.book_id, ab.status)
+      }
+      for (const book of books) {
+        book.audiobookStatus = latestByBook.get(book.id) ?? null
+      }
+    }
+  }
 
   // Compute stats
   const trailersGenerated = books.filter((b) => b.trailerStatus === 'complete').length
