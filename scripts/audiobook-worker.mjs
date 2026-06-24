@@ -184,7 +184,7 @@ const ELEVENLABS_VOICE_IDS = {
 }
 
 // ── TTS: generate one segment's audio and save to tmpDir ─────────────────────
-async function generateSegmentAudio(seg, voice, stability, tmpDir) {
+async function generateSegmentAudio(seg, voice, stability, tmpDir, ttsModel) {
   const voiceId = ELEVENLABS_VOICE_IDS[voice] || ELEVENLABS_VOICE_IDS['Daniel']
   const res = await fetchWithRetry('https://api.elevenlabs.io/v1/text-to-speech/' + voiceId + '?output_format=mp3_44100_128', {
     method: 'POST',
@@ -194,7 +194,7 @@ async function generateSegmentAudio(seg, voice, stability, tmpDir) {
     },
     body: JSON.stringify({
       text:           seg.text,
-      model_id:       'eleven_multilingual_v2',
+      model_id:       ttsModel || 'eleven_turbo_v2_5',
       voice_settings: { stability: stability ?? 0.5, similarity_boost: 0.75 },
     }),
   }, 3, 60000)
@@ -678,11 +678,11 @@ async function runParsePipeline(job) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function processJob(job) {
-  const { audiobookId, bookId, narratorVoice, segmentsJson: segments } = job
+  const { audiobookId, bookId, narratorVoice, segmentsJson: segments, ttsModel } = job
   const segCount = Array.isArray(segments) ? segments.length : 0
 
   console.log(`\n[audiobook-worker] 🎙  Starting GENERATE job: audiobookId=${audiobookId} bookId=${bookId}`)
-  console.log(`[audiobook-worker]    Segments: ${segCount} | narratorVoice: ${narratorVoice || 'Daniel'}`)
+  console.log(`[audiobook-worker]    Segments: ${segCount} | narratorVoice: ${narratorVoice || 'Daniel'} | ttsModel: ${ttsModel || 'eleven_turbo_v2_5'}`)
 
   // Belt-and-suspenders: GET endpoint already claimed the job as 'processing',
   // but we POST again so processing_started_at reflects worker start time.
@@ -715,7 +715,7 @@ async function processJob(job) {
       )
 
       try {
-        const segPath    = await generateSegmentAudio(seg, voice, stability, tmpDir)
+        const segPath    = await generateSegmentAudio(seg, voice, stability, tmpDir, ttsModel)
         const durationMs = getDurationMs(segPath)
         totalChars      += seg.text.length
 

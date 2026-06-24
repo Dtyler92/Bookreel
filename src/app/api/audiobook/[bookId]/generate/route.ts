@@ -21,9 +21,10 @@ export async function POST(
       voiceMap: Record<string, string>      // speaker → voice_key
       narratorVoice: string                 // e.g. 'Daniel'
       wordCount: number
+      ttsModel?: string                     // 'eleven_turbo_v2_5' | 'eleven_multilingual_v2'
     }
 
-    const { segments, voiceMap, narratorVoice = 'Daniel', wordCount } = body
+    const { segments, voiceMap, narratorVoice = 'Daniel', wordCount, ttsModel = 'eleven_turbo_v2_5' } = body
     if (!segments?.length) {
       return Response.json({ error: 'No segments provided' }, { status: 400 })
     }
@@ -103,6 +104,7 @@ export async function POST(
         word_count: wordCount,
         character_count: speakers.length,
         credit_consumed: true,
+        tts_model: ttsModel,
       })
       .select('id')
       .single()

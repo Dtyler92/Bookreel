@@ -13,7 +13,7 @@ interface Segment {
   text: string
 }
 
-type WizardStep = 'loading' | 'tier' | 'assign' | 'confirm' | 'generating' | 'done' | 'error'
+type WizardStep = 'loading' | 'language' | 'tier' | 'assign' | 'confirm' | 'generating' | 'done' | 'error'
 
 // ─── Design tokens ──────────────────────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ const WIZARD_STEPS = [
 
 function getStepStatus(wizardId: number, current: WizardStep): 'done' | 'active' | 'upcoming' {
   const map: Record<WizardStep, number> = {
-    loading: 1, tier: 1, assign: 2, confirm: 3, generating: 3, done: 4, error: 0,
+    loading: 1, language: 1, tier: 1, assign: 2, confirm: 3, generating: 3, done: 4, error: 0,
   }
   const active = map[current]
   if (wizardId < active) return 'done'
@@ -542,6 +542,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
   const [bookCover, setBookCover]         = useState<string | null>(null)
   const [narratorVoice, setNarratorVoice] = useState<string>('daniel')
   const [characterCount, setCharacterCount] = useState<number>(0)
+  const [ttsModel, setTtsModel] = useState<string>('eleven_turbo_v2_5')
 
   // ── UI toggles ───────────────────────────────────────────────────────────────
   const [activePicker, setActivePicker] = useState<string | null>(null)
@@ -635,11 +636,9 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
       .then(r => r.json())
       .then(d => {
         if (d.characterCount) setCharacterCount(d.characterCount)
-        // If already parsed, kickoff will handle jumping to assign
-        // Just show tier screen for now — kickoff effect runs when step hits 'loading'
-        if (step === 'loading') setStep('tier')
+        if (step === 'loading') setStep('language')
       })
-      .catch(() => { if (step === 'loading') setStep('tier') })
+      .catch(() => { if (step === 'loading') setStep('language') })
   }, [bookId])
 
   // ── Parse on mount: thin kickoff + poll parse-status ─────────────────────
@@ -749,7 +748,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
       const res = await fetch(`/api/audiobook/${bookId}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ segments, voiceMap, narratorVoice: VOICE_ROSTER.find(v => v.key === narratorVoice)?.name ?? 'Daniel', wordCount }),
+        body: JSON.stringify({ segments, voiceMap, narratorVoice: VOICE_ROSTER.find(v => v.key === narratorVoice)?.name ?? 'Daniel', wordCount, ttsModel }),
       })
       const data = await res.json()
       if (!res.ok || !data.audiobookId) throw new Error(data.error || 'Failed to start audiobook')
@@ -823,6 +822,115 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
               <ShimmerBar height={5} />
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STEP: LANGUAGE — single vs multilingual
+  // ════════════════════════════════════════════════════════════════════════════
+  if (step === 'language') return (
+    <div style={{ background: cream, minHeight: '100vh' }}>
+      <StepIndicator current={step} />
+      <div style={{ maxWidth: 520, margin: '0 auto', padding: '64px 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <div style={{ fontSize: 44, marginBottom: 16 }}>🌍</div>
+          <h1 style={{
+            fontFamily: 'var(--font-playfair), serif',
+            fontSize: 28, fontWeight: 700, color: dark,
+            margin: '0 0 10px', letterSpacing: '-0.01em',
+          }}>
+            Is this a multilingual book?
+          </h1>
+          <p style={{
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: 14, color: muted, margin: 0, lineHeight: 1.6,
+          }}>
+            This helps us choose the best voice engine for your audiobook.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Single language */}
+          <button
+            onClick={() => { setTtsModel('eleven_turbo_v2_5'); setStep('tier') }}
+            style={{
+              background: card, border: `2px solid ${border}`,
+              borderRadius: 16, padding: '20px 24px',
+              cursor: 'pointer', textAlign: 'left',
+              transition: 'all 150ms ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = red; e.currentTarget.style.background = 'rgba(200,64,47,0.03)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = border; e.currentTarget.style.background = card }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
+                  <span style={{ fontSize: 22 }}>⚡</span>
+                  <span style={{
+                    fontFamily: 'var(--font-playfair), serif',
+                    fontSize: 18, fontWeight: 700, color: dark,
+                  }}>
+                    Single Language
+                  </span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 8px',
+                    borderRadius: 100, background: '#DCFCE7', color: '#16A34A',
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    textTransform: 'uppercase', letterSpacing: '0.05em',
+                  }}>
+                    Recommended
+                  </span>
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 13, color: muted, lineHeight: 1.5,
+                }}>
+                  Entire book is in one language. Uses Flash Turbo — faster generation, lower cost, excellent quality.
+                </div>
+              </div>
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </div>
+          </button>
+
+          {/* Multilingual */}
+          <button
+            onClick={() => { setTtsModel('eleven_multilingual_v2'); setStep('tier') }}
+            style={{
+              background: card, border: `2px solid ${border}`,
+              borderRadius: 16, padding: '20px 24px',
+              cursor: 'pointer', textAlign: 'left',
+              transition: 'all 150ms ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#8B5CF6'; e.currentTarget.style.background = 'rgba(139,92,246,0.03)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = border; e.currentTarget.style.background = card }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
+                  <span style={{ fontSize: 22 }}>🌐</span>
+                  <span style={{
+                    fontFamily: 'var(--font-playfair), serif',
+                    fontSize: 18, fontWeight: 700, color: dark,
+                  }}>
+                    Multilingual
+                  </span>
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 13, color: muted, lineHeight: 1.5,
+                }}>
+                  Book contains multiple languages or non-English text. Uses Multilingual v2 for accurate cross-language pronunciation.
+                </div>
+              </div>
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={muted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </div>
+          </button>
         </div>
       </div>
     </div>
