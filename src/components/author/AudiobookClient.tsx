@@ -806,7 +806,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
               fontSize: 14, color: muted, lineHeight: 1.7,
               maxWidth: 460, margin: '0 auto 36px',
             }}>
-              Reading your manuscript chapter by chapter, identifying every speaker, and assembling your full cast. This usually takes 1–3 minutes for a full novel.
+              Reading your manuscript chapter by chapter, identifying every speaker, and assembling your full cast. Short stories take 5–10 minutes. Full novels can take 45–90 minutes — we'll save your progress so you won't have to wait again.
             </p>
             <div style={{ maxWidth: 340, margin: '0 auto' }}>
               <ShimmerBar height={5} />
