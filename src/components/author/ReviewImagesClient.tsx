@@ -311,7 +311,14 @@ function RegenerationOverlay({
       }}
     >
       {/* Icon */}
-      <span style={{ fontSize: 28, lineHeight: 1 }}>🎬</span>
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="2" y="7" width="20" height="14" rx="1" />
+        <rect x="2" y="3" width="20" height="5" rx="1" />
+        <line x1="7" y1="3" x2="5" y2="8" strokeLinecap="square" />
+        <line x1="12" y1="3" x2="10" y2="8" strokeLinecap="square" />
+        <line x1="17" y1="3" x2="15" y2="8" strokeLinecap="square" />
+        <polygon points="10,12 10,18 16,15" strokeLinejoin="round" fill="none" />
+      </svg>
       {/* Label */}
       <p style={{
         fontFamily: 'var(--font-playfair), serif',
@@ -974,7 +981,16 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
             boxShadow: '0 20px 60px rgba(13,13,11,0.18)',
             textAlign: 'center',
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎬</div>
+            <div style={{ marginBottom: '16px' }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.5">
+                <rect x="2" y="7" width="20" height="14" rx="1" />
+                <rect x="2" y="3" width="20" height="5" rx="1" />
+                <line x1="7" y1="3" x2="5" y2="8" strokeLinecap="square" />
+                <line x1="12" y1="3" x2="10" y2="8" strokeLinecap="square" />
+                <line x1="17" y1="3" x2="15" y2="8" strokeLinecap="square" />
+                <polygon points="10,12 10,18 16,15" strokeLinejoin="round" fill="none" />
+              </svg>
+            </div>
             <h2 style={{
               fontFamily: 'var(--font-playfair), serif',
               fontWeight: 700,

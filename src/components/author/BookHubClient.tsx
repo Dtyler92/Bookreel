@@ -549,7 +549,14 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
             {book.cover_image_url ? (
               <Image src={book.cover_image_url} alt={book.title} fill style={{ objectFit: 'cover' }} sizes="100px" unoptimized />
             ) : (
-              <div style={{ width: '100%', height: '100%', background: '#F4F1EB', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36 }}>📖</div>
+              <div style={{ width: '100%', height: '100%', background: '#F4F1EB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.5">
+                  <rect x="4" y="2" width="13" height="20" rx="1" />
+                  <line x1="4" y1="2" x2="4" y2="22" strokeWidth="3" strokeLinecap="square" />
+                  <line x1="8" y1="8" x2="14" y2="8" strokeWidth="1" opacity="0.45" />
+                  <line x1="8" y1="11" x2="14" y2="11" strokeWidth="1" opacity="0.45" />
+                </svg>
+              </div>
             )}
           </div>
 
@@ -628,7 +635,7 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
                   border: '1.5px solid #E8E2D5',
                 }}
               >
-                ⬇️ Downloads
+                Downloads
               </Link>
             <Link
               href={`/trailer-wizard/${book.id}`}

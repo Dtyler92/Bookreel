@@ -260,7 +260,7 @@ export function GlobalNav({ userName, userTier = 'free', credits, authorPhotoUrl
                       <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: '13px', fontWeight: 600, color: ink, margin: 0 }}>{userName}</p>
                     </div>
                     {[
-                      { href: '/dashboard', label: '📚  My Books' },
+                      { href: '/dashboard', label: 'My Books' },
                       { href: '/account',   label: '⚙️  Account Settings' },
                       { href: '/pricing#packs', label: '🪙  Buy Credits' },
                     ].map(item => (

@@ -160,3 +160,137 @@ export function SettingsIcon({ size = 24, className, color = 'currentColor' }: I
     </svg>
   )
 }
+
+// ── Headphones / Listen Icon ─────────────────────────────────────────────────────
+export function HeadphonesIcon({ size = 24, className, color = 'currentColor' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      {/* Headband arc */}
+      <path d="M4 13V9a8 8 0 0 1 16 0v4" stroke={color} strokeWidth="1.5" strokeLinecap="square" fill="none" />
+      {/* Left cup */}
+      <rect x="2" y="13" width="4" height="6" rx="1" stroke={color} strokeWidth="1.5" />
+      {/* Right cup */}
+      <rect x="18" y="13" width="4" height="6" rx="1" stroke={color} strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+// ── Microphone / Record Icon ────────────────────────────────────────────────
+export function MicIcon({ size = 24, className, color = 'currentColor' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      {/* Capsule body */}
+      <rect x="9" y="2" width="6" height="12" rx="3" stroke={color} strokeWidth="1.5" />
+      {/* Stand arc */}
+      <path d="M5 11a7 7 0 0 0 14 0" stroke={color} strokeWidth="1.5" strokeLinecap="square" fill="none" />
+      {/* Stand stem */}
+      <line x1="12" y1="18" x2="12" y2="22" stroke={color} strokeWidth="1.5" strokeLinecap="square" />
+      {/* Base */}
+      <line x1="8" y1="22" x2="16" y2="22" stroke={color} strokeWidth="1.5" strokeLinecap="square" />
+    </svg>
+  )
+}
+
+// ── Download Arrow ──────────────────────────────────────────────────────────────
+export function DownloadArrowIcon({ size = 24, className, color = 'currentColor' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      {/* Vertical shaft */}
+      <line x1="12" y1="3" x2="12" y2="16" stroke={color} strokeWidth="1.5" strokeLinecap="square" />
+      {/* Arrow head */}
+      <polyline points="7,11 12,16 17,11" stroke={color} strokeWidth="1.5" strokeLinejoin="miter" fill="none" />
+      {/* Tray */}
+      <path d="M4 19 L4 21 L20 21 L20 19" stroke={color} strokeWidth="1.5" strokeLinecap="square" fill="none" />
+    </svg>
+  )
+}
+
+// ── Globe / Language Icon ───────────────────────────────────────────────────────
+export function GlobeIcon({ size = 24, className, color = 'currentColor' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.5" />
+      {/* Meridian — vertical ellipse */}
+      <ellipse cx="12" cy="12" rx="4" ry="9" stroke={color} strokeWidth="1.5" />
+      {/* Parallels */}
+      <line x1="3" y1="9" x2="21" y2="9" stroke={color} strokeWidth="1" opacity="0.5" />
+      <line x1="3" y1="15" x2="21" y2="15" stroke={color} strokeWidth="1" opacity="0.5" />
+    </svg>
+  )
+}
+
+// ── Bolt / Flash Icon ────────────────────────────────────────────────────────────
+export function BoltIcon({ size = 24, className, color = 'currentColor' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <polyline
+        points="13,2 6,13 12,13 11,22 18,11 12,11 13,2"
+        stroke={color} strokeWidth="1.5" strokeLinejoin="miter" fill="none"
+      />
+    </svg>
+  )
+}
+
+// ── Film Clapperboard / Trailer Large Icon ───────────────────────────────
+export function ClapperIcon({ size = 24, className, color = 'currentColor' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      {/* Board body */}
+      <rect x="2" y="7" width="20" height="14" rx="1" stroke={color} strokeWidth="1.5" />
+      {/* Top clapper strip */}
+      <rect x="2" y="3" width="20" height="5" rx="1" stroke={color} strokeWidth="1.5" />
+      {/* Diagonal clapper marks */}
+      <line x1="7" y1="3" x2="5" y2="8" stroke={color} strokeWidth="1.5" strokeLinecap="square" />
+      <line x1="12" y1="3" x2="10" y2="8" stroke={color} strokeWidth="1.5" strokeLinecap="square" />
+      <line x1="17" y1="3" x2="15" y2="8" stroke={color} strokeWidth="1.5" strokeLinecap="square" />
+      {/* Play triangle */}
+      <polygon points="10,12 10,18 16,15" stroke={color} strokeWidth="1.5" strokeLinejoin="round" fill="none" />
+    </svg>
+  )
+}
+
+// ── Book Cover / Open Book Placeholder ──────────────────────────────────
+export function BookIcon({ size = 24, className, color = 'currentColor' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      {/* Cover */}
+      <rect x="4" y="2" width="13" height="20" rx="1" stroke={color} strokeWidth="1.5" />
+      {/* Spine */}
+      <line x1="4" y1="2" x2="4" y2="22" stroke={color} strokeWidth="3" strokeLinecap="square" />
+      {/* Page lines */}
+      <line x1="8" y1="8" x2="14" y2="8" stroke={color} strokeWidth="1" opacity="0.45" />
+      <line x1="8" y1="11" x2="14" y2="11" stroke={color} strokeWidth="1" opacity="0.45" />
+      <line x1="8" y1="14" x2="12" y2="14" stroke={color} strokeWidth="1" opacity="0.45" />
+    </svg>
+  )
+}
+
+// ── Image / Cover Placeholder Icon ───────────────────────────────────────
+export function ImageIcon({ size = 24, className, color = 'currentColor' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <rect x="2" y="3" width="20" height="18" rx="1" stroke={color} strokeWidth="1.5" />
+      {/* Sun / circle */}
+      <circle cx="8.5" cy="8.5" r="2" stroke={color} strokeWidth="1.5" />
+      {/* Mountain landscape */}
+      <polyline points="2,17 8,11 13,16 16,13 22,17" stroke={color} strokeWidth="1.5" strokeLinejoin="miter" fill="none" />
+    </svg>
+  )
+}
+
+// ── Sparkle / Auto-fill Icon ─────────────────────────────────────────────────
+export function SparkleIcon({ size = 24, className, color = 'currentColor' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      {/* Main 4-point star */}
+      <path
+        d="M12 2 L13.5 10.5 L22 12 L13.5 13.5 L12 22 L10.5 13.5 L2 12 L10.5 10.5 Z"
+        stroke={color} strokeWidth="1.5" strokeLinejoin="round" fill="none"
+      />
+      {/* Small accent star top-right */}
+      <path d="M19 3 L19.6 5.4 L22 6 L19.6 6.6 L19 9 L18.4 6.6 L16 6 L18.4 5.4 Z"
+        stroke={color} strokeWidth="1" strokeLinejoin="round" fill="none" opacity="0.6"
+      />
+    </svg>
+  )
+}

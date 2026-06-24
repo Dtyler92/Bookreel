@@ -833,7 +833,15 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
           <ShimmerBar height={2} />
 
           <div style={{ padding: '56px 40px 60px', textAlign: 'center' }}>
-            <div style={{ fontSize: 52, marginBottom: 22 }}>📖</div>
+            <div style={{ marginBottom: 22 }}>
+              <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.5">
+                <rect x="4" y="2" width="13" height="20" rx="1" />
+                <line x1="4" y1="2" x2="4" y2="22" strokeWidth="3" strokeLinecap="square" />
+                <line x1="8" y1="8" x2="14" y2="8" strokeWidth="1" opacity="0.45" />
+                <line x1="8" y1="11" x2="14" y2="11" strokeWidth="1" opacity="0.45" />
+                <line x1="8" y1="14" x2="12" y2="14" strokeWidth="1" opacity="0.45" />
+              </svg>
+            </div>
             <h2 style={{
               fontFamily: 'var(--font-playfair), serif',
               fontSize: 28, fontWeight: 700, color: dark,
@@ -874,7 +882,14 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
       <StepIndicator current={step} />
       <div style={{ maxWidth: 520, margin: '0 auto', padding: '64px 24px' }}>
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{ fontSize: 44, marginBottom: 16 }}>🌍</div>
+          <div style={{ marginBottom: 16 }}>
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="9" />
+              <ellipse cx="12" cy="12" rx="4" ry="9" />
+              <line x1="3" y1="9" x2="21" y2="9" strokeWidth="1" opacity="0.5" />
+              <line x1="3" y1="15" x2="21" y2="15" strokeWidth="1" opacity="0.5" />
+            </svg>
+          </div>
           <h1 style={{
             fontFamily: 'var(--font-playfair), serif',
             fontSize: 28, fontWeight: 700, color: dark,
@@ -906,7 +921,9 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
-                  <span style={{ fontSize: 22 }}>⚡</span>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <polyline points="13,2 6,13 12,13 11,22 18,11 12,11 13,2" strokeLinejoin="miter" />
+                  </svg>
                   <span style={{
                     fontFamily: 'var(--font-playfair), serif',
                     fontSize: 18, fontWeight: 700, color: dark,
@@ -950,7 +967,12 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
-                  <span style={{ fontSize: 22 }}>🌐</span>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <circle cx="12" cy="12" r="9" />
+                    <ellipse cx="12" cy="12" rx="4" ry="9" />
+                    <line x1="3" y1="9" x2="21" y2="9" strokeWidth="1" opacity="0.5" />
+                    <line x1="3" y1="15" x2="21" y2="15" strokeWidth="1" opacity="0.5" />
+                  </svg>
                   <span style={{
                     fontFamily: 'var(--font-playfair), serif',
                     fontSize: 18, fontWeight: 700, color: dark,
@@ -1215,7 +1237,14 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
         }}>
           <div style={{ height: 3, background: '#D97706' }} />
           <div style={{ padding: '56px 40px', textAlign: 'center' }}>
-            <div style={{ fontSize: 56, marginBottom: 22 }}>🎙️</div>
+            <div style={{ marginBottom: 22 }}>
+              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.5">
+                <rect x="9" y="2" width="6" height="12" rx="3" />
+                <path d="M5 11a7 7 0 0 0 14 0" strokeLinecap="square" fill="none" />
+                <line x1="12" y1="18" x2="12" y2="22" strokeLinecap="square" />
+                <line x1="8" y1="22" x2="16" y2="22" strokeLinecap="square" />
+              </svg>
+            </div>
             <h2 style={{
               fontFamily: 'var(--font-playfair), serif',
               fontSize: 30, fontWeight: 700, color: dark,
@@ -1325,7 +1354,13 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
         }}>
           <div style={{ height: 3, background: '#16A34A' }} />
           <div style={{ padding: '60px 40px', textAlign: 'center' }}>
-            <div style={{ fontSize: 60, marginBottom: 18 }}>🎧</div>
+            <div style={{ marginBottom: 18 }}>
+              <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.5">
+                <path d="M4 13V9a8 8 0 0 1 16 0v4" strokeLinecap="square" fill="none" />
+                <rect x="2" y="13" width="4" height="6" rx="1" />
+                <rect x="18" y="13" width="4" height="6" rx="1" />
+              </svg>
+            </div>
             <h2 style={{
               fontFamily: 'var(--font-playfair), serif',
               fontSize: 34, fontWeight: 700, color: dark,
@@ -1409,7 +1444,7 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                   fontSize: 14, fontWeight: 600,
                 }}
               >
-                ⬇️ Downloads
+                Downloads
               </a>
               <button
                 onClick={() => router.push('/dashboard')}
@@ -1464,7 +1499,14 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                 />
               </div>
             ) : (
-              <div style={{ fontSize: 44, marginBottom: 22 }}>🎙️</div>
+              <div style={{ marginBottom: 22 }}>
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.5">
+                  <rect x="9" y="2" width="6" height="12" rx="3" />
+                  <path d="M5 11a7 7 0 0 0 14 0" strokeLinecap="square" fill="none" />
+                  <line x1="12" y1="18" x2="12" y2="22" strokeLinecap="square" />
+                  <line x1="8" y1="22" x2="16" y2="22" strokeLinecap="square" />
+                </svg>
+              </div>
             )}
 
             <h2 style={{
@@ -1595,9 +1637,15 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                     width: '100%', aspectRatio: '2/3', borderRadius: 8,
                     background: 'linear-gradient(145deg, #C8402F 0%, #8A1C10 100%)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'rgba(255,255,255,0.25)', fontSize: 48, marginBottom: 18,
+                    marginBottom: 18,
                   }}>
-                    📖
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(200,64,47,0.4)" strokeWidth="1.5">
+                      <rect x="4" y="2" width="13" height="20" rx="1" />
+                      <line x1="4" y1="2" x2="4" y2="22" strokeWidth="3" strokeLinecap="square" />
+                      <line x1="8" y1="8" x2="14" y2="8" strokeWidth="1" opacity="0.45" />
+                      <line x1="8" y1="11" x2="14" y2="11" strokeWidth="1" opacity="0.45" />
+                      <line x1="8" y1="14" x2="12" y2="14" strokeWidth="1" opacity="0.45" />
+                    </svg>
                   </div>
                 )}
 
@@ -1721,7 +1769,9 @@ export default function AudiobookClient({ bookId }: { bookId: string }) {
                 onMouseEnter={e => (e.currentTarget.style.background = 'rgba(200,64,47,0.1)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'rgba(200,64,47,0.06)')}
               >
-                <span style={{ fontSize: 15 }}>✨</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.5">
+                  <path d="M12 2 L13.5 10.5 L22 12 L13.5 13.5 L12 22 L10.5 13.5 L2 12 L10.5 10.5 Z" strokeLinejoin="round" />
+                </svg>
                 <span style={{
                   fontFamily: 'var(--font-inter), sans-serif',
                   fontSize: 13, fontWeight: 600, color: red,

@@ -100,9 +100,31 @@ function DownloadItem({ icon, title, description, available, formats, bookId }: 
           width: 48, height: 48, borderRadius: 12, flexShrink: 0,
           background: available ? '#FEF2F0' : '#F4F1EB',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 24,
         }}>
-          {icon}
+          {icon === 'headphones' && (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={available ? '#C8402F' : '#B0A89E'} strokeWidth="1.5">
+              <path d="M4 13V9a8 8 0 0 1 16 0v4" strokeLinecap="square" fill="none" />
+              <rect x="2" y="13" width="4" height="6" rx="1" />
+              <rect x="18" y="13" width="4" height="6" rx="1" />
+            </svg>
+          )}
+          {icon === 'clapper' && (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={available ? '#C8402F' : '#B0A89E'} strokeWidth="1.5">
+              <rect x="2" y="7" width="20" height="14" rx="1" />
+              <rect x="2" y="3" width="20" height="5" rx="1" />
+              <line x1="7" y1="3" x2="5" y2="8" strokeLinecap="square" />
+              <line x1="12" y1="3" x2="10" y2="8" strokeLinecap="square" />
+              <line x1="17" y1="3" x2="15" y2="8" strokeLinecap="square" />
+              <polygon points="10,12 10,18 16,15" strokeLinejoin="round" fill="none" />
+            </svg>
+          )}
+          {icon === 'image' && (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={available ? '#C8402F' : '#B0A89E'} strokeWidth="1.5">
+              <rect x="2" y="3" width="20" height="18" rx="1" />
+              <circle cx="8.5" cy="8.5" r="2" />
+              <polyline points="2,17 8,11 13,16 16,13 22,17" strokeLinejoin="miter" fill="none" />
+            </svg>
+          )}
         </div>
 
         {/* Info */}
@@ -219,7 +241,7 @@ export default function DownloadsClient({
 
   const items = [
     {
-      icon: '🎧',
+      icon: 'headphones',
       title: 'Audiobook',
       description: hasAudiobook && audiobookDuration
         ? `Full-cast AI-narrated audiobook · ${formatDuration(audiobookDuration)} runtime`
@@ -231,7 +253,7 @@ export default function DownloadsClient({
       ],
     },
     {
-      icon: '🎬',
+      icon: 'clapper',
       title: 'Trailer',
       description: hasTrailer && trailerDate
         ? `Cinematic video trailer · Generated ${new Date(trailerDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
@@ -242,7 +264,7 @@ export default function DownloadsClient({
       ],
     },
     {
-      icon: '🖼️',
+      icon: 'image',
       title: 'Book Cover',
       description: coverUrl ? 'Your generated or uploaded book cover image' : 'No cover uploaded yet',
       available: !!coverUrl,

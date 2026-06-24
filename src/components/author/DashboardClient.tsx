@@ -449,7 +449,7 @@ function CoverModal({
               cursor: generating ? 'not-allowed' : 'pointer',
             }}
           >
-            {generating ? 'Generating...' : '✨ Generate one for me'}
+            {generating ? 'Generating...' : 'Generate one for me'}
           </button>
           <input
             ref={fileInputRef}
@@ -671,7 +671,10 @@ function BookCard({
               color: 'rgba(255,255,255,0.2)',
               fontSize: '48px',
             }}>
-              📖
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5">
+                <rect x="4" y="2" width="13" height="20" rx="1" />
+                <line x1="4" y1="2" x2="4" y2="22" strokeWidth="3" strokeLinecap="square" />
+              </svg>
             </div>
           )}
         </div>
@@ -696,7 +699,10 @@ function BookCard({
         color: 'rgba(255,255,255,0.2)',
         fontSize: '48px',
       }}>
-        📖
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5">
+          <rect x="4" y="2" width="13" height="20" rx="1" />
+          <line x1="4" y1="2" x2="4" y2="22" strokeWidth="3" strokeLinecap="square" />
+        </svg>
       </div>
     )
   }
@@ -885,10 +891,10 @@ function BookCard({
               const abDone = abStatus === 'complete'
               const abInProgress = abStatus === 'parsing' || abStatus === 'parsed' || abStatus === 'pending' || abStatus === 'processing'
               const label = abDone
-                ? '🎙️ View Audiobook'
+                ? 'View Audiobook'
                 : abInProgress
-                ? '🎙️ View Audiobook Progress'
-                : '🎙️ Create Audiobook'
+                ? 'View Audiobook Progress'
+                : 'Create Audiobook'
               const href = abDone ? `/listen/${book.id}` : `/audiobook/${book.id}`
               return (
               <Link
@@ -1272,7 +1278,15 @@ export function DashboardClient({
               padding: '80px 40px',
               textAlign: 'center',
             }}>
-              <div style={{ fontSize: '56px', marginBottom: '20px' }}>📚</div>
+              <div style={{ marginBottom: '20px' }}>
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.5">
+                  <rect x="4" y="2" width="13" height="20" rx="1" />
+                  <line x1="4" y1="2" x2="4" y2="22" strokeWidth="3" strokeLinecap="square" />
+                  <line x1="8" y1="8" x2="14" y2="8" strokeWidth="1" opacity="0.45" />
+                  <line x1="8" y1="11" x2="14" y2="11" strokeWidth="1" opacity="0.45" />
+                  <line x1="8" y1="14" x2="12" y2="14" strokeWidth="1" opacity="0.45" />
+                </svg>
+              </div>
               <h3 style={{
                 fontFamily: 'var(--font-playfair), serif',
                 fontWeight: 700,
