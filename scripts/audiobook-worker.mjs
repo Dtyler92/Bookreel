@@ -207,7 +207,7 @@ async function generateSegmentAudio(seg, voice, stability, tmpDir, ttsModel) {
   // Direct audio bytes returned (not a JSON wrapper with URL)
   const audioBuffer = Buffer.from(await res.arrayBuffer())
 
-  const segPath     = join(tmpDir, `seg-${String(seg.index).padStart(5, '0')}.mp3`)
+  const segPath     = join(tmpDir, `seg-${String(seg.index).replace('-', 'n')}.mp3`)
   writeFileSync(segPath, audioBuffer)
   return segPath
 }
@@ -692,10 +692,72 @@ async function processJob(job) {
   mkdirSync(tmpDir, { recursive: true })
 
   try {
+    // ── 0. Fetch book title + author name for intro announcement ───────────────
+    let bookTitle  = 'this book'
+    let authorName = null
+    try {
+      const { data: bookRow } = await supabase
+        .from('books')
+        .select('title, author_id')
+        .eq('id', bookId)
+        .single()
+      if (bookRow?.title) bookTitle = bookRow.title
+      if (bookRow?.author_id) {
+        const { data: profileRow } = await supabase
+          .from('profiles')
+          .select('full_name, pen_names')
+          .eq('id', bookRow.author_id)
+          .single()
+        if (profileRow) {
+          const pens = Array.isArray(profileRow.pen_names) ? profileRow.pen_names : []
+          authorName = pens[0] || profileRow.full_name || null
+        }
+      }
+    } catch (e) {
+      console.warn('[audiobook-worker]    Could not fetch book/author for intro:', e.message)
+    }
+
     // ── 1. Generate TTS audio for each segment ─────────────────────────────
     // renderedSegments is an ordered list including silence spacers.
     const renderedSegments = []  // { index, path, durationMs, isChapter, chapterTitle, isSilence }
     let totalChars = 0
+
+    // ── 1a. Intro announcement (title + author, different voice from narrator) ─
+    // Pick an intro voice that is guaranteed to be different from the narrator
+    const narratorResolved = narratorVoice || 'Daniel'
+    // Prefer a warm, authoritative voice that contrasts with the narrator
+    const INTRO_VOICE_PREFERENCE = ['Jessica', 'Matilda', 'Alice', 'Sarah', 'Laura', 'Lily', 'Bella']
+    const introVoice = INTRO_VOICE_PREFERENCE.find(v => v !== narratorResolved) || 'Jessica'
+
+    const introLines = authorName
+      ? `${bookTitle}.\n\nBy ${authorName}.`
+      : `${bookTitle}.`
+
+    console.log(`[audiobook-worker]    Generating intro with voice "${introVoice}": "${introLines.replace(/\n/g, ' ')}"`)
+    try {
+      const introSeg = { index: -2, text: introLines, speaker: 'INTRO' }
+      const introPath = await generateSegmentAudio(introSeg, introVoice, 0.45, tmpDir, ttsModel)
+      const introDurationMs = getDurationMs(introPath)
+
+      renderedSegments.push({
+        index: -2, path: introPath, durationMs: introDurationMs,
+        isChapter: false, chapterTitle: null, isSilence: false,
+      })
+
+      // 5-second silence between intro and first chapter
+      const silIntroPath = join(tmpDir, 'sil-intro.mp3')
+      execSync(
+        `ffmpeg -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 5 -q:a 9 "${silIntroPath}"`,
+        { stdio: 'pipe' }
+      )
+      renderedSegments.push({
+        index: -1, path: silIntroPath, durationMs: 5000,
+        isChapter: false, chapterTitle: null, isSilence: true,
+      })
+      console.log(`[audiobook-worker]    Intro generated (${(introDurationMs / 1000).toFixed(1)}s) + 5s silence`)
+    } catch (e) {
+      console.warn('[audiobook-worker]    ⚠  Intro generation failed (skipping):', e.message)
+    }
 
     for (const seg of (segments || [])) {
       if (!seg.text?.trim()) continue

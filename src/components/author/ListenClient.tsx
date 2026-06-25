@@ -428,7 +428,9 @@ export default function ListenClient({
         <div>
 
           {/* Cover art + meta row */}
-          <div style={{
+          <div
+            className="cover-meta-row"
+            style={{
             display: 'flex',
             gap: '28px',
             alignItems: 'flex-start',
@@ -437,7 +439,9 @@ export default function ListenClient({
           }}>
 
             {/* Cover art */}
-            <div style={{
+            <div
+              className="cover-art"
+              style={{
               flexShrink: 0,
               width: '148px',
               height: '212px',
@@ -510,7 +514,9 @@ export default function ListenClient({
           </div>
 
           {/* Player card */}
-          <div style={{
+          <div
+            className="player-card"
+            style={{
             background: card,
             border: `1.5px solid ${border}`,
             borderRadius: '18px',
@@ -940,8 +946,21 @@ export default function ListenClient({
         @media (max-width: 767px) {
           .listen-layout {
             grid-template-columns: 1fr !important;
-            padding: 24px 16px 48px !important;
-            gap: 28px !important;
+            padding: 16px 12px 48px !important;
+            gap: 20px !important;
+            max-width: 100% !important;
+          }
+          .player-card {
+            padding: 20px 16px 20px !important;
+            border-radius: 14px !important;
+          }
+          .cover-meta-row {
+            gap: 16px !important;
+            margin-bottom: 28px !important;
+          }
+          .cover-art {
+            width: 110px !important;
+            height: 158px !important;
           }
         }
 
