@@ -147,6 +147,13 @@ export async function POST(request: Request) {
       )
     }
 
+    // Auto-approve all scenes — reaching Generate means the author reviewed and accepted the screenplay
+    await supabase
+      .from('scenes')
+      .update({ author_approved: true })
+      .eq('book_id', bookId)
+      .eq('author_approved', false)
+
     // Update trailer status to 'pending' and record quality tier
     const { error: trailerError } = await supabase
       .from('trailers')
