@@ -94,12 +94,18 @@ Now analyze the book excerpt and return ONLY a JSON object (no markdown, no code
 
 Rules:
 - 3-5 characters max
-- 12-15 scenes (these become trailer clips — the Premium trailer uses up to 12 clips for 60s, Standard uses 4 clips for 20s; always produce at least 12 distinct, visually-varied scenes with clear dramatic progression; extras give slack if any are filtered for content)
+- 12-15 scenes (these become trailer clips — the Premium trailer uses up to 60s of content, Standard uses 4 clips × 5s = 20s; always produce at least 12 distinct, visually-varied scenes with clear dramatic progression; extras give slack if any are filtered for content)
 - 2-4 key items/objects max
 - Keep descriptions book-accurate
 - No explicit sexual content
 - CRITICAL — ONLY include a character or item if it actually APPEARS ON SCREEN in at least one scene. We generate a portrait image for every character and item, so listing one that never shows up in a scene wastes generation and confuses the author. Before finalizing: for each character, confirm their exact name appears in at least one scene's "characters_present". For each item, confirm it is visibly featured in at least one scene's "description". Drop any character or item that isn't actually depicted in a scene — even if they're important to the plot.
 - Every name in a scene's "characters_present" MUST exactly match a name in the "characters" array (and vice-versa: every character must appear in at least one scene).
+
+SCENE DURATION RULES — set duration_seconds to either 5 or 10 per scene:
+- 5 seconds: fast-cut action, combat, chase, explosions, reveals, jump-cuts, shocking moments, quick emotional reactions, rapid-fire montage beats. Short because the energy is in the speed.
+- 10 seconds: sweeping landscapes, atmospheric world-building, slow emotional beats, intimate character moments, awe-inspiring vistas, mystery/tension builds, scenes where the camera needs time to breathe and the audience needs time to absorb what they're seeing.
+- A great trailer mixes both. Aim for roughly 60% at 5s and 40% at 10s — but always let the scene type decide, not the ratio.
+- The Standard trailer only uses the first 4 scenes and ignores duration_seconds (always renders them at 5s). The Premium trailer reads your duration_seconds values and uses them as-is, summing toward a ~60s target.
 - Return ONLY the JSON object, nothing else
 
 Scene field guidance (IMPORTANT for video quality):

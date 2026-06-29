@@ -255,10 +255,12 @@ Screenplay action: ${screenplayText || 'none specified'}
 Genre: ${genre}
 Clip duration: ${durationSeconds}s
 
-Pick ONE camera movement that best serves this scene. All clips are 5 seconds — keep movements simple and decisive:
+Pick ONE camera movement that best serves this scene. This clip is ${durationSeconds}s:
+${durationSeconds <= 5
+  ? '- Keep it simple and decisive — avoid movements that need more than 5 seconds (long dollies, full crane arcs)'
+  : '- Longer movements work well here — slow push-ins, orbit shots, crane arcs, and pull-back reveals all have time to breathe'}
 - Slow push-in, gentle tilt, static wide, subtle drift, quick rack focus
 - Match the energy: tense = fast push or handheld; emotional = slow drift or static; establishing = pull-back or wide pan
-- Avoid movements that need more than 5 seconds to complete (long dollies, full crane arcs)
 
 Return ONLY the camera movement directive — no explanation, no punctuation, just the movement.
 Examples: slow push-in, pull back to reveal, handheld orbit, static wide shot, gradual tilt up, subtle drift left, slow dolly forward`
@@ -1494,29 +1496,55 @@ async function runPipeline(job) {
   try {
     // Estimate trailer length: clips × per-clip length (+ ~4s end card).
     // Respect TEST_MAX_CLIPS so short test renders get a correctly-sized music bed.
-    // Kling 3.0: 5s clips for standard, 5s clips for premium (more clips).
-    //   Standard: 4 clips × 5s = 20s + 4s end card = 24s
-    //   Premium: 12 clips × 5s = 60s + 4s end card = 64s
+    // Standard: 4 × 5s = 20s. Premium: sum of scene.duration_seconds (5 or 10 each) up to 60s.
     const baseClips  = isPremiun ? 12 : 4
     const estClipLen = 5
     const estClips   = TEST_MAX_CLIPS > 0 ? Math.min(baseClips, TEST_MAX_CLIPS) : baseClips
-    const estDuration = estClips * estClipLen + 4
+    // For premium, use actual scene durations if available, otherwise fall back to 5s average
+    const estDuration = isPremiun
+      ? Math.min(scenes.slice(0, estClips).reduce((a, s) => a + ((s.duration_seconds === 10) ? 10 : 5), 0), 60) + 4
+      : estClips * estClipLen + 4
     musicAudioPath = await generateMusicBed(book.genre || 'dramatic', estDuration, tmpDir, ledger)
     if (musicAudioPath) console.log('[worker]   Music bed ready')
   } catch (e) {
     console.error('[worker]   Music bed failed (non-fatal, shipping without music):', e.message)
   }
 
-  // Clip duration and scene counts by tier.
-  //   Standard: 4 clips × 5s = 20s + 4s end card
-  //   Premium: 12 clips × 5s = 60s + 4s end card
-  const sceneLength = 5
-  let maxScenes = isPremiun ? 12 : 4
-  if (TEST_MAX_CLIPS > 0) {
-    maxScenes = Math.min(maxScenes, TEST_MAX_CLIPS)
-    console.log(`[worker]   ⚠ TEST MODE: capping to ${maxScenes} clips (~${maxScenes * sceneLength}s) to save credits`)
+  // Clip duration and scene selection by tier.
+  //   Standard: fixed 4 clips × 5s = 20s (ignores duration_seconds — predictable cost)
+  //   Premium:  variable duration per scene (5s or 10s set by Claude), budget = 60s total
+  const STANDARD_CLIP_SEC = 5
+  const PREMIUM_BUDGET_SEC = 60
+
+  let scenesToGenerate = []
+  let totalSceneSecs = 0
+
+  if (isPremiun) {
+    // Walk scenes in order, accumulate duration until budget is spent
+    for (const scene of scenes) {
+      const clipSec = (scene.duration_seconds === 10) ? 10 : 5
+      if (totalSceneSecs + clipSec > PREMIUM_BUDGET_SEC) break
+      scenesToGenerate.push(scene)
+      totalSceneSecs += clipSec
+    }
+    // Enforce TEST_MAX_CLIPS in premium too
+    if (TEST_MAX_CLIPS > 0 && scenesToGenerate.length > TEST_MAX_CLIPS) {
+      scenesToGenerate = scenesToGenerate.slice(0, TEST_MAX_CLIPS)
+      totalSceneSecs = scenesToGenerate.reduce((a, s) => a + ((s.duration_seconds === 10) ? 10 : 5), 0)
+      console.log(`[worker]   ⚠ TEST MODE: capping to ${scenesToGenerate.length} clips (~${totalSceneSecs}s) to save credits`)
+    }
+    console.log(`[worker]   Premium scene plan: ${scenesToGenerate.length} clips = ${totalSceneSecs}s total (budget: ${PREMIUM_BUDGET_SEC}s)`)
+    scenesToGenerate.forEach(s => console.log(`[worker]     Scene ${s.scene_number}: ${(s.duration_seconds === 10) ? 10 : 5}s — ${s.title || s.description?.substring(0, 50)}`))
+  } else {
+    // Standard: flat 4 scenes × 5s
+    let maxScenes = 4
+    if (TEST_MAX_CLIPS > 0) {
+      maxScenes = Math.min(maxScenes, TEST_MAX_CLIPS)
+      console.log(`[worker]   ⚠ TEST MODE: capping to ${maxScenes} clips (~${maxScenes * STANDARD_CLIP_SEC}s) to save credits`)
+    }
+    scenesToGenerate = scenes.slice(0, maxScenes)
+    totalSceneSecs = scenesToGenerate.length * STANDARD_CLIP_SEC
   }
-  const scenesToGenerate = scenes.slice(0, maxScenes)
 
   // Character punch-lines — pick 1 (Author) or 2 (Pro) iconic spoken lines, voiced
   // per-character and lip-synced onto their scene. Fully non-fatal: any failure just
@@ -1635,7 +1663,9 @@ async function runPipeline(job) {
 
   for (const scene of scenesToGenerate) {
     try {
-      console.log(`[worker]   Scene ${scene.scene_number}: generating image...`)
+      // Per-scene clip duration: premium reads Claude's decision (5 or 10s), standard always 5s
+      const clipSec = isPremiun ? ((scene.duration_seconds === 10) ? 10 : 5) : STANDARD_CLIP_SEC
+      console.log(`[worker]   Scene ${scene.scene_number} (${clipSec}s): generating image...`)
 
       // Resolve character reference images for this scene's characters_present
       const sceneCharRefs = []
@@ -1655,7 +1685,7 @@ async function runPipeline(job) {
           scene.description,
           scene.screenplay_text,
           book.genre || 'dramatic',
-          scene.duration_seconds || sceneLength,
+          scene.duration_seconds || clipSec,
           ledger
         )
         if (cameraMovement && cameraMovement !== scene.screenplay_text) {
@@ -1698,14 +1728,14 @@ async function runPipeline(job) {
         : scene.description
       let clipUrl
       try {
-        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, cameraMovement, ledger, true, i2vEndpoint, resolution, perSec)
+        clipUrl = await generateVideoClip(imageUrl, videoDescription, clipSec, cameraMovement, ledger, true, i2vEndpoint, resolution, perSec)
       } catch (clipErr) {
         // Non-retryable: moderation, internal bad-output, or daily-cap. Don't waste generations.
         if (clipErr.isModeration || clipErr.isBadOutput || clipErr.isRateLimit) throw clipErr
         console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying once in 15s...`)
         await new Promise(r => setTimeout(r, 15000))
         imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger, sceneCharRefs)
-        clipUrl = await generateVideoClip(imageUrl, videoDescription, sceneLength, cameraMovement, ledger, true, i2vEndpoint, resolution, perSec)
+        clipUrl = await generateVideoClip(imageUrl, videoDescription, clipSec, cameraMovement, ledger, true, i2vEndpoint, resolution, perSec)
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
@@ -1740,7 +1770,7 @@ async function runPipeline(job) {
             console.log(`[worker]   Scene ${scene.scene_number}: motion prompt — "${motionPrompt.substring(0, 80)}"`)
 
             // Generate expressive HeyGen clip (replaces Kling clip for this scene)
-            const heygenUrl = await generateHeygenClip(avatarId, lineAudioUrl, imageUrl, motionPrompt, sceneLength, ledger)
+            const heygenUrl = await generateHeygenClip(avatarId, lineAudioUrl, imageUrl, motionPrompt, clipSec, ledger)
             clipUrl = heygenUrl
             characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
             console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line — HeyGen expressive avatar`)
