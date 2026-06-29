@@ -94,7 +94,7 @@ Now analyze the book excerpt and return ONLY a JSON object (no markdown, no code
 
 Rules:
 - 3-5 characters max
-- 7-9 scenes (these become trailer clips — the Pro trailer uses up to 7, so always produce at least 7 distinct, visually-varied scenes; a couple extra gives slack if any are filtered)
+- 12-15 scenes (these become trailer clips — the Premium trailer uses up to 12 clips for 60s, Standard uses 4 clips for 20s; always produce at least 12 distinct, visually-varied scenes with clear dramatic progression; extras give slack if any are filtered for content)
 - 2-4 key items/objects max
 - Keep descriptions book-accurate
 - No explicit sexual content

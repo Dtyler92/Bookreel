@@ -6,10 +6,10 @@ import Link from 'next/link'
 type BillingPeriod = 'monthly' | 'yearly'
 
 // ── Credit economy ─────────────────────────────────────────────────────────────
-// Standard trailer  (Seedance Fast, 720p,  4 clips × 10s = 40s)  = 55 credits
-// Premium trailer   (Seedance 1080p,       7 clips × 10s = 70s)  = 150 credits
-// Audiobook add-on  (ElevenLabs full MS)                          = 50 credits  (coming soon)
-// Social Pack       (vertical cuts + quote cards)                 = 20 credits  (coming soon)
+// Standard trailer  (720p,   4 clips × 5s = 20s + 4s title card)  = 55 credits
+// Premium trailer   (1080p, 12 clips × 5s = 60s + 4s title card)  = 150 credits
+// Audiobook add-on  (ElevenLabs full MS)                           = 50 credits  (coming soon)
+// Social Pack       (vertical cuts + quote cards)                  = 20 credits  (coming soon)
 
 const PLANS = [
   {
@@ -84,8 +84,8 @@ const QUALITY_TIERS = [
     name: 'Standard',
     resolution: '720p',
     credits: 55,
-    runtime: '~40 seconds',
-    clips: '4 clips × 10s',
+    runtime: '~24 seconds',
+    clips: '4 clips × 5s + 4s title card',
     features: ['Cinematic engine · 720p resolution', '1 character spoken line', 'Cinematic narration + music', 'Social-ready format'],
     badge: null,
   },
@@ -93,9 +93,9 @@ const QUALITY_TIERS = [
     name: 'Premium',
     resolution: '1080p',
     credits: 150,
-    runtime: '~40 seconds',
-    clips: '4 clips × 10s',
-    features: ['Full cinematic engine · 1080p full HD', '2 character spoken lines', 'Native lip-sync · characters brought to life', 'Cinematic narration + music', 'Social-ready format'],
+    runtime: '~64 seconds',
+    clips: '12 clips × 5s + 4s title card',
+    features: ['Full cinematic engine · 1080p full HD', '4 character spoken lines', 'Native lip-sync · characters brought to life', 'Cinematic narration + music', 'Social-ready format'],
     badge: 'Recommended',
   },
 ]
@@ -107,7 +107,7 @@ const FAQ = [
   },
   {
     q: 'What\'s the difference between Standard and Premium quality?',
-    a: 'Standard delivers a 720p trailer — sharp, cinematic, and social-ready. Premium upgrades to full 1080p HD with 2 character spoken lines brought to life with native lip-sync. Same cinematic engine, same screenplay crafted from your manuscript — you just pick the resolution.',
+    a: 'Standard delivers a ~24 second 720p trailer (4 cinematic clips + title card) — sharp, punchy, and social-ready. Premium upgrades to a full ~64 second 1080p HD trailer (12 cinematic clips + title card) with 4 character spoken lines brought to life with native lip-sync. Same cinematic engine, same screenplay crafted from your manuscript — Premium just goes deeper into your story.',
   },
   {
     q: 'Can I mix standard and premium renders?',

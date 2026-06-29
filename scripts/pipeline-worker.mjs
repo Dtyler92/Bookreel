@@ -1494,12 +1494,12 @@ async function runPipeline(job) {
   try {
     // Estimate trailer length: clips × per-clip length (+ ~4s end card).
     // Respect TEST_MAX_CLIPS so short test renders get a correctly-sized music bed.
-    // Kling 3.0: 5s clips — punchy, fast-cutting trailer energy.
-    //   Standard: 4 clips × 5s = 20s
-    //   Premium:  4 clips × 5s = 20s (1080p upgrade, same length)
-    const baseClips = 4
+    // Kling 3.0: 5s clips for standard, 5s clips for premium (more clips).
+    //   Standard: 4 clips × 5s = 20s + 4s end card = 24s
+    //   Premium: 12 clips × 5s = 60s + 4s end card = 64s
+    const baseClips  = isPremiun ? 12 : 4
     const estClipLen = 5
-    const estClips = TEST_MAX_CLIPS > 0 ? Math.min(baseClips, TEST_MAX_CLIPS) : baseClips
+    const estClips   = TEST_MAX_CLIPS > 0 ? Math.min(baseClips, TEST_MAX_CLIPS) : baseClips
     const estDuration = estClips * estClipLen + 4
     musicAudioPath = await generateMusicBed(book.genre || 'dramatic', estDuration, tmpDir, ledger)
     if (musicAudioPath) console.log('[worker]   Music bed ready')
@@ -1507,11 +1507,11 @@ async function runPipeline(job) {
     console.error('[worker]   Music bed failed (non-fatal, shipping without music):', e.message)
   }
 
-  // Determine max scenes. Both tiers = 4 clips × 5s = 20s.
-  // Standard = 720p, Premium = 1080p — same length, different quality.
-  // TEST_MAX_CLIPS (env) caps this for short troubleshooting renders.
+  // Clip duration and scene counts by tier.
+  //   Standard: 4 clips × 5s = 20s + 4s end card
+  //   Premium: 12 clips × 5s = 60s + 4s end card
   const sceneLength = 5
-  let maxScenes = 4
+  let maxScenes = isPremiun ? 12 : 4
   if (TEST_MAX_CLIPS > 0) {
     maxScenes = Math.min(maxScenes, TEST_MAX_CLIPS)
     console.log(`[worker]   ⚠ TEST MODE: capping to ${maxScenes} clips (~${maxScenes * sceneLength}s) to save credits`)
@@ -1524,7 +1524,7 @@ async function runPipeline(job) {
   // clip to lip-sync. Only scenes in scenesToGenerate are eligible.
   const tmpDirLines = `/tmp/bookreel-${bookId}`
   if (!existsSync(tmpDirLines)) mkdirSync(tmpDirLines, { recursive: true })
-  const maxLines = tier === 'premium' ? 2 : 1
+  const maxLines = isPremiun ? 4 : 1
   const lineBySceneNumber = new Map()
   let characters = []
   try {
