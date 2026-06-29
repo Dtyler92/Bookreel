@@ -95,7 +95,7 @@ const QUALITY_TIERS = [
     credits: 150,
     runtime: '~64 seconds',
     clips: '12 clips × 5s + 4s title card',
-    features: ['Full cinematic engine · 1080p full HD', '4 character spoken lines', 'Native lip-sync · characters brought to life', 'Cinematic narration + music', 'Social-ready format'],
+    features: ['Full cinematic engine · 1080p full HD', '2 character spoken lines', 'Native lip-sync · characters brought to life', 'Cinematic narration + music', 'Social-ready format'],
     badge: 'Recommended',
   },
 ]
@@ -107,7 +107,7 @@ const FAQ = [
   },
   {
     q: 'What\'s the difference between Standard and Premium quality?',
-    a: 'Standard delivers a ~24 second 720p trailer (4 cinematic clips + title card) — sharp, punchy, and social-ready. Premium upgrades to a full ~64 second 1080p HD trailer (12 cinematic clips + title card) with 4 character spoken lines brought to life with native lip-sync. Same cinematic engine, same screenplay crafted from your manuscript — Premium just goes deeper into your story.',
+    a: 'Standard delivers a ~24 second 720p trailer (4 cinematic clips + title card) — sharp, punchy, and social-ready. Premium upgrades to a full ~64 second 1080p HD trailer (12 cinematic clips + title card) with 2 character spoken lines brought to life with native lip-sync. Same cinematic engine, same screenplay crafted from your manuscript — Premium just goes deeper into your story.',
   },
   {
     q: 'Can I mix standard and premium renders?',

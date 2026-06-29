@@ -163,7 +163,7 @@ function TierStep({ onSelect }: { onSelect: (q: Quality) => void }) {
       features:    [
         '1080p Full HD cinematic quality',
         'Up to 12 scenes — AI picks 5s or 10s per clip',
-        '4 character spoken lines with lip-sync',
+        '2 character spoken lines with lip-sync',
         'Cinematic narration + music bed',
         'Title & author card',
       ],
@@ -558,7 +558,7 @@ export default function TrailerWizardClient({
               fontSize: 12, color: muted, lineHeight: 1.5,
             }}>
               {quality === 'premium'
-                ? 'Up to 12 scenes · AI-mixed 5s & 10s clips · 4 character lines · ~60s total'
+                ? 'Up to 12 scenes · AI-mixed 5s & 10s clips · 2 character lines · ~60s total'
                 : '4 scenes · 5s clips · 1 character line · ~24s total'}
             </div>
             <button
