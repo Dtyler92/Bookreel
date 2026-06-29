@@ -85,7 +85,7 @@ export async function PATCH(request: Request) {
         .single()
 
       const genre = book?.genre ?? 'general fiction'
-      const adjust = feedback?.trim() ? `. Adjust: ${sanitizeAppearanceDescription(feedback)}` : ''
+      const adjust = feedback?.trim() ? `${sanitizeAppearanceDescription(feedback)}. ` : ''
 
       if (type === 'character') {
         // Generate 3-angle character sheet: face first, then body shots using face as reference
@@ -98,7 +98,7 @@ export async function PATCH(request: Request) {
           // Step 1 — Face close-up (no reference)
           const faceResult = await fal.subscribe('fal-ai/flux-pro/v1.1-ultra', {
             input: {
-              prompt: `${baseDesc}, straight-on headshot portrait, face looking directly into camera, eye level, shoulders visible, neutral expression, sharp facial features, studio portrait lighting${adjust}`.substring(0, 500),
+              prompt: `${adjust}${baseDesc}, straight-on headshot portrait, face looking directly into camera, eye level, shoulders visible, neutral expression, sharp facial features, studio portrait lighting`.substring(0, 500),
               negative_prompt: IMAGE_NEGATIVE_PROMPT,
               aspect_ratio: '1:1',
               num_images: 1,
@@ -114,7 +114,7 @@ export async function PATCH(request: Request) {
           // Step 2 — Front full body, using face as reference
           const frontResult = await fal.subscribe('fal-ai/flux-pro/v1.1-ultra', {
             input: {
-              prompt: `${baseDesc}, same person as reference image, full body front view, facing camera directly, symmetrical pose, arms relaxed at sides, head to toe, same face and outfit${adjust}`.substring(0, 500),
+              prompt: `${adjust}${baseDesc}, same person as reference image, full body front view, facing camera directly, symmetrical pose, arms relaxed at sides, head to toe, same face and outfit`.substring(0, 500),
               negative_prompt: IMAGE_NEGATIVE_PROMPT,
               aspect_ratio: '3:4',
               num_images: 1,
@@ -136,7 +136,7 @@ export async function PATCH(request: Request) {
           // Step 3 — Back full body, using face as reference
           const backResult = await fal.subscribe('fal-ai/flux-pro/v1.1-ultra', {
             input: {
-              prompt: `${baseDesc}, same person as reference image, full body back view, seen from behind, same outfit and hair, head to toe${adjust}`.substring(0, 500),
+              prompt: `${adjust}${baseDesc}, same person as reference image, full body back view, seen from behind, same outfit and hair, head to toe`.substring(0, 500),
               negative_prompt: IMAGE_NEGATIVE_PROMPT,
               aspect_ratio: '3:4',
               num_images: 1,
@@ -157,7 +157,7 @@ export async function PATCH(request: Request) {
         // Items: single image regeneration
         try {
           const appearance = record.description ?? record.name
-          const basePrompt = `${appearance}, detailed, cinematic, dramatic lighting, ${genre} genre aesthetic, isolated subject${adjust}`
+          const basePrompt = `${adjust}${appearance}, detailed, cinematic, dramatic lighting, ${genre} genre aesthetic, isolated subject`
           console.log('[approve-image] Regenerating item image for', id)
           const result = await fal.subscribe('fal-ai/flux-pro/v1.1-ultra', {
             input: {
