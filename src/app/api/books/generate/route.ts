@@ -147,12 +147,21 @@ export async function POST(request: Request) {
       )
     }
 
-    // Auto-approve all scenes — reaching Generate means the author reviewed and accepted the screenplay
-    await supabase
+    // Verify all scenes are approved
+    const { data: scenes, error: scenesError } = await supabase
       .from('scenes')
-      .update({ author_approved: true })
+      .select('id, scene_number, author_approved')
       .eq('book_id', bookId)
-      .eq('author_approved', false)
+
+    if (scenesError) return Response.json({ error: 'Failed to fetch scenes' }, { status: 500 })
+
+    const unapprovedScenes = (scenes || []).filter((s: { author_approved: boolean }) => !s.author_approved)
+    if (unapprovedScenes.length > 0) {
+      return Response.json(
+        { error: `${unapprovedScenes.length} scene(s) not yet approved. Please review and approve all scenes in the screenplay step before generating.`, unapprovedCount: unapprovedScenes.length },
+        { status: 400 }
+      )
+    }
 
     // Update trailer status to 'pending' and record quality tier
     const { error: trailerError } = await supabase

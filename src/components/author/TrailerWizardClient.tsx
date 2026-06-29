@@ -332,8 +332,12 @@ export default function TrailerWizardClient({
 }: Props) {
   const router = useRouter()
 
-  const allScenesApproved  = initialScenes.length > 0    && initialScenes.every((s: any)    => s.author_approved)
-  const allImagesApproved  = initialCharacters.length > 0 && initialCharacters.every((c: any) => c.author_approved)
+  const [approvedSceneIds,     setApprovedSceneIds]     = useState<Set<string>>(() => new Set(initialScenes.filter((s: any) => s.author_approved).map((s: any) => s.id)))
+  const [approvedCharacterIds, setApprovedCharacterIds] = useState<Set<string>>(() => new Set(initialCharacters.filter((c: any) => c.author_approved).map((c: any) => c.id)))
+
+  const allScenesApproved    = initialScenes.length > 0     && approvedSceneIds.size     === initialScenes.length
+  const allCharactersApproved = initialCharacters.length > 0 && approvedCharacterIds.size === initialCharacters.length
+  const allImagesApproved    = allCharactersApproved
 
   const getInitialStep = (): WizardStep => {
     if (isRegenerate) return 'tier'
@@ -429,7 +433,11 @@ export default function TrailerWizardClient({
             initialScenes={initialScenes}
             initialCharacters={initialCharacters}
             wizardMode
-            onWizardComplete={() => setStep('images')}
+            onWizardComplete={(sceneIds, charIds) => {
+              setApprovedSceneIds(new Set(sceneIds))
+              setApprovedCharacterIds(new Set(charIds))
+              setStep('images')
+            }}
           />
         </div>
       )}
@@ -577,37 +585,59 @@ export default function TrailerWizardClient({
           {/* Approval checklist */}
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
-              { label: 'Screenplay approved', detail: `${initialScenes.length} scene${initialScenes.length !== 1 ? 's' : ''}` },
-              { label: 'Character images approved', detail: `${initialCharacters.length} character${initialCharacters.length !== 1 ? 's' : ''}` },
-            ].map(({ label, detail }) => (
+              { label: 'Screenplay approved', detail: `${approvedSceneIds.size} / ${initialScenes.length} scene${initialScenes.length !== 1 ? 's' : ''}`, done: allScenesApproved, link: 'screenplay' },
+              { label: 'Character images approved', detail: `${approvedCharacterIds.size} / ${initialCharacters.length} character${initialCharacters.length !== 1 ? 's' : ''}`, done: allImagesApproved, link: 'images' },
+            ].map(({ label, detail, done, link }) => (
               <div key={label} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap',
-                background: card, border: '1px solid #BBF7D0',
+                background: done ? card : '#FFFBEB',
+                border: `1px solid ${done ? '#BBF7D0' : '#FCD34D'}`,
                 borderRadius: 10, padding: '14px 18px',
                 boxShadow: '0 1px 4px rgba(13,13,11,0.04)',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <div style={{
                     width: 24, height: 24, borderRadius: '50%',
-                    background: '#F0FDF4', border: '1.5px solid #86EFAC',
+                    background: done ? '#F0FDF4' : '#FEF3C7',
+                    border: `1.5px solid ${done ? '#86EFAC' : '#FCD34D'}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
+                    {done ? (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    )}
                   </div>
                   <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, fontWeight: 500, color: dark }}>
                     {label}
                   </span>
                 </div>
-                <span style={{
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: 12, fontWeight: 500, color: muted,
-                  background: '#F4F1EB', padding: '2px 8px',
-                  borderRadius: 100, border: `1px solid ${border}`,
-                }}>
-                  {detail}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: 12, fontWeight: 500, color: done ? muted : '#D97706',
+                    background: done ? '#F4F1EB' : '#FEF3C7', padding: '2px 8px',
+                    borderRadius: 100, border: `1px solid ${done ? border : '#FCD34D'}`,
+                  }}>
+                    {detail}
+                  </span>
+                  {!done && (
+                    <button
+                      onClick={() => setStep(link as WizardStep)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                        fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: 12, fontWeight: 600, color: '#D97706', textDecoration: 'underline',
+                      }}
+                    >
+                      Review →
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -625,22 +655,34 @@ export default function TrailerWizardClient({
           )}
 
           {/* Generate button */}
+          {(!allScenesApproved || !allImagesApproved) && (
+            <div style={{
+              width: '100%', padding: '12px 16px', borderRadius: 8,
+              background: '#FFFBEB', border: '1px solid #FCD34D',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 13, color: '#92400E', textAlign: 'center',
+            }}>
+              Please approve all scenes and character images before generating.
+            </div>
+          )}
           <button
             onClick={handleGenerate}
-            disabled={generating}
+            disabled={generating || !allScenesApproved || !allImagesApproved}
             style={{
               width: '100%', display: 'flex', alignItems: 'center',
               justifyContent: 'center', gap: 10,
               padding: '16px 32px', borderRadius: 10,
-              background: generating ? '#D4736A' : red,
-              color: '#FFFFFF', border: 'none', cursor: generating ? 'not-allowed' : 'pointer',
+              background: (generating || !allScenesApproved || !allImagesApproved) ? '#D4C5C3' : red,
+              color: '#FFFFFF', border: 'none',
+              cursor: (generating || !allScenesApproved || !allImagesApproved) ? 'not-allowed' : 'pointer',
               fontFamily: 'var(--font-inter), sans-serif',
               fontSize: 15, fontWeight: 600, letterSpacing: '0.01em',
               transition: 'background 150ms ease',
-              boxShadow: generating ? 'none' : '0 4px 16px rgba(200,64,47,0.3)',
+              boxShadow: (generating || !allScenesApproved || !allImagesApproved) ? 'none' : '0 4px 16px rgba(200,64,47,0.3)',
+              opacity: (!allScenesApproved || !allImagesApproved) ? 0.6 : 1,
             }}
-            onMouseEnter={e => { if (!generating) (e.currentTarget as HTMLButtonElement).style.background = '#A8321F' }}
-            onMouseLeave={e => { if (!generating) (e.currentTarget as HTMLButtonElement).style.background = red }}
+            onMouseEnter={e => { if (!generating && allScenesApproved && allImagesApproved) (e.currentTarget as HTMLButtonElement).style.background = '#A8321F' }}
+            onMouseLeave={e => { if (!generating && allScenesApproved && allImagesApproved) (e.currentTarget as HTMLButtonElement).style.background = red }}
           >
             {generating ? (
               <>

@@ -22,7 +22,7 @@ interface Props {
   initialCharacters: CharacterWithApproval[]
   initialScenes: SceneWithApproval[]
   wizardMode?: boolean
-  onWizardComplete?: () => void
+  onWizardComplete?: (approvedSceneIds: string[], approvedCharacterIds: string[]) => void
 }
 
 // ─── Helper: parse combined description field ─────────────────────────────────
@@ -998,7 +998,10 @@ export default function ReviewClient({
 
   const handleGenerate = async () => {
     if (wizardMode) {
-      onWizardComplete?.()
+      onWizardComplete?.(
+        scenes.filter(s => s.author_approved).map(s => s.id),
+        characters.filter(c => c.author_approved).map(c => c.id),
+      )
     } else {
       setGenerating(true)
       setGenerateError(null)
