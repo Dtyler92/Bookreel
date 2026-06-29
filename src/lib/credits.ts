@@ -78,11 +78,12 @@ export async function getCreditState(userId: string): Promise<CreditState | null
 export async function consumeCredits(
   userId: string,
   bookId: string | null,
-  quality: QualityTier = 'standard'
+  quality: QualityTier = 'standard',
+  explicitCost?: number   // override computed cost (e.g. already validated by caller)
 ): Promise<boolean> {
   const supabase = serviceClient()
   const state    = await getCreditState(userId)
-  const cost     = creditCostForQuality(quality)
+  const cost     = explicitCost ?? creditCostForQuality(quality)
 
   if (!state || state.credits < cost) return false
 

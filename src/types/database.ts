@@ -69,7 +69,7 @@ export interface Trailer {
   id: string
   book_id: string
   status: TrailerStatus
-  quality_tier: 'basic' | 'pro'
+  quality_tier: 'standard' | 'premium' | 'basic' | 'pro'
   final_video_url: string | null
   thumbnail_url: string | null
   duration_seconds: number | null

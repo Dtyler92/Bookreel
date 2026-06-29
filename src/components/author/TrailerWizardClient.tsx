@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import ReviewClient from './ReviewClient'
 import ReviewImagesClient from './ReviewImagesClient'
 
-type WizardStep = 'screenplay' | 'images' | 'confirm'
+type WizardStep = 'tier' | 'screenplay' | 'images' | 'confirm'
+type Quality = 'standard' | 'premium'
 
 interface Props {
   book: any
@@ -17,9 +18,19 @@ interface Props {
   isRegenerate?: boolean
 }
 
+// ─── Design tokens ────────────────────────────────────────────────────────────
+
+const red   = '#C8402F'
+const dark  = '#0D0D0B'
+const muted = '#8A8278'
+const cream = '#FAFAF7'
+const border = '#E8E2D5'
+const card   = '#FFFFFF'
+
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
 const STEPS = [
+  { key: 'tier',       label: 'Quality'    },
   { key: 'screenplay', label: 'Screenplay' },
   { key: 'images',     label: 'Characters' },
   { key: 'confirm',    label: 'Generate'   },
@@ -31,7 +42,7 @@ function StepBar({ stepIndex, isRegenerate }: { stepIndex: number; isRegenerate:
       position: 'sticky', top: 64, zIndex: 40,
       background: 'rgba(253,252,249,0.95)',
       backdropFilter: 'blur(12px)',
-      borderBottom: '1px solid #E8E2D5',
+      borderBottom: `1px solid ${border}`,
       padding: '0 24px',
     }}>
       <style>{`
@@ -41,32 +52,28 @@ function StepBar({ stepIndex, isRegenerate }: { stepIndex: number; isRegenerate:
         }
       `}</style>
       <div style={{ maxWidth: 880, margin: '0 auto', display: 'flex', alignItems: 'center', height: 52, flexWrap: 'wrap', gap: 8 }}>
-        {/* Label */}
         <span className="br-wizard-label" style={{
           fontFamily: 'var(--font-inter), sans-serif',
           fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
-          textTransform: 'uppercase', color: '#8A8278',
+          textTransform: 'uppercase', color: muted,
           marginRight: 24,
         }}>
           {isRegenerate ? 'Review & Generate' : 'Trailer Wizard'}
         </span>
 
-        {/* Steps */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
           {STEPS.map((s, i) => {
             const isDone    = i < stepIndex
             const isCurrent = i === stepIndex
             return (
               <div key={s.key} style={{ display: 'flex', alignItems: 'center' }}>
-                {/* Connector */}
                 {i > 0 && (
                   <div className="br-step-connector" style={{
                     width: 32, height: 1,
-                    background: isDone ? '#16A34A' : '#E8E2D5',
+                    background: isDone ? '#16A34A' : border,
                     transition: 'background 300ms ease',
                   }} />
                 )}
-                {/* Pill */}
                 <div style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6,
                   padding: '5px 12px', borderRadius: 100,
@@ -78,10 +85,10 @@ function StepBar({ stepIndex, isRegenerate }: { stepIndex: number; isRegenerate:
                             : 'transparent',
                   border: `1px solid ${isDone    ? '#BBF7D0'
                                      : isCurrent ? '#F5C0B8'
-                                     : '#E8E2D5'}`,
+                                     : border}`,
                   color: isDone    ? '#15803D'
-                       : isCurrent ? '#C8402F'
-                       : '#8A8278',
+                       : isCurrent ? red
+                       : muted,
                 }}>
                   {isDone ? (
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -90,8 +97,8 @@ function StepBar({ stepIndex, isRegenerate }: { stepIndex: number; isRegenerate:
                   ) : (
                     <span style={{
                       width: 16, height: 16, borderRadius: '50%',
-                      background: isCurrent ? '#C8402F' : '#E8E2D5',
-                      color: isCurrent ? '#fff' : '#8A8278',
+                      background: isCurrent ? red : border,
+                      color: isCurrent ? '#fff' : muted,
                       fontSize: 11, fontWeight: 700,
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       flexShrink: 0,
@@ -106,6 +113,208 @@ function StepBar({ stepIndex, isRegenerate }: { stepIndex: number; isRegenerate:
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Tier picker step ─────────────────────────────────────────────────────────
+
+function TierStep({ onSelect }: { onSelect: (q: Quality) => void }) {
+  const [hovered, setHovered] = useState<Quality | null>(null)
+
+  const tiers: Array<{
+    key: Quality
+    name: string
+    credits: number
+    runtime: string
+    clips: string
+    resolution: string
+    badge: string | null
+    features: string[]
+    color: string
+    borderColor: string
+  }> = [
+    {
+      key:         'standard',
+      name:        'Standard',
+      credits:     55,
+      runtime:     '~24 seconds',
+      clips:       '4 clips × 5s',
+      resolution:  '720p',
+      badge:       null,
+      features:    [
+        '720p cinematic quality',
+        '4 fast-cut scenes',
+        '1 character spoken line',
+        'Cinematic narration + music bed',
+        'Title & author card',
+      ],
+      color:       '#F4F1EB',
+      borderColor: border,
+    },
+    {
+      key:         'premium',
+      name:        'Premium',
+      credits:     150,
+      runtime:     '~60 seconds',
+      clips:       'Up to 12 clips · 5s or 10s each',
+      resolution:  '1080p Full HD',
+      badge:       'Recommended',
+      features:    [
+        '1080p Full HD cinematic quality',
+        'Up to 12 scenes — AI picks 5s or 10s per clip',
+        '4 character spoken lines with lip-sync',
+        'Cinematic narration + music bed',
+        'Title & author card',
+      ],
+      color:       '#FEF3F2',
+      borderColor: '#F5C0B8',
+    },
+  ]
+
+  return (
+    <div style={{
+      maxWidth: 680, margin: '0 auto',
+      padding: '48px 20px 80px',
+    }}>
+      <div style={{ textAlign: 'center', marginBottom: 36 }}>
+        <h2 style={{
+          fontFamily: 'var(--font-playfair), serif',
+          fontSize: 30, fontWeight: 900, color: dark,
+          margin: '0 0 10px', letterSpacing: '-0.02em',
+        }}>
+          Choose your trailer quality
+        </h2>
+        <p style={{
+          fontFamily: 'var(--font-inter), sans-serif',
+          fontSize: 14, color: muted, margin: 0, lineHeight: 1.6,
+        }}>
+          This shapes how your screenplay is written — choose before we review it.
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {tiers.map(t => (
+          <button
+            key={t.key}
+            onClick={() => onSelect(t.key)}
+            onMouseEnter={() => setHovered(t.key)}
+            onMouseLeave={() => setHovered(null)}
+            style={{
+              width: '100%', textAlign: 'left',
+              background: hovered === t.key ? (t.key === 'premium' ? '#FEF3F2' : '#F0EDE7') : card,
+              border: `2px solid ${hovered === t.key || t.key === 'premium' ? t.borderColor : border}`,
+              borderRadius: 14, padding: '22px 24px',
+              cursor: 'pointer',
+              transition: 'all 180ms ease',
+              boxShadow: t.key === 'premium' ? '0 2px 16px rgba(200,64,47,0.08)' : 'none',
+              position: 'relative',
+            }}
+          >
+            {/* Badge */}
+            {t.badge && (
+              <div style={{
+                position: 'absolute', top: -11, left: 24,
+                background: red, color: '#fff',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+                textTransform: 'uppercase', padding: '3px 10px', borderRadius: 100,
+              }}>
+                {t.badge}
+              </div>
+            )}
+
+            {/* Header row */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                  <span style={{
+                    fontFamily: 'var(--font-playfair), serif',
+                    fontSize: 20, fontWeight: 900, color: dark,
+                  }}>
+                    {t.name}
+                  </span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600,
+                    background: t.key === 'premium' ? '#FEF3F2' : '#F4F1EB',
+                    color: t.key === 'premium' ? red : muted,
+                    border: `1px solid ${t.key === 'premium' ? '#F5C0B8' : border}`,
+                    padding: '2px 8px', borderRadius: 100,
+                    fontFamily: 'var(--font-inter), sans-serif',
+                  }}>
+                    {t.resolution}
+                  </span>
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 13, color: muted,
+                }}>
+                  {t.runtime} · {t.clips}
+                </div>
+              </div>
+
+              {/* Credits badge */}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{
+                  fontFamily: 'var(--font-playfair), serif',
+                  fontSize: 24, fontWeight: 900,
+                  color: t.key === 'premium' ? red : dark,
+                  lineHeight: 1,
+                }}>
+                  {t.credits}
+                </div>
+                <div style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 11, color: muted, marginTop: 2,
+                }}>
+                  credits
+                </div>
+              </div>
+            </div>
+
+            {/* Feature list */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {t.features.map(f => (
+                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                    stroke={t.key === 'premium' ? red : '#16A34A'}
+                    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: 13, color: dark, fontWeight: 400,
+                  }}>
+                    {f}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Select arrow */}
+            <div style={{
+              marginTop: 18, display: 'flex', alignItems: 'center', gap: 6,
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 13, fontWeight: 600,
+              color: t.key === 'premium' ? red : dark,
+            }}>
+              Select {t.name}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <p style={{
+        textAlign: 'center', marginTop: 20,
+        fontFamily: 'var(--font-inter), sans-serif',
+        fontSize: 12, color: muted, lineHeight: 1.6,
+      }}>
+        Credits are deducted when generation starts — not when you pick a tier.
+        <br />You can change your mind during the screenplay review.
+      </p>
     </div>
   )
 }
@@ -127,18 +336,25 @@ export default function TrailerWizardClient({
   const allImagesApproved  = initialCharacters.length > 0 && initialCharacters.every((c: any) => c.author_approved)
 
   const getInitialStep = (): WizardStep => {
-    // When regenerating a new trailer, always start at screenplay review
-    if (isRegenerate) return 'screenplay'
+    if (isRegenerate) return 'tier'
     if (allScenesApproved && allImagesApproved) return 'confirm'
     if (allScenesApproved) return 'images'
-    return 'screenplay'
+    return 'tier'
   }
 
-  const [step, setStep]           = useState<WizardStep>(getInitialStep)
+  const [step, setStep]             = useState<WizardStep>(getInitialStep)
+  const [quality, setQuality]       = useState<Quality>('standard')
   const [generating, setGenerating] = useState(false)
   const [error, setError]           = useState<string | null>(null)
 
   const stepIndex = STEPS.findIndex(s => s.key === step)
+
+  const creditCost = quality === 'premium' ? 150 : 55
+
+  const handleSelectTier = (q: Quality) => {
+    setQuality(q)
+    setStep('screenplay')
+  }
 
   const handleGenerate = async () => {
     setGenerating(true)
@@ -152,7 +368,7 @@ export default function TrailerWizardClient({
       const res = await fetch('/api/books/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId: book.id, ...(userId ? { userId } : {}) }),
+        body: JSON.stringify({ bookId: book.id, quality }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string }
@@ -166,20 +382,56 @@ export default function TrailerWizardClient({
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#FAFAF7' }}>
+    <div style={{ minHeight: '100vh', background: cream }}>
 
       <StepBar stepIndex={stepIndex} isRegenerate={isRegenerate} />
 
+      {/* Tier picker step */}
+      {step === 'tier' && (
+        <TierStep onSelect={handleSelectTier} />
+      )}
+
       {/* Screenplay step */}
       {step === 'screenplay' && (
-        <ReviewClient
-          bookId={book.id}
-          bookTitle={book.title}
-          initialScenes={initialScenes}
-          initialCharacters={initialCharacters}
-          wizardMode
-          onWizardComplete={() => setStep('images')}
-        />
+        <div>
+          {/* Quality reminder banner */}
+          <div style={{ maxWidth: 880, margin: '0 auto', padding: '16px 24px 0' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              background: quality === 'premium' ? '#FEF3F2' : '#F4F1EB',
+              border: `1px solid ${quality === 'premium' ? '#F5C0B8' : border}`,
+              borderRadius: 8, padding: '8px 14px',
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 12, fontWeight: 600,
+              color: quality === 'premium' ? red : muted,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                <path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none"/>
+              </svg>
+              {quality === 'premium' ? 'Premium trailer · 1080p · ~60s · 150 credits' : 'Standard trailer · 720p · ~24s · 55 credits'}
+              <button
+                onClick={() => setStep('tier')}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 11, color: muted, textDecoration: 'underline',
+                  padding: 0, marginLeft: 4,
+                }}
+              >
+                change
+              </button>
+            </div>
+          </div>
+          <ReviewClient
+            bookId={book.id}
+            bookTitle={book.title}
+            initialScenes={initialScenes}
+            initialCharacters={initialCharacters}
+            wizardMode
+            onWizardComplete={() => setStep('images')}
+          />
+        </div>
       )}
 
       {/* Images step */}
@@ -226,13 +478,13 @@ export default function TrailerWizardClient({
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
             padding: '6px 14px', borderRadius: 100,
-            background: '#F4F1EB', border: '1px solid #E8E2D5',
+            background: '#F4F1EB', border: `1px solid ${border}`,
             fontFamily: 'var(--font-inter), sans-serif',
-            fontSize: 12, fontWeight: 500, color: '#8A8278',
+            fontSize: 12, fontWeight: 500, color: muted,
           }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={red} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="4" width="20" height="16" rx="2"/>
-              <path d="M10 9l5 3-5 3V9z" fill="#C8402F" stroke="none"/>
+              <path d="M10 9l5 3-5 3V9z" fill={red} stroke="none"/>
             </svg>
             <span style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {book.title}
@@ -244,7 +496,7 @@ export default function TrailerWizardClient({
             <h2 style={{
               margin: '0 0 12px',
               fontFamily: 'var(--font-playfair), serif',
-              fontSize: 32, fontWeight: 700, color: '#0D0D0B',
+              fontSize: 32, fontWeight: 700, color: dark,
               letterSpacing: '-0.02em', lineHeight: 1.2,
             }}>
               {isRegenerate ? 'Ready to generate new trailer' : 'Ready to generate'}
@@ -252,7 +504,7 @@ export default function TrailerWizardClient({
             <p style={{
               margin: 0,
               fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: 15, lineHeight: 1.65, color: '#8A8278',
+              fontSize: 15, lineHeight: 1.65, color: muted,
             }}>
               {isRegenerate
                 ? 'Your screenplay and character images have been reviewed. A new cinematic trailer will be created — usually ready in 15–20 minutes.'
@@ -260,17 +512,77 @@ export default function TrailerWizardClient({
             </p>
           </div>
 
-          {/* Approval checklist */}
+          {/* Quality summary card */}
           <div style={{
-            width: '100%', display: 'flex', flexDirection: 'column', gap: 10,
+            width: '100%',
+            background: quality === 'premium' ? '#FEF3F2' : '#F4F1EB',
+            border: `1.5px solid ${quality === 'premium' ? '#F5C0B8' : border}`,
+            borderRadius: 12, padding: '18px 20px',
           }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{
+                  fontFamily: 'var(--font-playfair), serif',
+                  fontSize: 18, fontWeight: 900, color: dark,
+                }}>
+                  {quality === 'premium' ? 'Premium' : 'Standard'}
+                </span>
+                <span style={{
+                  fontSize: 11, fontWeight: 600,
+                  background: quality === 'premium' ? 'rgba(200,64,47,0.1)' : '#E8E2D5',
+                  color: quality === 'premium' ? red : muted,
+                  padding: '2px 8px', borderRadius: 100,
+                  fontFamily: 'var(--font-inter), sans-serif',
+                }}>
+                  {quality === 'premium' ? '1080p Full HD' : '720p'}
+                </span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{
+                  fontFamily: 'var(--font-playfair), serif',
+                  fontSize: 22, fontWeight: 900,
+                  color: quality === 'premium' ? red : dark,
+                }}>
+                  {creditCost}
+                </span>
+                <span style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: 12, color: muted, marginLeft: 4,
+                }}>
+                  credits
+                </span>
+              </div>
+            </div>
+            <div style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 12, color: muted, lineHeight: 1.5,
+            }}>
+              {quality === 'premium'
+                ? 'Up to 12 scenes · AI-mixed 5s & 10s clips · 4 character lines · ~60s total'
+                : '4 scenes · 5s clips · 1 character line · ~24s total'}
+            </div>
+            <button
+              onClick={() => setStep('tier')}
+              style={{
+                marginTop: 10, background: 'none', border: 'none',
+                cursor: 'pointer', padding: 0,
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 12, color: muted, textDecoration: 'underline',
+              }}
+            >
+              Change quality →
+            </button>
+          </div>
+
+          {/* Approval checklist */}
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
               { label: 'Screenplay approved', detail: `${initialScenes.length} scene${initialScenes.length !== 1 ? 's' : ''}` },
               { label: 'Character images approved', detail: `${initialCharacters.length} character${initialCharacters.length !== 1 ? 's' : ''}` },
             ].map(({ label, detail }) => (
               <div key={label} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap',
-                background: '#FFFFFF', border: '1px solid #BBF7D0',
+                background: card, border: '1px solid #BBF7D0',
                 borderRadius: 10, padding: '14px 18px',
                 boxShadow: '0 1px 4px rgba(13,13,11,0.04)',
               }}>
@@ -284,18 +596,15 @@ export default function TrailerWizardClient({
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   </div>
-                  <span style={{
-                    fontFamily: 'var(--font-inter), sans-serif',
-                    fontSize: 14, fontWeight: 500, color: '#0D0D0B',
-                  }}>
+                  <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, fontWeight: 500, color: dark }}>
                     {label}
                   </span>
                 </div>
                 <span style={{
                   fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: 12, fontWeight: 500, color: '#8A8278',
+                  fontSize: 12, fontWeight: 500, color: muted,
                   background: '#F4F1EB', padding: '2px 8px',
-                  borderRadius: 100, border: '1px solid #E8E2D5',
+                  borderRadius: 100, border: `1px solid ${border}`,
                 }}>
                   {detail}
                 </span>
@@ -323,7 +632,7 @@ export default function TrailerWizardClient({
               width: '100%', display: 'flex', alignItems: 'center',
               justifyContent: 'center', gap: 10,
               padding: '16px 32px', borderRadius: 10,
-              background: generating ? '#D4736A' : '#C8402F',
+              background: generating ? '#D4736A' : red,
               color: '#FFFFFF', border: 'none', cursor: generating ? 'not-allowed' : 'pointer',
               fontFamily: 'var(--font-inter), sans-serif',
               fontSize: 15, fontWeight: 600, letterSpacing: '0.01em',
@@ -331,7 +640,7 @@ export default function TrailerWizardClient({
               boxShadow: generating ? 'none' : '0 4px 16px rgba(200,64,47,0.3)',
             }}
             onMouseEnter={e => { if (!generating) (e.currentTarget as HTMLButtonElement).style.background = '#A8321F' }}
-            onMouseLeave={e => { if (!generating) (e.currentTarget as HTMLButtonElement).style.background = '#C8402F' }}
+            onMouseLeave={e => { if (!generating) (e.currentTarget as HTMLButtonElement).style.background = red }}
           >
             {generating ? (
               <>
@@ -345,7 +654,7 @@ export default function TrailerWizardClient({
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
                 </svg>
-                Generate My Trailer
+                Generate {quality === 'premium' ? 'Premium' : 'Standard'} Trailer — {creditCost} credits
               </>
             )}
           </button>
@@ -356,12 +665,12 @@ export default function TrailerWizardClient({
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: 13, fontWeight: 500, color: '#8A8278',
+              fontSize: 13, fontWeight: 500, color: muted,
               transition: 'color 150ms ease',
               padding: '12px 0',
             }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#0D0D0B')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#8A8278')}
+            onMouseEnter={e => (e.currentTarget.style.color = dark)}
+            onMouseLeave={e => (e.currentTarget.style.color = muted)}
           >
             ← Back to Book Hub
           </button>
