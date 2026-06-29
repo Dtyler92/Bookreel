@@ -39,7 +39,7 @@ const STEPS = [
 function StepBar({ stepIndex, isRegenerate }: { stepIndex: number; isRegenerate: boolean }) {
   return (
     <div style={{
-      position: 'sticky', top: 64, zIndex: 40,
+      position: 'fixed', top: 64, left: 0, right: 0, zIndex: 40,
       background: 'rgba(253,252,249,0.95)',
       backdropFilter: 'blur(12px)',
       borderBottom: `1px solid ${border}`,
@@ -382,7 +382,7 @@ export default function TrailerWizardClient({
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: cream }}>
+    <div style={{ minHeight: '100vh', background: cream, paddingTop: 116 }}>
 
       <StepBar stepIndex={stepIndex} isRegenerate={isRegenerate} />
 
