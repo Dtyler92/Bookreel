@@ -171,22 +171,71 @@ export async function POST(
     if (book.author_id !== user.id) return Response.json({ error: 'Forbidden' }, { status: 403 })
     if (!book.pdf_url) return Response.json({ error: 'No manuscript file found for this book. Please re-upload to regenerate the screenplay.' }, { status: 400 })
 
-    console.log(`[regen-screenplay] Starting for bookId=${bookId} title="${book.title}"`)
+    console.log(`[regen-screenplay] Starting for bookId=${bookId} title="${book.title}" pdf_url="${book.pdf_url}"`)
 
-    // Download PDF from storage
+    // Download manuscript from Supabase storage using the stored path
     let extractedText = ''
     try {
-      const pdfRes = await fetch(book.pdf_url)
-      if (!pdfRes.ok) throw new Error(`PDF fetch failed: ${pdfRes.status}`)
-      const pdfBuffer = Buffer.from(await pdfRes.arrayBuffer())
-      await ensureWorker()
-      const parser = new PDFParse({ data: pdfBuffer })
-      const textResult = await parser.getText()
-      extractedText = textResult.text || ''
-      console.log(`[regen-screenplay] PDF text extracted, length: ${extractedText.length}`)
+      const storagePath = book.pdf_url
+      const isEpub = storagePath.toLowerCase().endsWith('.epub')
+      const isRtf  = storagePath.toLowerCase().endsWith('.rtf')
+      const isTxt  = storagePath.toLowerCase().endsWith('.txt')
+
+      // Try storage download first (path-based), fall back to direct URL fetch
+      let fileBuffer: Buffer | null = null
+
+      // If it looks like a storage path (no http), download via Supabase storage
+      if (!storagePath.startsWith('http')) {
+        // Determine bucket — upload-url route uses 'books', legacy used 'media'
+        for (const bucket of ['books', 'media']) {
+          const { data: fileData, error: dlErr } = await supabase.storage
+            .from(bucket)
+            .download(storagePath)
+          if (!dlErr && fileData) {
+            fileBuffer = Buffer.from(await fileData.arrayBuffer())
+            console.log(`[regen-screenplay] Downloaded from bucket "${bucket}", size: ${fileBuffer.length}`)
+            break
+          }
+        }
+      } else {
+        // Full URL — fetch directly
+        const res = await fetch(storagePath)
+        if (res.ok) fileBuffer = Buffer.from(await res.arrayBuffer())
+      }
+
+      if (!fileBuffer || fileBuffer.length === 0) {
+        throw new Error('File download returned empty buffer')
+      }
+
+      if (isEpub) {
+        // EPUB: extract text from XML content inside the zip
+        const JSZip = (await import('jszip')).default
+        const zip = await JSZip.loadAsync(fileBuffer)
+        const textParts: string[] = []
+        const htmlFiles = Object.keys(zip.files).filter(f =>
+          f.endsWith('.html') || f.endsWith('.xhtml') || f.endsWith('.htm') || f.endsWith('.xml')
+        ).sort()
+        for (const fname of htmlFiles) {
+          const content = await zip.files[fname].async('string')
+          // Strip HTML/XML tags
+          textParts.push(content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim())
+        }
+        extractedText = textParts.join('\n\n')
+        console.log(`[regen-screenplay] EPUB text extracted, length: ${extractedText.length}`)
+      } else if (isTxt || isRtf) {
+        extractedText = fileBuffer.toString('utf-8').replace(/[\\{}]/g, ' ')
+        console.log(`[regen-screenplay] Text file extracted, length: ${extractedText.length}`)
+      } else {
+        // PDF
+        await ensureWorker()
+        const parser = new PDFParse({ data: fileBuffer })
+        const textResult = await parser.getText()
+        extractedText = textResult.text || ''
+        console.log(`[regen-screenplay] PDF text extracted, length: ${extractedText.length}`)
+      }
     } catch (pdfErr) {
-      console.error('[regen-screenplay] PDF parse error:', pdfErr)
-      return Response.json({ error: 'Failed to read manuscript file. The PDF may have been deleted or is unreadable.' }, { status: 500 })
+      console.error('[regen-screenplay] File parse error:', pdfErr)
+      return Response.json({ error: 'Failed to read manuscript file. The original file may have been deleted — please re-upload your book to regenerate the screenplay.' }, { status: 500 })
     }
 
     if (extractedText.length < 500) {
