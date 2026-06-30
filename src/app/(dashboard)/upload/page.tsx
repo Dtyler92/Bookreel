@@ -105,7 +105,7 @@ export default function UploadPage() {
   const [showAddPenName, setShowAddPenName] = useState(false)
   const [newPenName, setNewPenName] = useState('')
   const [savingPenName, setSavingPenName] = useState(false)
-  const [userTier, setUserTier] = useState<string>('free')
+  const [userTier, setUserTier] = useState<'free' | 'author' | 'pro' | 'publisher' | 'hobbyist'>('free')
   const [credits, setCredits] = useState<number | undefined>(undefined)
 
   // Fetch user's real name + pen names on mount
@@ -122,7 +122,7 @@ export default function UploadPage() {
       const fullName = profile?.full_name ?? (user.user_metadata?.full_name as string) ?? ''
       setAuthorName(fullName)
       setPenNames(profile?.pen_names ?? [])
-      setUserTier(profile?.subscription_tier ?? 'free')
+      setUserTier((profile?.subscription_tier ?? 'free') as 'free' | 'author' | 'pro' | 'publisher' | 'hobbyist')
       // Fetch credits
       const credRes = await fetch('/api/credits/balance')
       if (credRes.ok) {
