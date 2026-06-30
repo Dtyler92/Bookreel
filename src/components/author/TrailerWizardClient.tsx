@@ -505,9 +505,7 @@ export default function TrailerWizardClient({
   const allCharactersApproved = initialCharacters.length > 0 && approvedCharacterIds.size === initialCharacters.length
 
   const getInitialStep = (): WizardStep => {
-    if (isRegenerate) return 'tier'
-    if (allScenesApproved && allCharactersApproved) return 'images'
-    if (allScenesApproved) return 'images'
+    // Always start at tier — let the user pick quality and go through the full flow
     return 'tier'
   }
 

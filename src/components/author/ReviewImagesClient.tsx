@@ -868,10 +868,11 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
       style={{
         minHeight: '100vh',
         backgroundColor: '#FAFAF7',
-        paddingTop: '128px',
+        paddingTop: wizardMode ? '0' : '128px',
       }}
     >
-      {/* ── Fixed page header (matches screenplay review) ────────────────────── */}
+      {/* ── Fixed page header — hidden in wizard mode (wizard has its own StepBar) */}
+      {!wizardMode && (
       <div
         style={{
           position: 'fixed',
@@ -957,6 +958,7 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
           </span>
         </div>
       </div>
+      )}
 
       {/* ── Main content ─────────────────────────────────────────────────────── */}
       <div className="max-w-[1300px] mx-auto px-4 sm:px-10 pt-8 space-y-12 pb-36">

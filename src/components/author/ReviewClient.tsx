@@ -1046,10 +1046,11 @@ export default function ReviewClient({
       style={{
         minHeight: '100vh',
         backgroundColor: '#FAFAF7',
-        paddingTop: '128px',
+        paddingTop: wizardMode ? '0' : '128px',
       }}
     >
-      {/* ── Fixed page header ────────────────────────────────────────────────── */}
+      {/* ── Fixed page header — hidden in wizard mode (wizard has its own StepBar) */}
+      {!wizardMode && (
       <div
         style={{
           position: 'fixed',
@@ -1171,6 +1172,7 @@ export default function ReviewClient({
           </div>
         </div>
       </div>
+      )}
 
       {/* Regen error banner */}
       {regenError && (
