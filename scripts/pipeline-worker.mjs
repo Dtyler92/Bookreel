@@ -1518,6 +1518,7 @@ async function runPipeline(job) {
 
   let scenesToGenerate = []
   let totalSceneSecs = 0
+  let maxScenes = 4  // used by standard path and referenced after if/else
 
   if (isPremiun) {
     // Walk scenes in order, accumulate duration until budget is spent
@@ -1537,7 +1538,7 @@ async function runPipeline(job) {
     scenesToGenerate.forEach(s => console.log(`[worker]     Scene ${s.scene_number}: ${(s.duration_seconds === 10) ? 10 : 5}s — ${s.title || s.description?.substring(0, 50)}`))
   } else {
     // Standard: flat 4 scenes × 5s
-    let maxScenes = 4
+    maxScenes = 4
     if (TEST_MAX_CLIPS > 0) {
       maxScenes = Math.min(maxScenes, TEST_MAX_CLIPS)
       console.log(`[worker]   ⚠ TEST MODE: capping to ${maxScenes} clips (~${maxScenes * STANDARD_CLIP_SEC}s) to save credits`)
