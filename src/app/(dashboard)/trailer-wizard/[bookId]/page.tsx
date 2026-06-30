@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { GlobalNav } from '@/components/shared/GlobalNav'
 import TrailerWizardClient from '@/components/author/TrailerWizardClient'
 
 export default async function TrailerWizardPage({
@@ -23,6 +24,7 @@ export default async function TrailerWizardPage({
     { data: characters },
     { data: items },
     { data: scenes },
+    { data: profile },
   ] = await Promise.all([
     supabase.from('books').select('*').eq('id', bookId).eq('author_id', user.id).single(),
     supabase.from('trailers').select('id, status').eq('book_id', bookId),
@@ -41,26 +43,31 @@ export default async function TrailerWizardPage({
       .select('*')
       .eq('book_id', bookId)
       .order('scene_number', { ascending: true }),
+    supabase.from('profiles').select('full_name, subscription_tier').eq('id', user.id).single(),
   ])
 
   if (!book) redirect('/dashboard')
 
-  // isRegenerate = author has at least one existing trailer (complete or failed)
   const hasExistingTrailer = (trailers ?? []).some(
     t => t.status === 'complete' || t.status === 'failed'
   )
-  // Latest trailer record for the wizard (keep backward compat)
   const trailer = trailers && trailers.length > 0 ? trailers[trailers.length - 1] : null
 
   return (
-    <TrailerWizardClient
-      book={book}
-      trailer={trailer ?? null}
-      initialCharacters={characters ?? []}
-      initialItems={items ?? []}
-      initialScenes={scenes ?? []}
-      userId={user.id}
-      isRegenerate={hasExistingTrailer}
-    />
+    <>
+      <GlobalNav
+        userName={profile?.full_name ?? user.email ?? ''}
+        userTier={profile?.subscription_tier ?? 'free'}
+      />
+      <TrailerWizardClient
+        book={book}
+        trailer={trailer ?? null}
+        initialCharacters={characters ?? []}
+        initialItems={items ?? []}
+        initialScenes={scenes ?? []}
+        userId={user.id}
+        isRegenerate={hasExistingTrailer}
+      />
+    </>
   )
 }
