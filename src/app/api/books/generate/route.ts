@@ -28,8 +28,8 @@ export async function POST(request: Request) {
 
     const userId = user.id
 
-    const body = await request.json() as { bookId: string; quality?: Quality }
-    const { bookId } = body
+    const body = await request.json() as { bookId: string; quality?: Quality; selectedSceneIds?: string[] }
+    const { bookId, selectedSceneIds } = body
     const quality: Quality = body.quality === 'premium' ? 'premium' : 'standard'
     const creditCost = CREDIT_COST[quality]
 
@@ -147,7 +147,9 @@ export async function POST(request: Request) {
       )
     }
 
-    // Verify all scenes are approved
+    // Scenes approval:
+    // Standard — selectedSceneIds must be provided with exactly 4 IDs; mark only those approved
+    // Premium  — all scenes must already be approved
     const { data: scenes, error: scenesError } = await supabase
       .from('scenes')
       .select('id, scene_number, author_approved')
@@ -155,12 +157,22 @@ export async function POST(request: Request) {
 
     if (scenesError) return Response.json({ error: 'Failed to fetch scenes' }, { status: 500 })
 
-    const unapprovedScenes = (scenes || []).filter((s: { author_approved: boolean }) => !s.author_approved)
-    if (unapprovedScenes.length > 0) {
-      return Response.json(
-        { error: `${unapprovedScenes.length} scene(s) not yet approved. Please review and approve all scenes in the screenplay step before generating.`, unapprovedCount: unapprovedScenes.length },
-        { status: 400 }
-      )
+    if (quality === 'standard') {
+      if (!selectedSceneIds || selectedSceneIds.length !== 4) {
+        return Response.json({ error: 'Please select exactly 4 scenes before generating a Standard trailer.' }, { status: 400 })
+      }
+      // Mark only the selected 4 as approved, unapprove the rest
+      await supabase.from('scenes').update({ author_approved: false }).eq('book_id', bookId)
+      await supabase.from('scenes').update({ author_approved: true }).in('id', selectedSceneIds).eq('book_id', bookId)
+    } else {
+      // Premium: all scenes must be approved
+      const unapprovedScenes = (scenes || []).filter((s: { author_approved: boolean }) => !s.author_approved)
+      if (unapprovedScenes.length > 0) {
+        return Response.json(
+          { error: `${unapprovedScenes.length} scene(s) not yet approved. Please review and approve all scenes before generating.`, unapprovedCount: unapprovedScenes.length },
+          { status: 400 }
+        )
+      }
     }
 
     // Update trailer status to 'pending' and record quality tier
