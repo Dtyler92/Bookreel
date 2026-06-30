@@ -1046,14 +1046,16 @@ export default function ReviewClient({
       style={{
         minHeight: '100vh',
         backgroundColor: '#FAFAF7',
-        paddingTop: '64px',
+        paddingTop: '128px',
       }}
     >
-      {/* ── Sticky page header ───────────────────────────────────────────────── */}
+      {/* ── Fixed page header ────────────────────────────────────────────────── */}
       <div
         style={{
-          position: 'sticky',
+          position: 'fixed',
           top: '64px',
+          left: 0,
+          right: 0,
           zIndex: 40,
           backgroundColor: '#FFFFFF',
           borderBottom: '1px solid #E8E2D5',
