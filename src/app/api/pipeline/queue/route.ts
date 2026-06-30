@@ -77,12 +77,13 @@ export async function POST(request: Request) {
 
   const body = await request.json() as {
     bookId: string
+    trailerId?: string
     status: 'processing' | 'complete' | 'failed'
     videoUrl?: string
     errorMessage?: string
   }
 
-  const { bookId, status, videoUrl, errorMessage } = body
+  const { bookId, trailerId, status, videoUrl, errorMessage } = body
 
   if (!bookId || !status) {
     return Response.json({ error: 'bookId and status required' }, { status: 400 })
@@ -103,10 +104,16 @@ export async function POST(request: Request) {
     update.error_message = errorMessage
   }
 
-  const { error } = await supabase
-    .from('trailers')
-    .update(update)
-    .eq('book_id', bookId)
+  // Update by trailerId if provided (preferred — targets only the active trailer).
+  // Fall back to book_id for backward compat with older worker versions.
+  let query = supabase.from('trailers').update(update)
+  if (trailerId) {
+    query = query.eq('id', trailerId)
+  } else {
+    query = query.eq('book_id', bookId)
+  }
+
+  const { error } = await query
 
   if (error) {
     console.error('[pipeline/queue] Update error:', error)

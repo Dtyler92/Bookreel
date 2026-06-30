@@ -175,32 +175,41 @@ export async function POST(request: Request) {
       }
     }
 
-    // Update trailer status to 'pending' and record quality tier
-    const { error: trailerError } = await supabase
+    // Insert a NEW trailer row so the old trailer (with its video) is preserved.
+    // The pipeline worker picks up by status='pending'; we need the new row's id.
+    const { data: newTrailer, error: insertError } = await supabase
       .from('trailers')
-      .update({ status: 'pending', quality_tier: quality })
-      .eq('id', trailer.id)
+      .insert({
+        book_id: bookId,
+        status: 'pending',
+        quality_tier: quality,
+        images_approved: true,
+        credit_consumed: false,
+        view_count: 0,
+        click_count: 0,
+      })
+      .select('id')
+      .single()
 
-    if (trailerError) {
-      console.error('Trailer update error:', trailerError)
-      return Response.json({ error: 'Failed to update trailer status' }, { status: 500 })
+    if (insertError || !newTrailer) {
+      console.error('Trailer insert error:', insertError)
+      return Response.json({ error: 'Failed to create trailer record' }, { status: 500 })
     }
 
-    // --- Deduct credits (exact amount for this quality tier) ---
+    // --- Deduct credits ---
     if (!sameQualityRetry) {
       await consumeCredits(userId, bookId, quality, creditCost)
       await supabase
         .from('trailers')
         .update({ credit_consumed: true, quality_tier: quality })
-        .eq('id', trailer.id)
+        .eq('id', newTrailer.id)
       console.log(`[generate] Deducted ${creditCost} credits (${quality}) for user ${userId}, book ${bookId}`)
     } else {
       console.log(`[generate] Same-quality retry — no credit deduction for user ${userId}, book ${bookId}`)
     }
 
-    // Pass quality to pipeline worker
     const pipelineQuality = quality === 'premium' ? 'premium' : 'standard'
-    console.log(`[generate] Queued pipeline for bookId=${bookId} quality=${pipelineQuality} — VPS worker will pick up`)
+    console.log(`[generate] Queued pipeline for bookId=${bookId} trailerId=${newTrailer.id} quality=${pipelineQuality}`)
 
     return Response.json({ success: true, message: 'Your trailer is being built!', quality, creditCost })
   } catch (error) {

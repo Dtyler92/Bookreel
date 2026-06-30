@@ -283,11 +283,31 @@ function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, 
 
 // ─── Trailer row (one per trailer) ───────────────────────────────────────────
 
-function TrailerRow({ trailer, index, total }: { trailer: Trailer; index: number; total: number }) {
+function TrailerRow({ trailer, index, total, onDelete }: { trailer: Trailer; index: number; total: number; onDelete: (id: string) => void }) {
   const [hov, setHov] = useState(false)
+  const [delHov, setDelHov] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const isComplete = trailer.status === 'complete' || !!trailer.final_video_url
   const isInProgress = trailer.status === 'pending' || trailer.status === 'processing' || trailer.status === 'generating'
   const isFailed = trailer.status === 'failed'
+
+  const handleDelete = async () => {
+    if (!confirm('Delete this trailer? This cannot be undone.')) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/trailers/${trailer.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        onDelete(trailer.id)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error ?? 'Failed to delete trailer.')
+        setDeleting(false)
+      }
+    } catch {
+      alert('Failed to delete trailer.')
+      setDeleting(false)
+    }
+  }
 
   const label = isComplete ? 'Complete' : isInProgress ? 'In Progress' : isFailed ? 'Failed' : 'Queued'
   const dot = isComplete ? '#16A34A' : isInProgress ? '#D97706' : isFailed ? '#DC2626' : '#D4CDC1'
@@ -388,6 +408,35 @@ function TrailerRow({ trailer, index, total }: { trailer: Trailer; index: number
           ~15–20 min
         </span>
       )}
+
+      {/* Delete button — always shown except while actively processing */}
+      {!isInProgress && (
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          onMouseEnter={() => setDelHov(true)}
+          onMouseLeave={() => setDelHov(false)}
+          title="Delete this trailer"
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 30, height: 30, borderRadius: 6, flexShrink: 0,
+            background: delHov ? '#FEF2F2' : 'transparent',
+            border: `1px solid ${delHov ? '#FECACA' : '#E8E2D5'}`,
+            cursor: deleting ? 'not-allowed' : 'pointer',
+            transition: 'all 150ms ease', opacity: deleting ? 0.5 : 1,
+          }}
+        >
+          {deleting ? (
+            <svg style={{ animation: 'spin 1s linear infinite' }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.5">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={delHov ? '#DC2626' : '#9C9286'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
+            </svg>
+          )}
+        </button>
+      )}
     </div>
   )
 }
@@ -399,6 +448,10 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
 
   // Live trailers array — we update statuses in place as polling fires
   const [liveTrailers, setLiveTrailers] = useState<Trailer[]>(initialTrailers)
+
+  const handleTrailerDeleted = (trailerId: string) => {
+    setLiveTrailers(prev => prev.filter(t => t.id !== trailerId))
+  }
 
   // The in-progress trailer (if any) — newest first
   const inProgressTrailer = liveTrailers.find(t =>
@@ -679,7 +732,7 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {liveTrailers.map((trailer, index) => (
-                <TrailerRow key={trailer.id} trailer={trailer} index={index} total={liveTrailers.length} />
+                <TrailerRow key={trailer.id} trailer={trailer} index={index} total={liveTrailers.length} onDelete={handleTrailerDeleted} />
               ))}
             </div>
           )}

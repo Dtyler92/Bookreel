@@ -176,7 +176,6 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
     console.error(`[worker] Failed to update status for ${bookId}:`, await res.text())
   }
 }
-
 // ── Per-render cost tracking ──────────────────────────────────────────────────
 // fal.ai prices (verified Jun 2026 from each model's page). All generation runs on
 // ONE fal balance, so when it's exhausted, everything stops at once. The ledger logs
@@ -1480,8 +1479,8 @@ async function generateSafeRewrite(sceneDescription, rejectionReason) {
 const activeJobs = new Set()
 
 async function runPipeline(job) {
-  const { bookId, tier, quality = 'standard' } = job
-  console.log(`\n[worker] ▶ Starting pipeline: bookId=${bookId} tier=${tier} quality=${quality}`)
+  const { bookId, trailerId, tier, quality = 'standard' } = job
+  console.log(`\n[worker] ▶ Starting pipeline: bookId=${bookId} trailerId=${trailerId} tier=${tier} quality=${quality}`)
 
   // Select video endpoints + pricing based on quality requested by the user
   //   standard → 720p (Kling 3.0 Turbo via EvoLink / Seedance Fast via fal fallback)
@@ -1496,7 +1495,10 @@ async function runPipeline(job) {
   const engineLabel  = USE_EVOLINK ? 'EvoLink Kling 3.0 Turbo' : 'fal.ai Seedance 2.0'
   console.log(`[worker]   Video: ${engineLabel} ${quality.toUpperCase()} — ${resolution} @ $${perSec}/s${USE_EVOLINK ? ' (native audio included)' : ''}`)
 
-  await updateTrailerStatus(bookId, 'processing')
+  // Helper: update THIS specific trailer's status (not all trailers for the book)
+  const updateStatus = (status, extra = {}) => updateTrailerStatus(bookId, status, { trailerId, ...extra })
+
+  await updateStatus('processing')
 
   // Per-render cost ledger — every billable generation appends to this so we can
   // print a full cost breakdown when the trailer completes.
@@ -1907,7 +1909,7 @@ async function runPipeline(job) {
     }
   }
 
-  await updateTrailerStatus(bookId, 'complete', { videoUrl: finalVideoUrl })
+  await updateStatus('complete', { videoUrl: finalVideoUrl })
 
   // ── TikTok vertical cut (free — ffmpeg crop only, no AI) ─────────────────
   // Crop the center 9:16 portion of the trailer and upload as a separate file.
@@ -2110,7 +2112,7 @@ async function pollLoop() {
         .catch(async (err) => {
           console.error(`[worker] ❌ Pipeline error for ${job.bookId}:`, err.message)
           try {
-            await updateTrailerStatus(job.bookId, 'failed', { errorMessage: err.message })
+            await updateTrailerStatus(job.bookId, 'failed', { trailerId: job.trailerId, errorMessage: err.message })
           } catch (e2) {
             console.error('[worker] Failed to update status to failed:', e2.message)
           }
