@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { GlobalNav } from '@/components/shared/GlobalNav'
+import { getCreditState } from '@/lib/credits'
 import TrailerWizardClient from '@/components/author/TrailerWizardClient'
 
 export default async function TrailerWizardPage({
@@ -53,11 +54,15 @@ export default async function TrailerWizardPage({
   )
   const trailer = trailers && trailers.length > 0 ? trailers[trailers.length - 1] : null
 
+  const creditState = await getCreditState(user.id)
+  const credits = creditState?.credits ?? 0
+
   return (
     <>
       <GlobalNav
         userName={profile?.full_name ?? user.email ?? ''}
         userTier={profile?.subscription_tier ?? 'free'}
+        credits={credits}
       />
       <TrailerWizardClient
         book={book}

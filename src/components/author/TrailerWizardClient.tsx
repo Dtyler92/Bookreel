@@ -693,6 +693,8 @@ export default function TrailerWizardClient({
             initialItems={initialItems}
             userId={userId}
             wizardMode
+            quality={quality}
+            selectedSceneIds={Array.from(selectedSceneIds)}
             onWizardComplete={() => handleGenerate()}
           />
         </div>

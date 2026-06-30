@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { GlobalNav } from '@/components/shared/GlobalNav'
+import { getCreditState } from '@/lib/credits'
 import ReviewImagesClient from '@/components/author/ReviewImagesClient'
 import type { Book, Character, Item, Profile } from '@/types/database'
 
@@ -68,11 +69,15 @@ export default async function ReviewImagesPage({
       ? 'author'
       : 'free'
 
+  const creditState = await getCreditState(user.id)
+  const credits = creditState?.credits ?? 0
+
   return (
     <>
       <GlobalNav
         userName={typedProfile?.full_name ?? undefined}
         userTier={navTier}
+        credits={credits}
       />
       <ReviewImagesClient
         bookId={bookId}

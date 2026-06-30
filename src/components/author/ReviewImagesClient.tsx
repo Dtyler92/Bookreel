@@ -17,6 +17,8 @@ interface Props {
   initialItems: Item[]
   userId?: string
   wizardMode?: boolean
+  quality?: 'standard' | 'premium'
+  selectedSceneIds?: string[]
   onWizardComplete?: () => void
 }
 
@@ -718,7 +720,7 @@ function ItemCard({
 
 // ─── Main ReviewImagesClient ──────────────────────────────────────────────────
 
-export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initialCharacters, initialItems, userId, wizardMode, onWizardComplete }: Props) {
+export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initialCharacters, initialItems, userId, wizardMode, quality, selectedSceneIds, onWizardComplete }: Props) {
   const router = useRouter()
   const [characters, setCharacters] = useState<Character[]>(initialCharacters)
   const [items, setItems] = useState<Item[]>(initialItems)
@@ -835,11 +837,21 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
         body: JSON.stringify({ bookId }),
       })
 
-      // Then: kick off video generation
+      if (wizardMode) {
+        // Wizard handles the actual generate call with correct quality + selectedSceneIds
+        onWizardComplete?.()
+        return
+      }
+
+      // Then: kick off video generation (non-wizard path)
+      const genBody: any = { bookId, ...(userId ? { userId } : {}), quality }
+      if (quality === 'standard' && selectedSceneIds && selectedSceneIds.length === 4) {
+        genBody.selectedSceneIds = selectedSceneIds
+      }
       const res = await fetch('/api/books/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId, ...(userId ? { userId } : {}) }),
+        body: JSON.stringify(genBody),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string; upgradeRequired?: boolean }
@@ -850,11 +862,7 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
         }
         throw new Error(data?.error ?? `Generation failed (${res.status})`)
       }
-      if (wizardMode) {
-        onWizardComplete?.()
-      } else {
-        router.push('/dashboard?generated=1')
-      }
+      router.push('/dashboard?generated=1')
     } catch (err) {
       setContinueError(err instanceof Error ? err.message : 'Failed to start generation.')
       setContinuing(false)

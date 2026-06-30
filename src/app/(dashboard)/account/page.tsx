@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { GlobalNav } from '@/components/shared/GlobalNav'
+import { getCreditState } from '@/lib/credits'
 import AccountSettingsClient from '@/components/author/AccountSettingsClient'
 
 export default async function AccountSettingsPage() {
@@ -18,12 +19,16 @@ export default async function AccountSettingsPage() {
     .eq('id', user.id)
     .single()
 
+  const creditState = await getCreditState(user.id)
+  const credits = creditState?.credits ?? 0
+
   return (
     <>
       <GlobalNav
         userName={profile?.full_name ?? user.email ?? ''}
         userTier={profile?.subscription_tier ?? 'free'}
         authorPhotoUrl={profile?.author_photo_url ?? undefined}
+        credits={credits}
       />
       <AccountSettingsClient
         userId={user.id}

@@ -105,6 +105,8 @@ export default function UploadPage() {
   const [showAddPenName, setShowAddPenName] = useState(false)
   const [newPenName, setNewPenName] = useState('')
   const [savingPenName, setSavingPenName] = useState(false)
+  const [userTier, setUserTier] = useState<string>('free')
+  const [credits, setCredits] = useState<number | undefined>(undefined)
 
   // Fetch user's real name + pen names on mount
   useEffect(() => {
@@ -114,12 +116,19 @@ export default function UploadPage() {
       if (!user) return
       const { data: profile } = await supabase
         .from('profiles')
-        .select('full_name, pen_names')
+        .select('full_name, pen_names, subscription_tier')
         .eq('id', user.id)
         .single()
       const fullName = profile?.full_name ?? (user.user_metadata?.full_name as string) ?? ''
       setAuthorName(fullName)
       setPenNames(profile?.pen_names ?? [])
+      setUserTier(profile?.subscription_tier ?? 'free')
+      // Fetch credits
+      const credRes = await fetch('/api/credits/balance')
+      if (credRes.ok) {
+        const credData = await credRes.json()
+        setCredits(credData.credits ?? 0)
+      }
     }
     fetchProfile()
   }, [])
@@ -315,7 +324,7 @@ export default function UploadPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: '100vh', background: '#FAFAF7' }}>
-      <GlobalNav />
+      <GlobalNav userName={authorName} userTier={userTier} credits={credits} />
 
       {/* Loading Overlay */}
       {uploading && (

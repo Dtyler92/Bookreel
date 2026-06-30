@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { GlobalNav } from '@/components/shared/GlobalNav'
+import { getCreditState } from '@/lib/credits'
 import BookHubClient from '@/components/author/BookHubClient'
 
 export const dynamic = 'force-dynamic'
@@ -65,11 +66,15 @@ export default async function BookHubPage({
     .limit(1)
     .maybeSingle()
 
+  const creditState = await getCreditState(user.id)
+  const credits = creditState?.credits ?? 0
+
   return (
     <>
       <GlobalNav
         userName={profile?.full_name ?? user.email ?? ''}
         userTier={profile?.subscription_tier ?? 'free'}
+        credits={credits}
       />
       <BookHubClient
         book={book}
