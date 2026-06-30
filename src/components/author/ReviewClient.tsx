@@ -996,6 +996,29 @@ export default function ReviewClient({
     setScenes((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)))
   }
 
+  const [regenScreenplay, setRegenScreenplay] = useState(false)
+  const [regenError, setRegenError]           = useState<string | null>(null)
+  const [regenDone, setRegenDone]             = useState(false)
+
+  const handleRegenScreenplay = async () => {
+    if (!confirm('This will replace your current screenplay and character list with a fresh AI-generated version using the latest prompts. All current approvals will be reset. Continue?')) return
+    setRegenScreenplay(true)
+    setRegenError(null)
+    setRegenDone(false)
+    try {
+      const res = await fetch(`/api/books/${bookId}/regenerate-screenplay`, { method: 'POST' })
+      const data = await res.json().catch(() => ({})) as { error?: string; scenes?: number; characters?: number }
+      if (!res.ok) throw new Error(data.error ?? `Failed (${res.status})`)
+      setRegenDone(true)
+      // Reload the page to show fresh scenes/characters
+      setTimeout(() => router.refresh(), 800)
+    } catch (e: any) {
+      setRegenError(e.message ?? 'Something went wrong. Please try again.')
+    } finally {
+      setRegenScreenplay(false)
+    }
+  }
+
   const handleGenerate = async () => {
     if (wizardMode) {
       onWizardComplete?.(
@@ -1097,19 +1120,68 @@ export default function ReviewClient({
             </div>
           </div>
 
-          {/* Right: progress */}
-          <span
-            style={{
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '14px',
-              color: '#8A8278',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {approvedItems} of {totalItems} approved
-          </span>
+          {/* Right: regen button + progress */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <button
+              onClick={handleRegenScreenplay}
+              disabled={regenScreenplay}
+              title="Re-run AI with the latest screenplay prompts — replaces all current scenes and characters"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '7px 14px', borderRadius: 8,
+                background: regenDone ? '#F0FDF4' : '#F4F1EB',
+                border: `1.5px solid ${regenDone ? '#86EFAC' : '#E8E2D5'}`,
+                color: regenDone ? '#15803D' : '#0D0D0B',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: 13, fontWeight: 600, cursor: regenScreenplay ? 'not-allowed' : 'pointer',
+                opacity: regenScreenplay ? 0.6 : 1,
+                transition: 'all 150ms ease',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {regenScreenplay ? (
+                <>
+                  <svg style={{ animation: 'spin 1s linear infinite' }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" /></svg>
+                  Regenerating…
+                </>
+              ) : regenDone ? (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  Done — reloading
+                </>
+              ) : (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                  Regenerate Screenplay
+                </>
+              )}
+            </button>
+            <span
+              style={{
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '14px',
+                color: '#8A8278',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {approvedItems} of {totalItems} approved
+            </span>
+          </div>
         </div>
       </div>
+
+      {/* Regen error banner */}
+      {regenError && (
+        <div style={{ maxWidth: 1300, margin: '0 auto', padding: '0 24px' }}>
+          <div style={{
+            padding: '10px 16px', borderRadius: 8, marginTop: 12,
+            background: '#FEF2F2', border: '1px solid #FECACA',
+            fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#DC2626',
+          }}>
+            {regenError}
+          </div>
+        </div>
+      )}
 
       {/* ── Main content ─────────────────────────────────────────────────────── */}
       <style>{`@media (max-width: 768px) { .br-review-grid { grid-template-columns: 1fr !important; gap: 24px !important; } }`}</style>
