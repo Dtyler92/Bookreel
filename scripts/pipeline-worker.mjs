@@ -1001,7 +1001,7 @@ async function generateVoiceoverBeats(bookTitle, scenes, tone, ledger = null) {
 }
 
 // ── Voiceover audio (ElevenLabs v3 via fal.ai) ───────────────────────────────
-async function generateVoiceoverAudio(script, tmpDir, ledger = null, fileTag = '') {
+async function generateVoiceoverAudio(script, tmpDir, ledger = null, fileTag = '', narratorVoice = null) {
   if (!script || script.trim().length === 0) return null
   console.log(`[worker]   Generating voiceover audio${fileTag ? ` (${fileTag})` : ''}...`)
 
@@ -1014,7 +1014,7 @@ async function generateVoiceoverAudio(script, tmpDir, ledger = null, fileTag = '
     },
     body: JSON.stringify({
       text: script,
-      voice: NARRATOR_VOICE, // 'Daniel' — deep, cinematic. NOTE: must be `voice` (name); voice_id is ignored.
+      voice: narratorVoice || NARRATOR_VOICES.male, // per-book narrator voice (male/female)
       stability: 0.5,
       output_format: 'mp3_44100_128'
     })
@@ -1145,16 +1145,51 @@ async function generateMusicBed(genre, durationSeconds, tmpDir, ledger = null) {
 // ElevenLabs voices via fal.ai. CRITICAL: the eleven-v3 endpoint uses the `voice`
 // NAME param — `voice_id` is silently ignored and falls back to the default (Rachel),
 // which made every character sound like the narrator. These are verified-supported
-// voice names. Narrator = "Daniel" (deep, authoritative); characters get DISTINCT
-// voices so a spoken line clearly reads as the character, never the narrator.
-const NARRATOR_VOICE = 'Daniel'
+// voice names. Narrator voice is chosen per-book based on genre + protagonist gender.
+// Characters get DISTINCT voices so a spoken line clearly reads as the character, never the narrator.
+const NARRATOR_VOICES = {
+  male:   'Daniel',    // deep, cinematic male narrator
+  female: 'Charlotte', // clear, cinematic female narrator
+}
 const CHARACTER_VOICES = {
   deep_male:    'George',    // mature, resonant male — distinct from Daniel
   male:         'Liam',      // younger male
   old_male:     'Bill',      // older male
-  female:       'Charlotte', // clear female (distinct from default Rachel)
-  young_female: 'Alice',     // younger female
+  female:       'Alice',     // female — distinct from Charlotte narrator
+  young_female: 'Matilda',   // younger female
   default:      'Charlie',
+}
+
+// Genres that skew female protagonist / female narrator
+const FEMALE_NARRATOR_GENRES = new Set([
+  'romance', 'women\'s fiction', 'chick lit', 'contemporary romance',
+  'paranormal romance', 'young adult', 'ya', 'cozy mystery',
+])
+
+// Pick narrator voice from book genre + character list.
+// Returns 'Daniel' (male) or 'Charlotte' (female).
+function pickNarratorVoice(genre, characters = []) {
+  const g = (genre || '').toLowerCase().trim()
+
+  // Genre-based default
+  if (FEMALE_NARRATOR_GENRES.has(g)) return NARRATOR_VOICES.female
+
+  // Infer from protagonist gender via characters list —
+  // if the majority of named characters lean female, use female narrator
+  if (characters.length > 0) {
+    const femaleNames = new Set(['she', 'her', 'woman', 'girl', 'lady', 'queen', 'princess', 'witch', 'duchess', 'mrs', 'ms', 'miss'])
+    let femaleScore = 0
+    for (const c of characters) {
+      const desc = ((c.description || '') + ' ' + (c.appearance_notes || '')).toLowerCase()
+      if (femaleNames.has((c.name || '').split(' ')[0]?.toLowerCase())) femaleScore++
+      if (/\b(she|her|woman|girl|female|lady)\b/.test(desc)) femaleScore++
+      if (/\b(he|his|man|boy|male|lord|king|duke|mr)\b/.test(desc)) femaleScore--
+    }
+    if (femaleScore > 0) return NARRATOR_VOICES.female
+  }
+
+  // Default: male narrator
+  return NARRATOR_VOICES.male
 }
 
 function voiceNameFor(voiceKey) {
@@ -1576,6 +1611,11 @@ async function runPipeline(job) {
     console.error('[worker]   Character-line selection failed (non-fatal, narrator-only):', e.message)
   }
 
+  // Pick narrator voice based on book genre + character genders — done here because
+  // characters are now loaded. Used for all narrator TTS calls below.
+  const narratorVoice = pickNarratorVoice(book.genre, characters)
+  console.log(`[worker]   Narrator voice: ${narratorVoice} (genre: ${book.genre || 'unknown'}, ${characters.length} characters)`)
+
   // Narration beats — SPARSE per-scene narrator phrases tied to the scenes we're
   // actually rendering. Each beat is rendered to its own TTS file keyed by scene
   // number, then placed at that scene's timestamp during the mix. Non-fatal.
@@ -1593,7 +1633,7 @@ async function runPipeline(job) {
       for (const b of beats) {
         if (narrationBySceneNumber.has(b.scene_number)) continue
         if (lineSceneNumbers.has(b.scene_number)) continue // belt-and-suspenders: never share a scene with dialogue
-        const path = await generateVoiceoverAudio(b.text, tmpDir, ledger, `beat-s${b.scene_number}`)
+        const path = await generateVoiceoverAudio(b.text, tmpDir, ledger, `beat-s${b.scene_number}`, narratorVoice)
         if (path) narrationBySceneNumber.set(b.scene_number, { text: b.text, path })
       }
     }
