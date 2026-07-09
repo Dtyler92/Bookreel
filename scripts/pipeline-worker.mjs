@@ -452,7 +452,8 @@ async function pollEvolinkTask(taskId, durationSeconds, label, ledger, perSec) {
     const data = await res.json()
     console.log(`[worker]   EvoLink poll ${i+1}: ${data.status} (${data.progress ?? '?'}%)`)
     if (data.status === 'completed') {
-      const videoUrl = Array.isArray(data.results) ? data.results[0] : data.results?.video_url || null
+      // results is an array of objects: [{ url: "https://..." }, ...]
+      const videoUrl = Array.isArray(data.results) ? (data.results[0]?.url || null) : null
       if (!videoUrl) throw new Error('EvoLink returned no video URL in results')
       if (ledger) ledger.add(label, 'evolink', perSec * durationSeconds)
       return videoUrl
@@ -530,7 +531,7 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
         duration: parseInt(duration),
         quality: resolution,
         aspect_ratio: '16:9',
-        generate_audio: true,   // Kling 3.0 native audio — SFX + ambient synced to scene
+        sound: true,   // Kling native audio field (EvoLink Kling uses `sound`, not `generate_audio`)
       })
     })
     if (!submitRes.ok) {
