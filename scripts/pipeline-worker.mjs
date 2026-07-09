@@ -1749,8 +1749,16 @@ async function runPipeline(job) {
         ? `${scene.description}, full character portrait, face directly toward camera, front-facing headshot, both eyes clearly visible, symmetrical framing, neutral expression, sharp facial detail, cinematic portrait lighting, full face in frame`
         : scene.description
 
-      // Generate image and upload to Supabase (so URL doesn't expire)
-      let imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger, sceneCharRefs)
+      // Generate image — reuse existing scene image if already generated,
+      // only call fal.ai if there isn't one (saves credits on regenerate).
+      // For lip-sync scenes we always need a fresh front-facing portrait.
+      let imageUrl
+      if (!willLipSync && scene.image_url) {
+        imageUrl = scene.image_url
+        console.log(`[worker]   Scene ${scene.scene_number}: reusing existing image`)
+      } else {
+        imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger, sceneCharRefs)
+      }
 
       // Save first scene image as book cover if no cover is set
       if (scene.scene_number === scenesToGenerate[0].scene_number && !book.cover_image_url) {
