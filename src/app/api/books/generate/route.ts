@@ -94,21 +94,19 @@ export async function POST(request: Request) {
     const modelConfig = getVideoConfig(tier as 'standard' | 'premium')
     console.log(`[generate] quality=${quality} cost=${creditCost}cr tier="${tier}" config:`, modelConfig)
 
-    // Verify images have been approved before generating video
-    const { data: trailer, error: trailerFetchError } = await supabase
+    // Verify images have been approved before generating video.
+    // If no trailer record exists (e.g. author deleted all previous trailers),
+    // skip the images_approved flag check — character/item approval is verified
+    // individually below, which is the real gate.
+    const { data: trailer } = await supabase
       .from('trailers')
       .select('id, images_approved')
       .eq('book_id', bookId)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
-    if (trailerFetchError || !trailer) {
-      console.error('Trailer fetch error:', trailerFetchError)
-      return Response.json({ error: 'No trailer record found. Please complete the image review step first.', requiresImageApproval: true }, { status: 400 })
-    }
-
-    if (!trailer.images_approved) {
+    if (trailer && !trailer.images_approved) {
       return Response.json(
         { error: 'Character and item images must be approved before generating your trailer', requiresImageApproval: true },
         { status: 400 }
