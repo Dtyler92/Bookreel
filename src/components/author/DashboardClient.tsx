@@ -553,102 +553,99 @@ function BookCard({
   const renderCover = () => {
     if (isGenerating) {
       return (
-        /* ── Generating State: warm editorial light background ── */
-        <div style={{
-          width: '100%',
-          height: '100%',
-          background: 'linear-gradient(145deg, #F4F1EB 0%, #EDE9E0 50%, #E8E2D5 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column',
-          gap: 12,
-        }}>
-          <FilmFrames />
-          <span style={{
-            fontFamily: 'var(--font-playfair), serif',
-            fontStyle: 'italic',
-            fontSize: 14,
-            color: '#8A8278',
-            textAlign: 'center',
-            padding: '0 16px',
-            lineHeight: 1.4,
+        /* ── Generating State: cover behind, overlay on top ── */
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          {coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={coverUrl} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <div style={{ width: '100%', height: '100%', background: 'linear-gradient(145deg, #F4F1EB 0%, #EDE9E0 50%, #E8E2D5 100%)' }} />
+          )}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexDirection: 'column', gap: 12,
           }}>
-            Crafting your trailer…
-          </span>
-          <span style={{
-            fontFamily: 'var(--font-inter), sans-serif',
-            fontSize: 11,
-            color: '#B0A99E',
-            textAlign: 'center',
-          }}>
-            Usually ready in 15–20 min
-          </span>
+            <FilmFrames />
+            <span style={{
+              fontFamily: 'var(--font-playfair), serif',
+              fontStyle: 'italic', fontSize: 14,
+              color: 'rgba(255,255,255,0.9)', textAlign: 'center', padding: '0 16px', lineHeight: 1.4,
+            }}>
+              Crafting your trailer…
+            </span>
+            <span style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 11, color: 'rgba(255,255,255,0.6)', textAlign: 'center',
+            }}>
+              Usually ready in 15–20 min
+            </span>
+          </div>
         </div>
       )
     }
 
     if (isFailed) {
       return (
-        /* ── Failed State ── */
-        <div style={{
-          width: '100%',
-          height: '100%',
-          background: 'linear-gradient(145deg, #F4F1EB 0%, #EDE9E0 50%, #E8E2D5 100%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column',
-          gap: 10,
-        }}>
-          <span style={{ fontSize: 22, color: '#C8402F', lineHeight: 1 }}>⚠</span>
-          <span style={{
-            fontFamily: 'var(--font-inter), sans-serif',
-            fontSize: 14,
-            fontWeight: 500,
-            color: '#C8402F',
-            textAlign: 'center',
-            padding: '0 12px',
+        /* ── Failed State: cover behind, overlay on top ── */
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+          {/* Cover image or gradient fallback */}
+          {coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={coverUrl} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <div style={{ width: '100%', height: '100%', background: 'linear-gradient(145deg, #C8402F 0%, #8A1C10 100%)' }} />
+          )}
+          {/* Dark overlay + failed message */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'rgba(0,0,0,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexDirection: 'column', gap: 10,
           }}>
-            Generation failed
-          </span>
-          <span style={{
-            fontFamily: 'var(--font-inter), sans-serif',
-            fontSize: 11,
-            color: '#8A8278',
-          }}>
-            Please try again
-          </span>
-          {/* Retry button — stops link propagation */}
-          <button
-            onClick={async (e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              setTrailerStatus('generating')
-              try {
-                await fetch(`/api/books/${book.id}/retry-trailer`, { method: 'POST' })
-              } catch (_) { /* ignore */ }
-            }}
-            onMouseEnter={() => setRetryHover(true)}
-            onMouseLeave={() => setRetryHover(false)}
-            style={{
-              marginTop: 4,
-              background: retryHover ? '#C8402F' : 'transparent',
-              border: '1.5px solid #C8402F',
-              borderRadius: '6px',
-              padding: '5px 14px',
+            <span style={{ fontSize: 22, color: '#FCA5A5', lineHeight: 1 }}>⚠</span>
+            <span style={{
               fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: retryHover ? '#FFFFFF' : '#C8402F',
-              cursor: 'pointer',
-              transition: 'background 150ms ease, color 150ms ease',
-              letterSpacing: '0.02em',
-              minHeight: '44px',
-            }}
-          >
-            Retry
-          </button>
+              fontSize: 14, fontWeight: 600, color: '#FCA5A5',
+              textAlign: 'center', padding: '0 12px',
+            }}>
+              Generation failed
+            </span>
+            <span style={{
+              fontFamily: 'var(--font-inter), sans-serif',
+              fontSize: 11, color: 'rgba(255,255,255,0.7)',
+            }}>
+              Please try again
+            </span>
+            <button
+              onClick={async (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setTrailerStatus('generating')
+                try {
+                  await fetch(`/api/books/${book.id}/retry-trailer`, { method: 'POST' })
+                } catch (_) { /* ignore */ }
+              }}
+              onMouseEnter={() => setRetryHover(true)}
+              onMouseLeave={() => setRetryHover(false)}
+              style={{
+                marginTop: 4,
+                background: retryHover ? '#C8402F' : 'transparent',
+                border: '1.5px solid #FCA5A5',
+                borderRadius: '6px',
+                padding: '5px 14px',
+                fontFamily: 'var(--font-inter), sans-serif',
+                fontSize: '12px', fontWeight: 600,
+                color: retryHover ? '#FFFFFF' : '#FCA5A5',
+                cursor: 'pointer',
+                transition: 'background 150ms ease, color 150ms ease',
+                letterSpacing: '0.02em', minHeight: '44px',
+              }}
+            >
+              Retry
+            </button>
+          </div>
         </div>
       )
     }
