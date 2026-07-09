@@ -531,7 +531,7 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
         duration: parseInt(duration),
         quality: resolution,
         aspect_ratio: '16:9',
-        sound: true,   // Kling native audio field (EvoLink Kling uses `sound`, not `generate_audio`)
+        sound: 'true',   // Kling native audio — must be string "true" not boolean
       })
     })
     if (!submitRes.ok) {
