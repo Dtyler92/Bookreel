@@ -560,13 +560,30 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
     + (suppressTalking ? ', subject is silent and still, mouth closed, no talking' : '')
 
   if (USE_EVOLINK) {
-    // Seedance 2.0 via EvoLink — image-to-video (~54% cheaper than fal.ai)
     const evolinkModel = resolution === '1080p'
       ? 'seedance-2.0-image-to-video'
       : 'seedance-2.0-fast-image-to-video'
     const evolinkPerSec = resolution === '1080p'
       ? PRICING.evolink_seedance_1080p
       : PRICING.evolink_seedance_720p
+
+    // EvoLink cannot reliably reach Supabase storage URLs — convert to base64 data URI
+    // so the image is embedded directly in the request instead of fetched remotely.
+    let safeImageUrl = imageUrl
+    try {
+      const imgFetch = await fetch(imageUrl)
+      if (imgFetch.ok) {
+        const buf = await imgFetch.arrayBuffer()
+        const mime = imgFetch.headers.get('content-type') || 'image/jpeg'
+        safeImageUrl = `data:${mime};base64,` + Buffer.from(buf).toString('base64')
+        console.log(`[worker]   Image converted to base64 (${Math.round(buf.byteLength / 1024)}KB)`)
+      } else {
+        console.warn(`[worker]   Image fetch failed ${imgFetch.status}, using URL directly`)
+      }
+    } catch (imgErr) {
+      console.warn(`[worker]   Image fetch error (${imgErr.message}), using URL directly`)
+    }
+
     console.log(`[worker]   Submitting to EvoLink Seedance 2.0 (${evolinkModel}, ${resolution}, ${duration}s)`)
     const submitRes = await fetch(`${EVOLINK_BASE}/videos/generations`, {
       method: 'POST',
@@ -574,7 +591,7 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
       body: JSON.stringify({
         model: evolinkModel,
         prompt: safePrompt,
-        image_url: imageUrl,
+        image_url: safeImageUrl,
         duration: parseInt(duration),
         quality: resolution,
         aspect_ratio: '16:9',
