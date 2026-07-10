@@ -165,7 +165,7 @@ export default function SignupPage() {
           letterSpacing: '0.04em',
           marginBottom: '12px',
         }}>
-          ✦ Join 100+ indie authors
+          ✦ Bring your book to life
         </p>
 
         {/* Heading */}
