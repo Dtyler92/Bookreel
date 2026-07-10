@@ -215,18 +215,19 @@ function RegenerateButton({ onClick, loading }: { onClick: () => void; loading: 
       style={{
         background: loading ? '#F4F1EB' : 'transparent',
         border: `1px solid ${border}`,
-        borderRadius: 6, padding: '4px 9px', cursor: loading ? 'not-allowed' : 'pointer',
-        fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 600,
-        color: loading ? muted : red,
-        display: 'inline-flex', alignItems: 'center', gap: 4,
+        borderRadius: 6, padding: '4px 10px', cursor: loading ? 'not-allowed' : 'pointer',
+        fontFamily: 'var(--font-inter), sans-serif',
+        fontSize: 11, fontWeight: 600, color: loading ? muted : red,
+        display: 'inline-flex', alignItems: 'center', gap: 5,
         transition: 'all 150ms', flexShrink: 0, opacity: loading ? 0.6 : 1,
+        whiteSpace: 'nowrap',
       }}
     >
       {loading
-        ? <span style={{ display: 'inline-block', width: 10, height: 10, border: `1.5px solid ${muted}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-        : '↺'
+        ? <span style={{ display: 'inline-block', width: 10, height: 10, border: `1.5px solid ${muted}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+        : <span style={{ fontSize: 13, lineHeight: 1 }}>↺</span>
       }
-      {loading ? '' : 'Redo'}
+      {loading ? 'Redoing…' : 'Redo'}
     </button>
   )
 }
