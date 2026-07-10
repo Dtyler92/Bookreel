@@ -1054,14 +1054,8 @@ export default function ReviewClient({
         characters.filter(c => c.author_approved).map(c => c.id),
       )
     } else {
-      setGenerating(true)
-      setGenerateError(null)
-      try {
-        router.push(`/review-images/${bookId}`)
-      } catch (err) {
-        setGenerateError(err instanceof Error ? err.message : 'Failed to navigate.')
-        setGenerating(false)
-      }
+      // Non-wizard: just go back to Book Hub — don't advance to next step
+      router.push(`/book/${bookId}`)
     }
   }
 
@@ -1559,7 +1553,7 @@ export default function ReviewClient({
               transition: 'background-color 200ms ease, color 200ms ease, opacity 200ms ease',
             }}
           >
-            {wizardMode ? 'Continue to Image Review →' : generating ? 'Opening…' : 'Continue to Visual Review →'}
+            {wizardMode ? 'Continue to Image Review →' : generating ? 'Saving…' : '← Back to Book Hub'}
           </button>
           <span
             style={{

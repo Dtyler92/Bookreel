@@ -843,26 +843,8 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
         return
       }
 
-      // Then: kick off video generation (non-wizard path)
-      const genBody: any = { bookId, ...(userId ? { userId } : {}), quality }
-      if (quality === 'standard' && selectedSceneIds && selectedSceneIds.length === 4) {
-        genBody.selectedSceneIds = selectedSceneIds
-      }
-      const res = await fetch('/api/books/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(genBody),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { error?: string; upgradeRequired?: boolean }
-        if (res.status === 403 && data.upgradeRequired) {
-          setShowUpgradeModal(true)
-          setContinuing(false)
-          return
-        }
-        throw new Error(data?.error ?? `Generation failed (${res.status})`)
-      }
-      router.push('/dashboard?generated=1')
+      // Non-wizard: just go back to Book Hub — trailer generation is started from there
+      router.push(`/book/${bookId}`)
     } catch (err) {
       setContinueError(err instanceof Error ? err.message : 'Failed to start generation.')
       setContinuing(false)
@@ -1143,10 +1125,10 @@ export default function ReviewImagesClient({ bookId, bookTitle, bookGenre, initi
               {continuing ? (
                 <span className="flex items-center gap-2">
                   <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Starting…
+                  Saving…
                 </span>
               ) : (
-                wizardMode ? 'Generate My Trailer →' : 'Continue to Generation →'
+                wizardMode ? 'Generate My Trailer →' : '← Back to Book Hub'
               )}
             </button>
           </div>
