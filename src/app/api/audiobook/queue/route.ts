@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 
   const { data: pendingJobs, error } = await supabase
     .from('audiobooks')
-    .select('id, book_id, narrator_voice, segments_json, word_count, status, processing_started_at, parse_started_at, created_at, tts_model')
+    .select('id, book_id, narrator_voice, segments_json, word_count, status, processing_started_at, parse_started_at, created_at')
     .or(
       `status.eq.pending,` +
       `and(status.eq.processing,processing_started_at.lt.${thirtyMinutesAgo}),` +
@@ -105,7 +105,7 @@ export async function GET(request: Request) {
       narratorVoice: job.narrator_voice,
       segmentsJson:  job.segments_json,
       wordCount:     job.word_count,
-      ttsModel:      job.tts_model || 'eleven_turbo_v2_5',
+      ttsModel:      'eleven_turbo_v2_5',
       jobType:       'generate' as const,
     }
   })
