@@ -148,12 +148,15 @@ interface ModuleCardProps {
   ctaLabel?: string
   ctaHref?: string
   onCtaClick?: () => void
+  cta2Label?: string
+  onCta2Click?: () => void
   cardHref?: string
 }
 
-function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, onCtaClick, cardHref }: ModuleCardProps) {
+function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, onCtaClick, cta2Label, onCta2Click, cardHref }: ModuleCardProps) {
   const [hovered, setHovered] = useState(false)
   const [ctaHov, setCtaHov] = useState(false)
+  const [cta2Hov, setCta2Hov] = useState(false)
   const locked = state === 'locked'
 
   const stateColors = {
@@ -247,7 +250,7 @@ function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, 
 
         {/* CTA */}
         {ctaLabel && !locked && (
-          <div style={{ marginTop: 'auto', paddingTop: 4 }}>
+          <div style={{ marginTop: 'auto', paddingTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {ctaHref ? (
               <Link
                 href={ctaHref}
@@ -289,6 +292,26 @@ function ModuleCard({ icon, title, description, state, meta, ctaLabel, ctaHref, 
                 </svg>
               </button>
             ) : null}
+
+            {/* Secondary CTA (e.g. "Sell Book" next to "View Audiobook") */}
+            {cta2Label && onCta2Click && (
+              <button
+                onClick={onCta2Click}
+                onMouseEnter={() => setCta2Hov(true)}
+                onMouseLeave={() => setCta2Hov(false)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  fontFamily: 'var(--font-inter), sans-serif', letterSpacing: '0.01em',
+                  cursor: 'pointer', transition: 'all 150ms ease',
+                  background: cta2Hov ? '#15803D' : '#F0FDF4',
+                  color: cta2Hov ? '#FFFFFF' : '#15803D',
+                  border: `1.5px solid ${cta2Hov ? '#15803D' : '#BBF7D0'}`,
+                }}
+              >
+                💰 {cta2Label}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -517,6 +540,7 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
       label: arr.length === 1 ? 'Social Clip' : `Clip v${i + 1}`,
     }))
   const [showClipsModal, setShowClipsModal] = useState(false)
+  const [showSellModal, setShowSellModal] = useState(false)
   const [deletingClip, setDeletingClip] = useState<string | null>(null)
 
   const handleDeleteClip = async (trailerId: string) => {
@@ -657,6 +681,8 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
       ctaLabel: hasAudiobook ? 'View Audiobook' : audiobookInProgress ? 'View Audiobook Progress' : 'Create Audiobook',
       ctaHref: hasAudiobook ? `/listen/${book.id}` : `/audiobook/${book.id}`,
       onCtaClick: undefined,
+      cta2Label: hasAudiobook ? 'Sell Book' : undefined,
+      onCta2Click: hasAudiobook ? () => setShowSellModal(true) : undefined,
     },
     (() => {
       const clipCount = allTiktokClips.length
@@ -979,119 +1005,6 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
 
       </main>
 
-      {/* ── Sell Audiobook Panel ── */}
-      {hasAudiobook && audiobook && (
-        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px 32px' }}>
-          <div style={{
-            background: '#FFFFFF', border: '1px solid #E8E2D5',
-            borderLeft: '3px solid #C8402F', borderRadius: 12, padding: '24px 28px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-              <div>
-                <h3 style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: 18, color: '#0D0D0B', margin: '0 0 4px' }}>
-                  💰 Sell on BookReel
-                </h3>
-                <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#8A8278', margin: 0 }}>
-                  {listingForSale
-                    ? `Your audiobook is listed at $${listingPrice} · `
-                    : 'List your audiobook for sale — readers buy once, download forever. '}
-                  {listingForSale && (
-                    <a href={`/store/${book.id}`} target="_blank" rel="noopener noreferrer"
-                      style={{ color: '#C8402F', textDecoration: 'none', fontWeight: 600 }}>
-                      View store page ↗
-                    </a>
-                  )}
-                </p>
-              </div>
-
-              {/* Toggle */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                {listingSaved && <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#16A34A', fontWeight: 600 }}>✓ Saved</span>}
-                <button
-                  onClick={() => handleListingSave(!listingForSale)}
-                  disabled={listingSaving}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 8,
-                    background: listingForSale ? '#F0FDF4' : '#F4F1EB',
-                    border: `1.5px solid ${listingForSale ? '#BBF7D0' : '#E8E2D5'}`,
-                    borderRadius: 8, padding: '8px 16px', cursor: listingSaving ? 'not-allowed' : 'pointer',
-                    fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, fontWeight: 600,
-                    color: listingForSale ? '#15803D' : '#0D0D0B',
-                    opacity: listingSaving ? 0.7 : 1,
-                  }}
-                >
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: listingForSale ? '#16A34A' : '#D4CDC1', display: 'inline-block' }} />
-                  {listingSaving ? 'Saving…' : listingForSale ? 'Listed for sale' : 'Not listed'}
-                </button>
-              </div>
-            </div>
-
-            {/* Price editor */}
-            <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#8A8278' }}>Price:</span>
-              {listingPriceEditing ? (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 2, border: '1px solid #C8402F', borderRadius: 8, overflow: 'hidden', background: '#FFFDF9' }}>
-                    <span style={{ padding: '7px 8px 7px 12px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, color: '#8A8278' }}>$</span>
-                    <input
-                      type="number"
-                      min="0.99" max="999" step="0.01"
-                      value={listingPrice}
-                      onChange={e => setListingPrice(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleListingSave(listingForSale); if (e.key === 'Escape') setListingPriceEditing(false) }}
-                      autoFocus
-                      style={{ border: 'none', outline: 'none', background: 'transparent', width: 72, fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, color: '#0D0D0B', padding: '7px 12px 7px 0' }}
-                    />
-                  </div>
-                  <button onClick={() => handleListingSave(listingForSale)} disabled={listingSaving}
-                    style={{ background: '#C8402F', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    Save price
-                  </button>
-                  <button onClick={() => setListingPriceEditing(false)}
-                    style={{ background: 'none', border: '1px solid #E8E2D5', borderRadius: 8, padding: '7px 12px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278', cursor: 'pointer' }}>
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 16, fontWeight: 700, color: '#0D0D0B' }}>${listingPrice}</span>
-                  <button onClick={() => setListingPriceEditing(true)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278', textDecoration: 'underline', padding: 0 }}>
-                    Edit price
-                  </button>
-                </>
-              )}
-              <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, color: '#8A8278' }}>
-                · BookReel takes 15% · You keep 85%
-              </span>
-            </div>
-
-            {listingError && (
-              <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#DC2626' }}>⚠ {listingError}</p>
-            )}
-
-            {/* Download links for author */}
-            {(audiobook.m4b_url || audiobook.mp3_url) && (
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #F0EBE3', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278', alignSelf: 'center' }}>Your files:</span>
-                {audiobook.m4b_url && (
-                  <a href={audiobook.m4b_url} download target="_blank" rel="noopener noreferrer"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F4F1EB', border: '1px solid #E8E2D5', borderRadius: 7, padding: '5px 12px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600, color: '#0D0D0B', textDecoration: 'none' }}>
-                    ↓ M4B (Apple Books)
-                  </a>
-                )}
-                {audiobook.mp3_url && (
-                  <a href={audiobook.mp3_url} download target="_blank" rel="noopener noreferrer"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F4F1EB', border: '1px solid #E8E2D5', borderRadius: 7, padding: '5px 12px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600, color: '#0D0D0B', textDecoration: 'none' }}>
-                    ↓ MP3
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* ── Social Media Clips Modal ── */}
       {showClipsModal && (
         <div
@@ -1196,6 +1109,158 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
             <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, color: '#8A8278', marginTop: 20, textAlign: 'center' }}>
               A new clip is generated automatically with each trailer.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Sell Book Modal ── */}
+      {showSellModal && hasAudiobook && audiobook && (
+        <div
+          onClick={() => setShowSellModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(13,13,11,0.5)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#FFFFFF', borderRadius: 16, padding: '32px',
+              maxWidth: 500, width: '100%',
+              boxShadow: '0 24px 64px rgba(13,13,11,0.18)',
+              maxHeight: '90vh', overflowY: 'auto',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 24 }}>
+              <div>
+                <h2 style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: 22, color: '#0D0D0B', margin: '0 0 6px' }}>
+                  💰 Sell on BookReel
+                </h2>
+                <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#8A8278', margin: 0 }}>
+                  Readers buy once and download forever. You keep 85%.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSellModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8A8278', fontSize: 20, lineHeight: 1, padding: 4, flexShrink: 0 }}
+              >✕</button>
+            </div>
+
+            {/* Listing toggle */}
+            <div style={{ background: '#F4F1EB', borderRadius: 10, padding: '16px 20px', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, fontWeight: 600, color: '#0D0D0B', marginBottom: 2 }}>
+                    Listing status
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278' }}>
+                    {listingForSale ? 'Your audiobook is live on the store' : 'Not visible to readers yet'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {listingSaved && <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#16A34A', fontWeight: 600 }}>✓ Saved</span>}
+                  <button
+                    onClick={() => handleListingSave(!listingForSale)}
+                    disabled={listingSaving}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      background: listingForSale ? '#F0FDF4' : '#FFFFFF',
+                      border: `1.5px solid ${listingForSale ? '#BBF7D0' : '#E8E2D5'}`,
+                      borderRadius: 8, padding: '8px 16px',
+                      cursor: listingSaving ? 'not-allowed' : 'pointer',
+                      fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, fontWeight: 600,
+                      color: listingForSale ? '#15803D' : '#0D0D0B',
+                      opacity: listingSaving ? 0.7 : 1,
+                    }}
+                  >
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: listingForSale ? '#16A34A' : '#D4CDC1', display: 'inline-block', flexShrink: 0 }} />
+                    {listingSaving ? 'Saving…' : listingForSale ? 'Listed for sale' : 'Not listed'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Price editor */}
+            <div style={{ background: '#F4F1EB', borderRadius: 10, padding: '16px 20px', marginBottom: 16 }}>
+              <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, fontWeight: 600, color: '#0D0D0B', marginBottom: 12 }}>
+                Price
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {listingPriceEditing ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 2, border: '1px solid #C8402F', borderRadius: 8, overflow: 'hidden', background: '#FFFDF9' }}>
+                      <span style={{ padding: '7px 8px 7px 12px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, color: '#8A8278' }}>$</span>
+                      <input
+                        type="number" min="0.99" max="999" step="0.01"
+                        value={listingPrice}
+                        onChange={e => setListingPrice(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleListingSave(listingForSale); if (e.key === 'Escape') setListingPriceEditing(false) }}
+                        autoFocus
+                        style={{ border: 'none', outline: 'none', background: 'transparent', width: 80, fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, color: '#0D0D0B', padding: '7px 12px 7px 0' }}
+                      />
+                    </div>
+                    <button onClick={() => handleListingSave(listingForSale)} disabled={listingSaving}
+                      style={{ background: '#C8402F', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      Save price
+                    </button>
+                    <button onClick={() => setListingPriceEditing(false)}
+                      style={{ background: 'none', border: '1px solid #E8E2D5', borderRadius: 8, padding: '8px 12px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#8A8278', cursor: 'pointer' }}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 22, fontWeight: 700, color: '#0D0D0B' }}>${listingPrice}</span>
+                    <button onClick={() => setListingPriceEditing(true)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#8A8278', textDecoration: 'underline', padding: 0 }}>
+                      Edit
+                    </button>
+                  </>
+                )}
+              </div>
+              <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, color: '#8A8278', margin: '8px 0 0' }}>
+                BookReel takes 15% · You keep 85% · Readers get M4B + MP3 forever
+              </p>
+            </div>
+
+            {listingError && (
+              <p style={{ margin: '0 0 12px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#DC2626' }}>⚠ {listingError}</p>
+            )}
+
+            {/* Store link */}
+            {listingForSale && (
+              <a href={`/store/${book.id}`} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: '12px 16px', textDecoration: 'none', marginBottom: 16 }}>
+                <span style={{ fontSize: 16 }}>🔗</span>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, fontWeight: 600, color: '#15803D' }}>View your store page ↗</div>
+                  <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, color: '#8A8278' }}>Share this link with readers</div>
+                </div>
+              </a>
+            )}
+
+            {/* Download links for author */}
+            {(audiobook.m4b_url || audiobook.mp3_url) && (
+              <div style={{ borderTop: '1px solid #E8E2D5', paddingTop: 16 }}>
+                <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278', marginBottom: 10, fontWeight: 600 }}>Your files</div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {audiobook.m4b_url && (
+                    <a href={audiobook.m4b_url} download target="_blank" rel="noopener noreferrer"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F4F1EB', border: '1px solid #E8E2D5', borderRadius: 7, padding: '7px 14px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600, color: '#0D0D0B', textDecoration: 'none' }}>
+                      ↓ M4B (Apple Books)
+                    </a>
+                  )}
+                  {audiobook.mp3_url && (
+                    <a href={audiobook.mp3_url} download target="_blank" rel="noopener noreferrer"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F4F1EB', border: '1px solid #E8E2D5', borderRadius: 7, padding: '7px 14px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600, color: '#0D0D0B', textDecoration: 'none' }}>
+                      ↓ MP3
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
