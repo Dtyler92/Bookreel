@@ -183,23 +183,14 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
 const PRICING = {
   flux_image_ultra: 0.06,   // flux-pro/v1.1-ultra — per image (scene gen + char refs)
   // ── Video per-second rates ────────────────────────────────────────────────
-  // EvoLink.ai Kling 3.0 (USE_EVOLINK=true, default)
-  // Standard tier  → Kling 3.0 Turbo  @ $0.106/s (native audio included)
-  // Premium tier   → Kling 3.0 Motion @ $0.121/s (native audio included, higher quality)
-  evolink_kling_turbo:  0.106,   // kling-v3-turbo-image-to-video  — standard (720p)
-  evolink_kling_motion: 0.121,   // kling-v3-motion-image-to-video — premium  (1080p)
+  // EvoLink.ai Seedance 2.0 (USE_EVOLINK=true, default)
+  evolink_seedance_720p:  0.043,   // seedance-2.0-fast-image-to-video (720p)
+  evolink_seedance_1080p: 0.093,   // seedance-2.0-image-to-video (1080p)
   // fal.ai Seedance 2.0 (USE_EVOLINK=false fallback)
   fal_seedance: 0.093,   // seedance-2.0 per-second (both tiers)
-  // Seedance per-second price is also resolved at runtime in SEEDANCE_PER_SEC above
-  tts_per_1k_char: 0.10,    // elevenlabs eleven-v3 — per 1000 chars
-  music_bed: 0.015,         // stable-audio — approx (open model, compute-second)
-  // Alias keys used by newer billing paths (prevents NaN in ledger)
-  evolink_kling_720p_audio:  0.106,   // same as evolink_kling_turbo
-  evolink_kling_1080p_audio: 0.121,   // same as evolink_kling_motion
-  evolink_seedance_720p:     0.093,   // same as fal_seedance
-  lipsync_per_sec:           0.05,    // $3/min = $0.05/s (sync-lipsync v2)
-  heygen_avatar_creation: 1.00,   // one-time per character
-  heygen_video_720p: 0.50,        // per 10s clip at 720p ($0.05/sec)
+  lipsync_per_sec: 0.05,    // $3/min = $0.05/s (sync-lipsync v2)
+  heygen_avatar_creation: 1.00,   // one-time per character (kept for reference)
+  heygen_video_720p: 0.50,        // per 10s clip at 720p (kept for reference)
 }
 // Rough Claude Sonnet token prices (script/line-selection LLM, billed to Anthropic/
 // OpenRouter — a SEPARATE balance from fal, tracked here for full per-render visibility).
@@ -523,35 +514,36 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
     + (suppressTalking ? ', subject is silent and still, mouth closed, no talking' : '')
 
   if (USE_EVOLINK) {
-    // Kling 3.0 Turbo via EvoLink — image-to-video with native audio
-    const evolinkModel = 'kling-v3-turbo-image-to-video'
+    // Seedance 2.0 via EvoLink — image-to-video (~54% cheaper than fal.ai)
+    const evolinkModel = resolution === '1080p'
+      ? 'seedance-2.0-image-to-video'
+      : 'seedance-2.0-fast-image-to-video'
     const evolinkPerSec = resolution === '1080p'
-      ? PRICING.evolink_kling_1080p_audio
-      : PRICING.evolink_kling_720p_audio
-    console.log(`[worker]   Submitting to EvoLink Kling 3.0 Turbo (${resolution}, ${duration}s, native audio)`)
+      ? PRICING.evolink_seedance_1080p
+      : PRICING.evolink_seedance_720p
+    console.log(`[worker]   Submitting to EvoLink Seedance 2.0 (${evolinkModel}, ${resolution}, ${duration}s)`)
     const submitRes = await fetch(`${EVOLINK_BASE}/videos/generations`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${EVOLINK_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: evolinkModel,
         prompt: safePrompt,
-        image_start: imageUrl,
+        image_url: imageUrl,
         duration: parseInt(duration),
         quality: resolution,
         aspect_ratio: '16:9',
-        sound: 'true',   // Kling native audio — must be string "true" not boolean
       })
     })
     if (!submitRes.ok) {
       const errText = await submitRes.text()
-      const err = new Error(`EvoLink Kling i2v submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
+      const err = new Error(`EvoLink Seedance i2v submit failed ${submitRes.status}: ${errText.substring(0, 200)}`)
       if (submitRes.status === 429) err.isRateLimit = true
       throw err
     }
     const submitData = await submitRes.json()
     const taskId = submitData.id
-    console.log(`[worker]   EvoLink Kling 3.0 task: ${taskId}`)
-    return pollEvolinkTask(taskId, Number(duration), `video clip ${duration}s (Kling 3.0 Turbo ${resolution} + audio)`, ledger, evolinkPerSec)
+    console.log(`[worker]   EvoLink Seedance 2.0 task: ${taskId}`)
+    return pollEvolinkTask(taskId, Number(duration), `video clip ${duration}s (Seedance 2.0 ${resolution})`, ledger, evolinkPerSec)
   }
 
   // fal.ai path (USE_EVOLINK=false)
@@ -968,7 +960,11 @@ async function generateVoiceoverBeats(bookTitle, scenes, tone, ledger = null, sc
       `Return ONLY a JSON array, no markdown, each item: {"scene_number": <number>, "text": "<narration>"}.`
   } else {
     // MODE: Generate sparse beats from scratch (no screenplay voiceover available)
-    const beatCount = Math.max(1, Math.round(scenes.length / 2))
+    // For longer trailers (premium, 6+ scenes) narrate ~75% of scenes for richer coverage.
+    // For short trailers (standard, 4 scenes) narrate ~half to keep breathing room.
+    const beatCount = scenes.length >= 6
+      ? Math.max(2, Math.round(scenes.length * 0.75))
+      : Math.max(1, Math.round(scenes.length / 2))
     userContent =
       `Book trailer for "${bookTitle}". Tone: ${tone}.\n` +
       `Scenes (in order):\n${sceneList}\n\n` +
@@ -1832,8 +1828,8 @@ async function runPipeline(job) {
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
-      // Character punch-line: generate TTS audio then HeyGen expressive avatar clip.
-      // No fallback — if HeyGen fails we keep the original Kling clip (silent).
+      // Character punch-line: generate TTS audio then Seedance ref2v lip-sync clip.
+      // Falls back gracefully — if ref2v fails we keep the original Seedance clip (silent).
       const chosenLine = lineBySceneNumber.get(scene.scene_number)
       if (chosenLine) {
         try {
@@ -1841,34 +1837,21 @@ async function runPipeline(job) {
           const { url: lineAudioUrl, path: lineAudioPath } =
             await generateCharacterLineAudio(chosenLine.line, chosenLine.voice, tmpDirLines, scene.scene_number, ledger)
 
-          // Find the character record to get/create HeyGen avatar_id
+          // Find the character record to get face image
           const charRecord = (characters || []).find(c =>
             c.name?.toLowerCase().trim() === chosenLine.character_name?.toLowerCase().trim()
           )
           const faceImageUrl = charRecord?.image_url_left || charRecord?.image_url_front || charRecord?.image_url || null
 
-          if (!isPlaceholder(HEYGEN_API_KEY) && faceImageUrl) {
-            // Get or create HeyGen avatar_id for this character
-            let avatarId = charRecord?.heygen_avatar_id || null
-            if (!avatarId) {
-              avatarId = await createHeygenAvatar(chosenLine.character_name, faceImageUrl)
-              await supabase.from('characters').update({ heygen_avatar_id: avatarId }).eq('id', charRecord.id)
-              if (ledger) ledger.add(`HeyGen avatar creation: ${chosenLine.character_name}`, 'heygen', PRICING.heygen_avatar_creation)
-            } else {
-              console.log(`[worker]   HeyGen: using cached avatar for "${chosenLine.character_name}" (${avatarId})`)
-            }
-
-            // Derive motion prompt from scene emotion
-            const motionPrompt = deriveMotionPrompt(scene.description, chosenLine.line, book.genre)
-            console.log(`[worker]   Scene ${scene.scene_number}: motion prompt — "${motionPrompt.substring(0, 80)}"`)
-
-            // Generate expressive HeyGen clip (replaces Kling clip for this scene)
-            const heygenUrl = await generateHeygenClip(avatarId, lineAudioUrl, imageUrl, motionPrompt, clipSec, ledger)
-            clipUrl = heygenUrl
+          if (faceImageUrl) {
+            // Seedance ref2v lip-sync — works with or without EvoLink
+            console.log(`[worker]   Scene ${scene.scene_number}: lip-syncing via Seedance ref2v...`)
+            const refClipUrl = await generateCharacterClip(faceImageUrl, lineAudioUrl, scene.description, clipSec, ledger)
+            clipUrl = refClipUrl
             characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
-            console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line — HeyGen expressive avatar`)
+            console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line — Seedance ref2v lip-sync`)
           } else {
-            console.log(`[worker]   Scene ${scene.scene_number}: HeyGen skipped (no API key or no face image) — keeping original clip`)
+            console.log(`[worker]   Scene ${scene.scene_number}: no face image for lip-sync — keeping original clip`)
           }
         } catch (lineErr) {
           console.error(`[worker]   Scene ${scene.scene_number}: character line failed (non-fatal, keeping original clip):`, lineErr.message)
@@ -1963,25 +1946,76 @@ async function runPipeline(job) {
   await updateStatus('complete', { videoUrl: finalVideoUrl })
 
   // ── TikTok vertical cut (free — ffmpeg crop only, no AI) ─────────────────
-  // Crop the center 9:16 portion of the trailer and upload as a separate file.
+  // Crop the center 9:16 portion of the trailer clips (no end card) and
+  // append a proper 9:16 title card sized for portrait video.
   // This costs $0 in AI — pure CPU. All subscription plans get this automatically.
   try {
     const tiktokPath = join(tmpDir, 'tiktok.mp4')
-    // Get source dimensions to calculate center crop
+    const tiktokNoCardPath = join(tmpDir, 'tiktok-noc.mp4')
+    const tiktokCardPath = join(tmpDir, 'tiktok-card.mp4')
+
+    // Get source dimensions + total duration
     const probeOut = execSync(
       `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${join(tmpDir, 'trailer.mp4')}"`,
       { encoding: 'utf8' }
     ).trim()
     const [srcW, srcH] = probeOut.split(',').map(Number)
-    // Calculate 9:16 crop from center
+
+    // Probe total trailer duration and end-card duration so we can trim the end card
+    let trailerDur = 0, endCardDur = 0
+    try {
+      trailerDur = parseFloat(execSync(
+        `ffprobe -v error -show_entries format=duration -of csv=p=0 "${join(tmpDir, 'trailer.mp4')}"`,
+        { encoding: 'utf8' }
+      ).trim()) || 0
+      // end card is always 4s
+      endCardDur = 4.0
+    } catch {}
+    const clipsDur = trailerDur > endCardDur ? trailerDur - endCardDur : trailerDur
+
+    // Step 1: Crop the clips portion (without end card) to 9:16
     const cropH = srcH
     const cropW = Math.round(srcH * 9 / 16)
     const cropX = Math.round((srcW - cropW) / 2)
+    const tiktokW = 1080, tiktokH = 1920
     execSync(
-      `ffmpeg -y -i "${join(tmpDir, 'trailer.mp4')}" -vf "crop=${cropW}:${cropH}:${cropX}:0,scale=1080:1920:flags=lanczos" ` +
+      `ffmpeg -y -i "${join(tmpDir, 'trailer.mp4')}" -t ${clipsDur.toFixed(3)} ` +
+      `-vf "crop=${cropW}:${cropH}:${cropX}:0,scale=${tiktokW}:${tiktokH}:flags=lanczos" ` +
+      `-c:v libx264 -preset fast -crf 22 -c:a aac -movflags +faststart "${tiktokNoCardPath}"`,
+      { stdio: 'pipe' }
+    )
+
+    // Step 2: Build a proper 9:16 title card (1080×1920)
+    const ttTitleTxt = join(tmpDir, 'tt-title.txt')
+    const ttAuthorTxt = join(tmpDir, 'tt-author.txt')
+    writeFileSync(ttTitleTxt, (title || 'Untitled').toUpperCase())
+    const hasAuthor = authorName && authorName.length > 0
+    if (hasAuthor) writeFileSync(ttAuthorTxt, `by ${authorName}`)
+    const ttTitleSize = Math.round(tiktokH * 0.055)  // ~106px at 1920 height
+    const ttAuthorSize = Math.round(tiktokH * 0.028)  // ~54px
+    const ttTitleY = hasAuthor ? '(h/2)-text_h-16' : '(h-text_h)/2'
+    const fontBold = '/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf'
+    const fontReg  = '/usr/share/fonts/truetype/freefont/FreeSerif.ttf'
+    let ttVf = `drawtext=fontfile=${fontBold}:textfile=${ttTitleTxt}:fontcolor=white:fontsize=${ttTitleSize}:x=(w-text_w)/2:y=${ttTitleY}`
+    if (hasAuthor) {
+      ttVf += `,drawtext=fontfile=${fontReg}:textfile=${ttAuthorTxt}:fontcolor=0xCFC9BE:fontsize=${ttAuthorSize}:x=(w-text_w)/2:y=(h/2)+20`
+    }
+    ttVf += `,fade=t=in:st=0:d=0.6,fade=t=out:st=3.4:d=0.6`
+    execSync(
+      `ffmpeg -f lavfi -i color=c=black:s=${tiktokW}x${tiktokH}:d=4:r=24 ` +
+      `-vf "${ttVf}" -c:v libx264 -pix_fmt yuv420p -t 4 "${tiktokCardPath}" -y 2>&1`,
+      { stdio: 'pipe' }
+    )
+
+    // Step 3: Concat clips + 9:16 title card
+    const ttConcatList = join(tmpDir, 'tt-concat.txt')
+    writeFileSync(ttConcatList, `file '${tiktokNoCardPath}'\nfile '${tiktokCardPath}'\n`)
+    execSync(
+      `ffmpeg -y -f concat -safe 0 -i "${ttConcatList}" ` +
       `-c:v libx264 -preset fast -crf 22 -c:a aac -movflags +faststart "${tiktokPath}"`,
       { stdio: 'pipe' }
     )
+
     const tiktokBuffer = readFileSync(tiktokPath)
     const tiktokStoragePath = trailerId
       ? `trailers/${bookId}/${trailerId}-tiktok.mp4`
