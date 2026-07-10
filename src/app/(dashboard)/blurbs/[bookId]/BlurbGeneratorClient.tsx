@@ -17,6 +17,7 @@ interface Props {
   bookId: string
   bookTitle: string
   genre?: string | null
+  savedBlurbs?: Blurbs | null
 }
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -285,13 +286,44 @@ function BlurbCard({
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props) {
-  const [blurbs, setBlurbs] = useState<Blurbs | null>(null)
+export default function BlurbGeneratorClient({ bookId, bookTitle, genre, savedBlurbs }: Props) {
+  const [blurbs, setBlurbs] = useState<Blurbs | null>(savedBlurbs ?? null)
   const [loading, setLoading] = useState(false)
   const [regenLoading, setRegenLoading] = useState<Partial<Record<BlurbSection, boolean>>>({})
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Record<string, string>>({})
   const [infoModal, setInfoModal] = useState<string | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+
+  // Persist inline edits to DB on blur (when author clicks away from a textarea)
+  const saveEdits = async (updatedBlurbs: Blurbs) => {
+    setSaveStatus('saving')
+    try {
+      await fetch(`/api/books/${bookId}/blurbs/save`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blurbs: updatedBlurbs }),
+      })
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2500)
+    } catch {
+      setSaveStatus('idle')
+    }
+  }
+
+  // Merge current edits into blurbs object and save
+  const handleBlur = () => {
+    if (!blurbs) return
+    const merged: Blurbs = {
+      backCover:        editing.backCover        ?? blurbs.backCover,
+      shortHook:        editing.shortHook        ?? blurbs.shortHook,
+      tiktokHooks:      blurbs.tiktokHooks.map((h, i) => editing[`tiktok_${i}`] ?? h),
+      instagramCaption: editing.instagramCaption ?? blurbs.instagramCaption,
+      tweetThread:      blurbs.tweetThread.map((t, i) => editing[`tweet_${i}`] ?? t),
+      goodreadsBlurb:   editing.goodreadsBlurb   ?? blurbs.goodreadsBlurb,
+    }
+    saveEdits(merged)
+  }
 
   const generate = async () => {
     setLoading(true)
@@ -357,6 +389,11 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
             Cinematically generated marketing copy tailored to your book&apos;s genre, scenes, and narrator script.
             Edit any section inline, then copy and paste wherever you need it.
           </p>
+          {saveStatus !== 'idle' && (
+            <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: saveStatus === 'saved' ? '#16A34A' : muted, margin: '8px 0 0', fontWeight: 600 }}>
+              {saveStatus === 'saving' ? '⏳ Saving…' : '✓ Saved'}
+            </p>
+          )}
         </div>
 
         {/* Generate button — only shown before first run */}
@@ -402,7 +439,7 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               regenLoading={!!regenLoading.backCover}
               onInfo={() => setInfoModal('Back Cover Blurb')}
             >
-              <textarea value={getEdited('backCover', blurbs.backCover)} onChange={e => setEdit('backCover', e.target.value)} rows={6}
+              <textarea value={getEdited('backCover', blurbs.backCover)} onChange={e => setEdit('backCover', e.target.value)} onBlur={handleBlur} rows={6}
                 style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, lineHeight: 1.75, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'vertical', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }} />
             </BlurbCard>
 
@@ -416,7 +453,7 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               regenLoading={!!regenLoading.shortHook}
               onInfo={() => setInfoModal('Short Hook')}
             >
-              <textarea value={getEdited('shortHook', blurbs.shortHook)} onChange={e => setEdit('shortHook', e.target.value)} rows={2}
+              <textarea value={getEdited('shortHook', blurbs.shortHook)} onChange={e => setEdit('shortHook', e.target.value)} onBlur={handleBlur} rows={2}
                 style={{ width: '100%', fontFamily: 'var(--font-playfair), serif', fontSize: 16, lineHeight: 1.6, color: dark, fontStyle: 'italic', border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'none', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }} />
             </BlurbCard>
 
@@ -436,7 +473,7 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
                   <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                     <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 700, color: muted, paddingTop: 10, flexShrink: 0, width: 18 }}>{i + 1}</span>
                     <div style={{ flex: 1 }}>
-                      <textarea value={getEdited(`tiktok_${i}`, hook)} onChange={e => setEdit(`tiktok_${i}`, e.target.value)} rows={2}
+                      <textarea value={getEdited(`tiktok_${i}`, hook)} onChange={e => setEdit(`tiktok_${i}`, e.target.value)} onBlur={handleBlur} rows={2}
                         style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.6, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: '8px 12px', resize: 'none', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }} />
                     </div>
                     <CopyButton text={getEdited(`tiktok_${i}`, hook)} />
@@ -456,7 +493,7 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               regenLoading={!!regenLoading.instagramCaption}
               onInfo={() => setInfoModal('Instagram Caption')}
             >
-              <textarea value={getEdited('instagramCaption', blurbs.instagramCaption)} onChange={e => setEdit('instagramCaption', e.target.value)} rows={5}
+              <textarea value={getEdited('instagramCaption', blurbs.instagramCaption)} onChange={e => setEdit('instagramCaption', e.target.value)} onBlur={handleBlur} rows={5}
                 style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.75, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'vertical', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }} />
             </BlurbCard>
 
@@ -479,7 +516,7 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
                     <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                       <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 700, color: muted, paddingTop: 10, flexShrink: 0, width: 28 }}>{i + 1}/4</span>
                       <div style={{ flex: 1 }}>
-                        <textarea value={val} onChange={e => setEdit(`tweet_${i}`, e.target.value)} rows={3}
+                        <textarea value={val} onChange={e => setEdit(`tweet_${i}`, e.target.value)} onBlur={handleBlur} rows={3}
                           style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.6, color: dark, border: `1px solid ${over ? '#FECACA' : border}`, borderRadius: 8, padding: '8px 12px', resize: 'none', outline: 'none', background: over ? '#FEF2F2' : '#FAFAF7', boxSizing: 'border-box' }} />
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 3 }}>
                           <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 10, color: over ? '#DC2626' : muted }}>{val.length}/280</span>
@@ -503,7 +540,7 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               regenLoading={!!regenLoading.goodreadsBlurb}
               onInfo={() => setInfoModal('Goodreads Blurb')}
             >
-              <textarea value={getEdited('goodreadsBlurb', blurbs.goodreadsBlurb)} onChange={e => setEdit('goodreadsBlurb', e.target.value)} rows={5}
+              <textarea value={getEdited('goodreadsBlurb', blurbs.goodreadsBlurb)} onChange={e => setEdit('goodreadsBlurb', e.target.value)} onBlur={handleBlur} rows={5}
                 style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, lineHeight: 1.75, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'vertical', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }} />
             </BlurbCard>
 

@@ -144,7 +144,14 @@ export async function POST(
       const raw = await callAI(prompt)
       const cleaned = raw.replace(/^```json?\s*/i, '').replace(/```\s*$/i, '').trim()
       const result = JSON.parse(cleaned)
-      return Response.json({ section: body.section, value: result[body.section] })
+      const value = result[body.section]
+
+      // Merge updated section into existing saved blurbs and persist
+      const { data: existing } = await supabase.from('books').select('blurbs_json').eq('id', bookId).single()
+      const merged = { ...(existing?.blurbs_json as object ?? {}), [body.section]: value }
+      await supabase.from('books').update({ blurbs_json: merged }).eq('id', bookId)
+
+      return Response.json({ section: body.section, value })
     }
 
     // ── Full generation ───────────────────────────────────────────────────────
@@ -184,6 +191,9 @@ Generate the following marketing copy. Return ONLY valid JSON — no markdown, n
     const raw = await callAI(fullPrompt)
     const cleaned = raw.replace(/^```json?\s*/i, '').replace(/```\s*$/i, '').trim()
     const blurbs = JSON.parse(cleaned)
+
+    // Persist to DB so the author never loses their blurbs
+    await supabase.from('books').update({ blurbs_json: blurbs }).eq('id', bookId)
 
     return Response.json({ blurbs })
   } catch (err) {

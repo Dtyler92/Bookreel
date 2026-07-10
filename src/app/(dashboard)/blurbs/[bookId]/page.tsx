@@ -31,7 +31,7 @@ export default async function BlurbsPage({
 
   const { data: book } = await sb
     .from('books')
-    .select('id, title, genre, author_id')
+    .select('id, title, genre, author_id, blurbs_json')
     .eq('id', bookId)
     .eq('author_id', user.id)
     .single()
@@ -55,6 +55,7 @@ export default async function BlurbsPage({
         bookId={bookId}
         bookTitle={book.title}
         genre={book.genre}
+        savedBlurbs={book.blurbs_json ?? null}
       />
     </>
   )
