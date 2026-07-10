@@ -1062,9 +1062,9 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {/* Play button — opens video in new tab */}
                     <a
                       href={clip.url}
-                      download
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
@@ -1075,10 +1075,30 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                      </svg>
+                      Play
+                    </a>
+                    {/* Download button — separate icon-only button */}
+                    <a
+                      href={clip.url}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Download clip"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'transparent', border: '1px solid #E8E2D5', color: '#8A8278',
+                        borderRadius: 8, padding: '8px 10px', textDecoration: 'none',
+                        transition: 'color 150ms, border-color 150ms',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#0D0D0B'; (e.currentTarget as HTMLAnchorElement).style.borderColor = '#0D0D0B' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#8A8278'; (e.currentTarget as HTMLAnchorElement).style.borderColor = '#E8E2D5' }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
                       </svg>
-                      Download
                     </a>
                     <button
                       onClick={() => handleDeleteClip(clip.trailerId)}
