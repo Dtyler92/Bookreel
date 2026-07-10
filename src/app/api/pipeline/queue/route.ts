@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
   const { data: pendingJobs, error } = await supabase
     .from('trailers')
-    .select('id, book_id, quality_tier, status, processing_started_at, created_at')
+    .select('id, book_id, quality_tier, status, narrator_voice, processing_started_at, created_at')
     .or(
       `status.eq.pending,` +
       `and(status.eq.generating,processing_started_at.lt.${tenMinutesAgo}),` +
@@ -63,6 +63,7 @@ export async function GET(request: Request) {
       tier: (isPremium ? 'pro' : 'author') as 'author' | 'pro',
       quality: (isPremium ? 'premium' : 'standard') as 'standard' | 'premium',
       status: job.status,
+      narratorVoice: (job as any).narrator_voice || null,
       stuckSince: job.processing_started_at
     }
   })

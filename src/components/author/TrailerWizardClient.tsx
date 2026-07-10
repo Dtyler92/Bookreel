@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import ReviewClient from './ReviewClient'
 import ReviewImagesClient from './ReviewImagesClient'
 
-type WizardStep = 'tier' | 'screenplay' | 'scenes' | 'images'
+type WizardStep = 'tier' | 'screenplay' | 'scenes' | 'images' | 'voice'
 type Quality = 'standard' | 'premium'
 
 interface Props {
@@ -34,12 +34,14 @@ const STANDARD_STEPS = [
   { key: 'screenplay', label: 'Screenplay'  },
   { key: 'scenes',     label: 'Pick Scenes' },
   { key: 'images',     label: 'Characters'  },
+  { key: 'voice',      label: 'Voice'       },
 ]
 
 const PREMIUM_STEPS = [
   { key: 'tier',       label: 'Quality'    },
   { key: 'screenplay', label: 'Screenplay' },
   { key: 'images',     label: 'Characters' },
+  { key: 'voice',      label: 'Voice'      },
 ]
 
 function StepBar({ quality, step, isRegenerate }: { quality: Quality; step: WizardStep; isRegenerate: boolean }) {
@@ -511,6 +513,7 @@ export default function TrailerWizardClient({
 
   const [step,       setStep]       = useState<WizardStep>(getInitialStep)
   const [quality,    setQuality]    = useState<Quality>('standard')
+  const [narratorVoice, setNarratorVoice] = useState<string>('auto')
   const [generating, setGenerating] = useState(false)
   const [error,      setError]      = useState<string | null>(null)
 
@@ -538,7 +541,7 @@ export default function TrailerWizardClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookId: book.id }),
       })
-      const body: any = { bookId: book.id, quality }
+      const body: any = { bookId: book.id, quality, narratorVoice: narratorVoice === 'auto' ? null : narratorVoice }
       if (quality === 'standard' && selectedSceneIds.size === 4) {
         body.selectedSceneIds = Array.from(selectedSceneIds)
       }
@@ -695,9 +698,18 @@ export default function TrailerWizardClient({
             wizardMode
             quality={quality}
             selectedSceneIds={Array.from(selectedSceneIds)}
-            onWizardComplete={() => handleGenerate()}
+            onWizardComplete={() => setStep('voice')}
           />
         </div>
+      )}
+
+      {/* Voice picker step */}
+      {step === 'voice' && (
+        <VoicePickerStep
+          selected={narratorVoice}
+          onSelect={(v) => { setNarratorVoice(v); handleGenerate() }}
+          onBack={() => setStep('images')}
+        />
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

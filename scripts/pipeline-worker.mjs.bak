@@ -453,16 +453,8 @@ async function pollEvolinkTask(taskId, durationSeconds, label, ledger, perSec) {
     console.log(`[worker]   EvoLink poll ${i+1}: ${data.status} (${data.progress ?? '?'}%)`)
     if (data.status === 'completed') {
       // results is an array of objects: [{ url: "https://..." }, ...]
-      // Also handle alternate field names some EvoLink versions return
-      // EvoLink response: result_data.outputs[0].url (current format)
-      // Fallback: results[0].url (old format), data.video_url, data.url
-      const videoUrl = data.result_data?.outputs?.[0]?.url
-        || (Array.isArray(data.results) ? (data.results[0]?.url || data.results[0]?.video_url) : null)
-        || data.video_url || data.url || null
-      if (!videoUrl) {
-        console.error('[worker]   EvoLink raw response:', JSON.stringify(data).substring(0, 500))
-        throw new Error('EvoLink returned no video URL in results')
-      }
+      const videoUrl = Array.isArray(data.results) ? (data.results[0]?.url || null) : null
+      if (!videoUrl) throw new Error('EvoLink returned no video URL in results')
       if (ledger) ledger.add(label, 'evolink', perSec * durationSeconds)
       return videoUrl
     }
@@ -697,7 +689,7 @@ function buildTitleCard(tmpDir, width, height, fps, title, authorName) {
   return cardPath
 }
 
-async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTracks = [], musicAudioPath = null, characterLines = [], trailerId = null) {
+async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTracks = [], musicAudioPath = null, characterLines = []) {
   const tmpDir = `/tmp/bookreel-${bookId}`
   if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
 
@@ -912,9 +904,7 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTra
   // Upload to Supabase
   const { readFileSync } = await import('fs')
   const videoBuffer = readFileSync(outputPath)
-  const storagePath = trailerId
-    ? `trailers/${bookId}/${trailerId}.mp4`
-    : `trailers/${bookId}/final-trailer.mp4`
+  const storagePath = `trailers/${bookId}/final-trailer.mp4`
 
   const { error: uploadErr } = await supabase.storage
     .from('media')
@@ -1490,7 +1480,7 @@ async function generateSafeRewrite(sceneDescription, rejectionReason) {
 const activeJobs = new Set()
 
 async function runPipeline(job) {
-  const { bookId, trailerId, tier, quality = 'standard', narratorVoice: requestedNarratorVoice = null } = job
+  const { bookId, trailerId, tier, quality = 'standard' } = job
   console.log(`\n[worker] ▶ Starting pipeline: bookId=${bookId} trailerId=${trailerId} tier=${tier} quality=${quality}`)
 
   // Select video endpoints + pricing based on quality requested by the user
@@ -1624,11 +1614,10 @@ async function runPipeline(job) {
     console.error('[worker]   Character-line selection failed (non-fatal, narrator-only):', e.message)
   }
 
-  // Pick narrator voice: use author's explicit choice if provided, otherwise auto-pick
-  // based on book genre + character genders.
-  const narratorVoice = requestedNarratorVoice || pickNarratorVoice(book.genre, characters)
-  const voiceSource = requestedNarratorVoice ? 'author choice' : 'auto (genre/gender)'
-  console.log(`[worker]   Narrator voice: ${narratorVoice} (${voiceSource}, genre: ${book.genre || 'unknown'})`)
+  // Pick narrator voice based on book genre + character genders — done here because
+  // characters are now loaded. Used for all narrator TTS calls below.
+  const narratorVoice = pickNarratorVoice(book.genre, characters)
+  console.log(`[worker]   Narrator voice: ${narratorVoice} (genre: ${book.genre || 'unknown'}, ${characters.length} characters)`)
 
   // Narration beats — SPARSE per-scene narrator phrases tied to the scenes we're
   // actually rendering. Each beat is rendered to its own TTS file keyed by scene
@@ -1892,11 +1881,10 @@ async function runPipeline(job) {
         }).eq('id', scene.id)
         rejectedScenes.push(scene.scene_number)
       } else {
-        // Non-moderation failure (transient EvoLink/network error, billing issue, etc.)
-        // Use 'pending' so it auto-retries on next run instead of getting stuck
+        // Non-moderation failure (transient EvoLink/network error)
         await supabase.from('scenes').update({
-          moderation_status: 'pending',
-          moderation_reason: null,
+          moderation_status: 'rejected',
+          moderation_reason: 'This scene couldn\'t be generated due to a temporary studio error. Try regenerating, or edit the scene below.',
           last_moderation_at: new Date().toISOString(),
         }).eq('id', scene.id)
         rejectedScenes.push(scene.scene_number)
@@ -1917,7 +1905,7 @@ async function runPipeline(job) {
 
   // Stitch and upload
   console.log('[worker]   Stitching clips...')
-  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, narrationTracks, musicAudioPath, characterLineTracks, trailerId)
+  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, narrationTracks, musicAudioPath, characterLineTracks)
   console.log('[worker]   ✅ Final video:', finalVideoUrl.substring(0, 80))
 
   // Auto-cover disabled — never replace the book cover card with a scene image
@@ -1939,7 +1927,7 @@ async function runPipeline(job) {
     const tiktokPath = join(tmpDir, 'tiktok.mp4')
     // Get source dimensions to calculate center crop
     const probeOut = execSync(
-      `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${join(tmpDir, 'trailer.mp4')}"`,
+      `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${outputPath}"`,
       { encoding: 'utf8' }
     ).trim()
     const [srcW, srcH] = probeOut.split(',').map(Number)
@@ -1948,14 +1936,12 @@ async function runPipeline(job) {
     const cropW = Math.round(srcH * 9 / 16)
     const cropX = Math.round((srcW - cropW) / 2)
     execSync(
-      `ffmpeg -y -i "${join(tmpDir, 'trailer.mp4')}" -vf "crop=${cropW}:${cropH}:${cropX}:0,scale=1080:1920:flags=lanczos" ` +
+      `ffmpeg -y -i "${outputPath}" -vf "crop=${cropW}:${cropH}:${cropX}:0,scale=1080:1920:flags=lanczos" ` +
       `-c:v libx264 -preset fast -crf 22 -c:a aac -movflags +faststart "${tiktokPath}"`,
       { stdio: 'pipe' }
     )
     const tiktokBuffer = readFileSync(tiktokPath)
-    const tiktokStoragePath = trailerId
-      ? `trailers/${bookId}/${trailerId}-tiktok.mp4`
-      : `trailers/${bookId}/tiktok.mp4`
+    const tiktokStoragePath = `trailers/${bookId}/tiktok.mp4`
     const { error: ttErr } = await supabase.storage
       .from('media')
       .upload(tiktokStoragePath, tiktokBuffer, { contentType: 'video/mp4', upsert: true })

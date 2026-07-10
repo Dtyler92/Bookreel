@@ -28,8 +28,8 @@ export async function POST(request: Request) {
 
     const userId = user.id
 
-    const body = await request.json() as { bookId: string; quality?: Quality; selectedSceneIds?: string[] }
-    const { bookId, selectedSceneIds } = body
+    const body = await request.json() as { bookId: string; quality?: Quality; selectedSceneIds?: string[]; narratorVoice?: string | null }
+    const { bookId, selectedSceneIds, narratorVoice } = body
     const quality: Quality = body.quality === 'premium' ? 'premium' : 'standard'
     const creditCost = CREDIT_COST[quality]
 
@@ -185,6 +185,7 @@ export async function POST(request: Request) {
         credit_consumed: false,
         view_count: 0,
         click_count: 0,
+        ...(narratorVoice ? { narrator_voice: narratorVoice } : {}),
       })
       .select('id')
       .single()
