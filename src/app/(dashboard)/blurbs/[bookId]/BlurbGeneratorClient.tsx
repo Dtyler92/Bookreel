@@ -27,6 +27,160 @@ const cream  = '#FAFAF7'
 const border = '#E8E2D5'
 const card   = '#FFFFFF'
 
+// ── Best practices per section ────────────────────────────────────────────────
+const BEST_PRACTICES: Record<string, { title: string; tips: string[] }> = {
+  'Back Cover Blurb': {
+    title: 'Back Cover Blurb — Best Practices',
+    tips: [
+      "🎯 Lead with your protagonist's biggest problem or desire — not backstory.",
+      '⚡ Keep sentences short and punchy. Long sentences lose readers fast.',
+      '❓ End with a question or unresolved tension — never reveal the ending.',
+      '🎭 Match the tone to your genre: thrillers feel urgent, romance feels warm, fantasy feels epic.',
+      '📏 Aim for 150-200 words. Under 100 feels thin; over 250 loses attention.',
+      '🔁 Paste it into Amazon KDP, your author website, and Goodreads for maximum visibility.',
+      '💡 Pro tip: Read it out loud. If it sounds awkward spoken, rewrite it.',
+    ],
+  },
+  'Short Hook': {
+    title: 'Short Hook — Best Practices',
+    tips: [
+      '⚡ This is your 5-second elevator pitch. Every word must earn its place.',
+      '🎯 Lead with conflict or stakes — what does your hero stand to lose?',
+      '🚫 Avoid "a story about" or "follows the journey of" — too generic.',
+      '📣 Use this as your ad headline, email subject line, or bio tagline.',
+      '🔄 Test 2-3 variations on social media and see which gets the most engagement.',
+      "💡 Pro tip: The best hooks create a question in the reader's mind they need answered.",
+    ],
+  },
+  'TikTok Hooks': {
+    title: 'TikTok / Reels Hooks — Best Practices',
+    tips: [
+      '▶️ The first 2 seconds decide everything — start mid-action or mid-emotion.',
+      '📱 Use these as text overlays on your trailer clip or read them directly to camera.',
+      '🔢 Test all 4 hooks as separate posts over a week — see which performs best.',
+      '🏷️ Add #BookTok, #BookRecommendations, and your genre hashtags to every post.',
+      '🎵 Always use trending audio — it gets pushed to more feeds.',
+      '👁️ POV hooks ("POV: you just found your new favorite book") consistently outperform plain descriptions.',
+      "💡 Pro tip: Post at 7-9am or 7-9pm your audience's timezone for peak reach.",
+    ],
+  },
+  'Instagram Caption': {
+    title: 'Instagram Caption — Best Practices',
+    tips: [
+      '📸 Pair with your book cover photo, a flat lay, or a mood-matching aesthetic image.',
+      '🔗 "Link in bio" is your CTA — make sure your bio link goes to your store or Amazon.',
+      '📏 Front-load the important text — Instagram truncates after 2 lines without tapping.',
+      '#️⃣ Use 5-8 hashtags max. More looks spammy; less limits reach.',
+      '🗓️ Best posting times: Tuesday–Friday, 11am–1pm or 7–9pm.',
+      '💬 Ask a question at the end to drive comments — the algorithm rewards engagement.',
+      '💡 Pro tip: Mix genre hashtags (#FantasyBooks) with community tags (#Bookstagram, #BookLovers).',
+    ],
+  },
+  'Tweet Thread': {
+    title: 'Tweet Thread — Best Practices',
+    tips: [
+      '🧵 Pin your best-performing thread to your profile — new followers see it first.',
+      '📊 Tweet 1 is the most important — it determines if anyone reads the rest.',
+      '⏱️ Post threads Tuesday–Thursday between 9am–3pm for best visibility.',
+      '🔁 End tweet should always include a direct link to buy or follow.',
+      '📏 Stay under 260 characters per tweet — leaves room for retweets with comment.',
+      '💬 Reply to your own thread with a book cover image — images boost impressions 3x.',
+      '💡 Pro tip: Quote-tweet an already-viral book post in your genre as the opener.',
+    ],
+  },
+  'Goodreads Blurb': {
+    title: 'Goodreads Blurb — Best Practices',
+    tips: [
+      '📖 Goodreads readers are serious — they want specificity, not vague promises.',
+      '🎭 Name your protagonist and their core conflict clearly in the first sentence.',
+      '⚠️ Add a content warning at the bottom if your book has mature themes.',
+      '🏷️ Make sure your Goodreads genre tags match the tone of your blurb.',
+      '⭐ Ask early readers to leave a review after rating — blurbs with reviews convert better.',
+      '🔗 Link your author profile to your website and other social media.',
+      "💡 Pro tip: Goodreads powers Amazon's \"Customers Also Bought\" — a strong blurb here drives discovery.",
+    ],
+  },
+}
+
+// ── Info modal ────────────────────────────────────────────────────────────────
+function InfoModal({ section, onClose }: { section: string; onClose: () => void }) {
+  const content = BEST_PRACTICES[section]
+  if (!content) return null
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'rgba(13,13,11,0.5)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#FFFFFF', borderRadius: 16, padding: '32px',
+          maxWidth: 520, width: '100%',
+          boxShadow: '0 24px 64px rgba(13,13,11,0.18)',
+          maxHeight: '85vh', overflowY: 'auto',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
+          <h2 style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: 20, color: dark, margin: 0, lineHeight: 1.3 }}>
+            {content.title}
+          </h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: muted, fontSize: 20, lineHeight: 1, padding: 2, flexShrink: 0 }}>
+            ✕
+          </button>
+        </div>
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {content.tips.map((tip, i) => (
+            <li key={i} style={{
+              fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.65, color: dark,
+              background: '#FAFAF7', border: `1px solid ${border}`, borderRadius: 8, padding: '10px 14px',
+            }}>
+              {tip}
+            </li>
+          ))}
+        </ul>
+        <button
+          onClick={onClose}
+          style={{
+            marginTop: 20, width: '100%', background: red, color: '#fff',
+            border: 'none', borderRadius: 8, padding: '11px 0',
+            fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          }}
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Reusable buttons ──────────────────────────────────────────────────────────
+function InfoButton({ onClick }: { onClick: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title="Best practices"
+      style={{
+        background: 'none', border: 'none', cursor: 'pointer',
+        padding: '1px 2px', lineHeight: 1, display: 'inline-flex', alignItems: 'center',
+        color: hovered ? red : '#C4BBB0', transition: 'color 150ms',
+      }}
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="16" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12.01" y2="8"/>
+      </svg>
+    </button>
+  )
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   const copy = () => {
@@ -42,11 +196,8 @@ function CopyButton({ text }: { text: string }) {
         background: copied ? '#F0FDF4' : '#F4F1EB',
         border: `1px solid ${copied ? '#BBF7D0' : border}`,
         borderRadius: 6, padding: '4px 10px', cursor: 'pointer',
-        fontFamily: 'var(--font-inter), sans-serif',
-        fontSize: 11, fontWeight: 600,
-        color: copied ? '#15803D' : muted,
-        transition: 'all 150ms',
-        flexShrink: 0,
+        fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 600,
+        color: copied ? '#15803D' : muted, transition: 'all 150ms', flexShrink: 0,
       }}
     >
       {copied ? '✓ Copied' : 'Copy'}
@@ -64,11 +215,10 @@ function RegenerateButton({ onClick, loading }: { onClick: () => void; loading: 
         background: loading ? '#F4F1EB' : 'transparent',
         border: `1px solid ${border}`,
         borderRadius: 6, padding: '4px 9px', cursor: loading ? 'not-allowed' : 'pointer',
-        fontFamily: 'var(--font-inter), sans-serif',
-        fontSize: 11, fontWeight: 600, color: loading ? muted : red,
+        fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 600,
+        color: loading ? muted : red,
         display: 'inline-flex', alignItems: 'center', gap: 4,
-        transition: 'all 150ms', flexShrink: 0,
-        opacity: loading ? 0.6 : 1,
+        transition: 'all 150ms', flexShrink: 0, opacity: loading ? 0.6 : 1,
       }}
     >
       {loading
@@ -80,8 +230,9 @@ function RegenerateButton({ onClick, loading }: { onClick: () => void; loading: 
   )
 }
 
+// ── BlurbCard ─────────────────────────────────────────────────────────────────
 function BlurbCard({
-  label, sublabel, platform, children, copyText, accent, onRegenerate, regenLoading,
+  label, sublabel, platform, children, copyText, accent, onRegenerate, regenLoading, onInfo,
 }: {
   label: string
   sublabel?: string
@@ -91,6 +242,7 @@ function BlurbCard({
   accent?: string
   onRegenerate: () => void
   regenLoading: boolean
+  onInfo: () => void
 }) {
   return (
     <div style={{
@@ -100,10 +252,11 @@ function BlurbCard({
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
             <span style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: 15, color: dark }}>
               {label}
             </span>
+            <InfoButton onClick={onInfo} />
             {platform && (
               <span style={{
                 fontFamily: 'var(--font-inter), sans-serif', fontSize: 10, fontWeight: 700,
@@ -131,19 +284,23 @@ function BlurbCard({
   )
 }
 
+// ── Main component ────────────────────────────────────────────────────────────
 export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props) {
   const [blurbs, setBlurbs] = useState<Blurbs | null>(null)
   const [loading, setLoading] = useState(false)
   const [regenLoading, setRegenLoading] = useState<Partial<Record<BlurbSection, boolean>>>({})
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Record<string, string>>({})
+  const [infoModal, setInfoModal] = useState<string | null>(null)
 
   const generate = async () => {
     setLoading(true)
     setError(null)
     setEditing({})
     try {
-      const res = await fetch(`/api/books/${bookId}/blurbs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      const res = await fetch(`/api/books/${bookId}/blurbs`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+      })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Generation failed'); return }
       setBlurbs(data.blurbs)
@@ -164,17 +321,10 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Regeneration failed'); return }
-      // Update only that section in blurbs, clear its edits
       setBlurbs(prev => prev ? { ...prev, [section]: data.value } : prev)
       setEditing(prev => {
         const next = { ...prev }
-        // Clear all keys belonging to this section
-        Object.keys(next).forEach(k => {
-          if (k === section || k.startsWith(`${section}_`) || k.startsWith(section.replace('Hooks', '_').replace('Thread', '_'))) {
-            delete next[k]
-          }
-        })
-        // Clear tiktok/tweet per-item keys
+        delete next[section as string]
         if (section === 'tiktokHooks') [0,1,2,3].forEach(i => delete next[`tiktok_${i}`])
         if (section === 'tweetThread') [0,1,2,3].forEach(i => delete next[`tweet_${i}`])
         return next
@@ -188,7 +338,6 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
 
   const getEdited = (key: string, fallback: string) =>
     editing[key] !== undefined ? editing[key] : fallback
-
   const setEdit = (key: string, val: string) =>
     setEditing(prev => ({ ...prev, [key]: val }))
 
@@ -216,14 +365,11 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
             onClick={generate}
             disabled={loading}
             style={{
-              background: loading ? '#E8E2D5' : red,
-              color: loading ? muted : '#fff',
+              background: loading ? '#E8E2D5' : red, color: loading ? muted : '#fff',
               border: 'none', borderRadius: 10, padding: '14px 28px',
               fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, fontWeight: 700,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              marginBottom: 36,
-              display: 'inline-flex', alignItems: 'center', gap: 10,
-              transition: 'all 180ms',
+              cursor: loading ? 'not-allowed' : 'pointer', marginBottom: 36,
+              display: 'inline-flex', alignItems: 'center', gap: 10, transition: 'all 180ms',
               boxShadow: loading ? 'none' : '0 2px 12px rgba(200,64,47,0.25)',
             }}
           >
@@ -246,7 +392,7 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
         {/* Results */}
         {blurbs && (
           <>
-            {/* ── Back Cover Blurb ── */}
+            {/* Back Cover Blurb */}
             <BlurbCard
               label="Back Cover Blurb"
               sublabel="Use on Amazon, your website, or anywhere readers discover your book"
@@ -254,16 +400,13 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               copyText={getEdited('backCover', blurbs.backCover)}
               onRegenerate={() => regenerateSection('backCover')}
               regenLoading={!!regenLoading.backCover}
+              onInfo={() => setInfoModal('Back Cover Blurb')}
             >
-              <textarea
-                value={getEdited('backCover', blurbs.backCover)}
-                onChange={e => setEdit('backCover', e.target.value)}
-                rows={6}
-                style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, lineHeight: 1.75, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'vertical', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }}
-              />
+              <textarea value={getEdited('backCover', blurbs.backCover)} onChange={e => setEdit('backCover', e.target.value)} rows={6}
+                style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, lineHeight: 1.75, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'vertical', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }} />
             </BlurbCard>
 
-            {/* ── Short Hook ── */}
+            {/* Short Hook */}
             <BlurbCard
               label="Short Hook"
               sublabel="One sentence for ads, email subject lines, or anywhere you need to grab attention fast"
@@ -271,16 +414,13 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               copyText={getEdited('shortHook', blurbs.shortHook)}
               onRegenerate={() => regenerateSection('shortHook')}
               regenLoading={!!regenLoading.shortHook}
+              onInfo={() => setInfoModal('Short Hook')}
             >
-              <textarea
-                value={getEdited('shortHook', blurbs.shortHook)}
-                onChange={e => setEdit('shortHook', e.target.value)}
-                rows={2}
-                style={{ width: '100%', fontFamily: 'var(--font-playfair), serif', fontSize: 16, lineHeight: 1.6, color: dark, fontStyle: 'italic', border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'none', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }}
-              />
+              <textarea value={getEdited('shortHook', blurbs.shortHook)} onChange={e => setEdit('shortHook', e.target.value)} rows={2}
+                style={{ width: '100%', fontFamily: 'var(--font-playfair), serif', fontSize: 16, lineHeight: 1.6, color: dark, fontStyle: 'italic', border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'none', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }} />
             </BlurbCard>
 
-            {/* ── TikTok Hooks ── */}
+            {/* TikTok Hooks */}
             <BlurbCard
               label="TikTok Hooks"
               platform="TikTok / Reels"
@@ -289,18 +429,15 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               copyText={blurbs.tiktokHooks.map((h, i) => `${i + 1}. ${getEdited(`tiktok_${i}`, h)}`).join('\n\n')}
               onRegenerate={() => regenerateSection('tiktokHooks')}
               regenLoading={!!regenLoading.tiktokHooks}
+              onInfo={() => setInfoModal('TikTok Hooks')}
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {blurbs.tiktokHooks.map((hook, i) => (
                   <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                     <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 700, color: muted, paddingTop: 10, flexShrink: 0, width: 18 }}>{i + 1}</span>
                     <div style={{ flex: 1 }}>
-                      <textarea
-                        value={getEdited(`tiktok_${i}`, hook)}
-                        onChange={e => setEdit(`tiktok_${i}`, e.target.value)}
-                        rows={2}
-                        style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.6, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: '8px 12px', resize: 'none', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }}
-                      />
+                      <textarea value={getEdited(`tiktok_${i}`, hook)} onChange={e => setEdit(`tiktok_${i}`, e.target.value)} rows={2}
+                        style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.6, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: '8px 12px', resize: 'none', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }} />
                     </div>
                     <CopyButton text={getEdited(`tiktok_${i}`, hook)} />
                   </div>
@@ -308,7 +445,7 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               </div>
             </BlurbCard>
 
-            {/* ── Instagram Caption ── */}
+            {/* Instagram Caption */}
             <BlurbCard
               label="Instagram Caption"
               platform="Instagram"
@@ -317,16 +454,13 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               copyText={getEdited('instagramCaption', blurbs.instagramCaption)}
               onRegenerate={() => regenerateSection('instagramCaption')}
               regenLoading={!!regenLoading.instagramCaption}
+              onInfo={() => setInfoModal('Instagram Caption')}
             >
-              <textarea
-                value={getEdited('instagramCaption', blurbs.instagramCaption)}
-                onChange={e => setEdit('instagramCaption', e.target.value)}
-                rows={5}
-                style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.75, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'vertical', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }}
-              />
+              <textarea value={getEdited('instagramCaption', blurbs.instagramCaption)} onChange={e => setEdit('instagramCaption', e.target.value)} rows={5}
+                style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.75, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'vertical', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }} />
             </BlurbCard>
 
-            {/* ── Tweet Thread ── */}
+            {/* Tweet Thread */}
             <BlurbCard
               label="Tweet Thread"
               platform="X / Twitter"
@@ -335,23 +469,20 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               copyText={blurbs.tweetThread.map((t, i) => `${i + 1}/${blurbs.tweetThread.length} ${getEdited(`tweet_${i}`, t)}`).join('\n\n')}
               onRegenerate={() => regenerateSection('tweetThread')}
               regenLoading={!!regenLoading.tweetThread}
+              onInfo={() => setInfoModal('Tweet Thread')}
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {blurbs.tweetThread.map((tweet, i) => {
                   const val = getEdited(`tweet_${i}`, tweet)
-                  const overLimit = val.length > 280
+                  const over = val.length > 280
                   return (
                     <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                       <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, fontWeight: 700, color: muted, paddingTop: 10, flexShrink: 0, width: 28 }}>{i + 1}/4</span>
                       <div style={{ flex: 1 }}>
-                        <textarea
-                          value={val}
-                          onChange={e => setEdit(`tweet_${i}`, e.target.value)}
-                          rows={3}
-                          style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.6, color: dark, border: `1px solid ${overLimit ? '#FECACA' : border}`, borderRadius: 8, padding: '8px 12px', resize: 'none', outline: 'none', background: overLimit ? '#FEF2F2' : '#FAFAF7', boxSizing: 'border-box' }}
-                        />
+                        <textarea value={val} onChange={e => setEdit(`tweet_${i}`, e.target.value)} rows={3}
+                          style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, lineHeight: 1.6, color: dark, border: `1px solid ${over ? '#FECACA' : border}`, borderRadius: 8, padding: '8px 12px', resize: 'none', outline: 'none', background: over ? '#FEF2F2' : '#FAFAF7', boxSizing: 'border-box' }} />
                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 3 }}>
-                          <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 10, color: overLimit ? '#DC2626' : muted }}>{val.length}/280</span>
+                          <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 10, color: over ? '#DC2626' : muted }}>{val.length}/280</span>
                         </div>
                       </div>
                       <CopyButton text={val} />
@@ -361,7 +492,7 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               </div>
             </BlurbCard>
 
-            {/* ── Goodreads Blurb ── */}
+            {/* Goodreads Blurb */}
             <BlurbCard
               label="Goodreads Blurb"
               platform="Goodreads"
@@ -370,13 +501,10 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
               copyText={getEdited('goodreadsBlurb', blurbs.goodreadsBlurb)}
               onRegenerate={() => regenerateSection('goodreadsBlurb')}
               regenLoading={!!regenLoading.goodreadsBlurb}
+              onInfo={() => setInfoModal('Goodreads Blurb')}
             >
-              <textarea
-                value={getEdited('goodreadsBlurb', blurbs.goodreadsBlurb)}
-                onChange={e => setEdit('goodreadsBlurb', e.target.value)}
-                rows={5}
-                style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, lineHeight: 1.75, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'vertical', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }}
-              />
+              <textarea value={getEdited('goodreadsBlurb', blurbs.goodreadsBlurb)} onChange={e => setEdit('goodreadsBlurb', e.target.value)} rows={5}
+                style={{ width: '100%', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, lineHeight: 1.75, color: dark, border: `1px solid ${border}`, borderRadius: 8, padding: 14, resize: 'vertical', outline: 'none', background: '#FAFAF7', boxSizing: 'border-box' }} />
             </BlurbCard>
 
             {/* Copy all */}
@@ -410,6 +538,9 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
         )}
 
       </main>
+
+      {/* Info modal */}
+      {infoModal && <InfoModal section={infoModal} onClose={() => setInfoModal(null)} />}
     </div>
   )
 }
