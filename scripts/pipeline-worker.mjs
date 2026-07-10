@@ -752,7 +752,7 @@ function buildTitleCard(tmpDir, width, height, fps, title, authorName) {
   return cardPath
 }
 
-async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTracks = [], musicAudioPath = null, characterLines = [], trailerId = null) {
+async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTracks = [], musicAudioPath = null, characterLines = [], trailerId = null, lipSyncClipIndices = new Set()) {
   const tmpDir = `/tmp/bookreel-${bookId}`
   if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
 
@@ -811,7 +811,12 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTra
   }).filter(i => i >= 0)
 
   const audioNormParts = clipsWithAudio
-    .map((clipIdx, j) => `[${clipIdx}:a]aresample=44100,volume=0.35[ca${j}]`)
+    .map((clipIdx, j) => {
+      // Lip-sync clips have character voice baked in — keep at full volume.
+      // Regular clips just have ambient Seedance audio — keep low.
+      const vol = lipSyncClipIndices.has(clipIdx) ? 1.0 : 0.35
+      return `[${clipIdx}:a]aresample=44100,volume=${vol}[ca${j}]`
+    })
     .join(';')
   const concatAudioInputs = clipsWithAudio.map((_, j) => `[ca${j}]`).join('')
   const concatInputs = allInputs.map((_, i) => `[v${i}]`).join('')
@@ -861,11 +866,15 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTra
   // overrun its clip, that's fine — it simply tails into the next cut.
   const narrationPlaced = []
   if (Array.isArray(narrationTracks)) {
+    let prevEnd = 0  // track when the last beat finishes to prevent overlap
     for (const nb of narrationTracks) {
       if (nb.clipIndex == null || nb.clipIndex < 0 || nb.clipIndex >= clipPaths.length) continue
       if (!nb.path || !existsSync(nb.path)) continue
       const dur = probeDur(nb.path, 2.0)
-      const start = clipStart[nb.clipIndex] + 0.5
+      // Start 0.5s into the clip, but never before the previous beat ends (+ 0.2s gap)
+      const clipBased = clipStart[nb.clipIndex] + 0.5
+      const start = Math.max(clipBased, prevEnd + 0.2)
+      prevEnd = start + dur
       narrationPlaced.push({ path: nb.path, start, end: start + dur })
     }
   }
@@ -1816,6 +1825,7 @@ async function runPipeline(job) {
   const rejectedScenes = []
   const characterLineTracks = []  // { clipIndex, path } → passed to stitch for timed mixing
   const narrationTracks = []      // { clipIndex, path } → per-scene narrator beats
+  const lipSyncClipIndices = new Set()  // clip indices that have character voice baked in (ref2v)
   let firstSceneImageUrl = null  // auto-cover if book has none
 
   for (const scene of scenesToGenerate) {
@@ -1951,11 +1961,13 @@ async function runPipeline(job) {
 
           if (faceImageUrl) {
             // Seedance ref2v lip-sync — audio is baked INTO the generated clip.
+            // Track the clip index so the stitch keeps that clip's audio at full volume.
             // Do NOT push lineAudioPath to characterLineTracks — that would mix
-            // a second copy of the voice into the final audio and cause an echo/offset.
+            // a second copy of the voice and cause an echo/offset.
             console.log(`[worker]   Scene ${scene.scene_number}: lip-syncing via Seedance ref2v...`)
             const refClipUrl = await generateCharacterClip(faceImageUrl, lineAudioUrl, scene.description, clipSec, ledger)
             clipUrl = refClipUrl
+            lipSyncClipIndices.add(clipUrls.length)  // mark this clip index as having baked-in voice
             console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line — Seedance ref2v lip-sync`)
           } else {
             console.log(`[worker]   Scene ${scene.scene_number}: no face image for lip-sync — keeping original clip`)
@@ -2037,7 +2049,7 @@ async function runPipeline(job) {
 
   // Stitch and upload
   console.log('[worker]   Stitching clips...')
-  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, narrationTracks, musicAudioPath, characterLineTracks, trailerId)
+  const finalVideoUrl = await stitchAndUpload(clipUrls, bookId, book.title, authorName, narrationTracks, musicAudioPath, characterLineTracks, trailerId, lipSyncClipIndices)
   console.log('[worker]   ✅ Final video:', finalVideoUrl.substring(0, 80))
 
   // Auto-cover disabled — never replace the book cover card with a scene image
