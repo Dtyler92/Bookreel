@@ -484,19 +484,21 @@ async function pollEvolinkTask(taskId, durationSeconds, label, ledger, perSec) {
     const data = await res.json()
     console.log(`[worker]   EvoLink poll ${i+1}: ${data.status} (${data.progress ?? '?'}%)`)
     if (data.status === 'completed') {
-      // results is an array of objects: [{ url: "https://..." }, ...]
-      // Also handle alternate field names some EvoLink versions return
-      // EvoLink response: result_data.outputs[0].url (current format)
-      // Fallback: results[0].url (old format), data.video_url, data.url
-      const videoUrl = data.result_data?.outputs?.[0]?.url
-        || (Array.isArray(data.results) ? (data.results[0]?.url || data.results[0]?.video_url) : null)
-        || data.video_url || data.url || null
-      if (!videoUrl) {
-        console.error('[worker]   EvoLink raw response:', JSON.stringify(data).substring(0, 500))
-        throw new Error('EvoLink returned no video URL in results')
-      }
-      if (ledger) ledger.add(label, 'evolink', perSec * durationSeconds)
-      return videoUrl
+    // EvoLink returns result_data as an array: [{ url: "https://..." }]
+    // Also handle alternate shapes from different API versions
+    const videoUrl = (Array.isArray(data.result_data) ? (data.result_data[0]?.url || data.result_data[0]?.video_url) : null)
+      || data.result_data?.outputs?.[0]?.url
+      || (Array.isArray(data.results) ? (data.results[0]?.url || data.results[0]?.video_url) : null)
+      || data.video_url || data.url || null
+    if (!videoUrl) {
+      console.error('[worker]   EvoLink raw response:', JSON.stringify(data).substring(0, 500))
+      // Empty result = silent content block by Seedance — treat as moderation so auto-rewrite fires
+      const err = new Error('EvoLink returned no video URL — likely a content policy block')
+      err.isModeration = true
+      throw err
+    }
+    if (ledger) ledger.add(label, 'evolink', perSec * durationSeconds)
+    return videoUrl
     }
     if (data.status === 'failed') {
       const detail = JSON.stringify(data.error || data).substring(0, 300)
