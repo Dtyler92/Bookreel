@@ -340,6 +340,41 @@ function VoicePickerStep({ selected, onSelect, onBack }: {
 }) {
   const [hovered, setHovered] = useState<string | null>(null)
   const [picked, setPicked] = useState<string>(selected)
+  const [playing, setPlaying] = useState<string | null>(null)
+  const [loading, setLoading] = useState<string | null>(null)
+  const audioRef = useState<HTMLAudioElement | null>(null)
+
+  const playPreview = async (e: React.MouseEvent, voiceId: string) => {
+    e.stopPropagation()
+    if (voiceId === 'auto') return
+
+    // Stop any current playback
+    if (audioRef[0]) {
+      audioRef[0].pause()
+      audioRef[0].currentTime = 0
+    }
+    if (playing === voiceId) {
+      setPlaying(null)
+      return
+    }
+
+    setLoading(voiceId)
+    try {
+      const res = await fetch(`/api/voice-preview?voice=${voiceId}`)
+      if (!res.ok) throw new Error('Preview unavailable')
+      const data = await res.json()
+      const audio = new Audio(data.url)
+      audioRef[0] = audio
+      audio.onended = () => setPlaying(null)
+      audio.onerror = () => { setPlaying(null); setLoading(null) }
+      await audio.play()
+      setPlaying(voiceId)
+    } catch {
+      setPlaying(null)
+    } finally {
+      setLoading(null)
+    }
+  }
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '40px 24px' }}>
@@ -348,7 +383,7 @@ function VoicePickerStep({ selected, onSelect, onBack }: {
           Choose your narrator voice
         </h2>
         <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, color: muted, margin: 0 }}>
-          The voiceover narration will be read in this voice. You can change it next time you generate.
+          Hit ▶ to hear a sample, then pick your favorite. You can change it next time you generate.
         </p>
       </div>
 
@@ -356,20 +391,24 @@ function VoicePickerStep({ selected, onSelect, onBack }: {
         {NARRATOR_VOICE_OPTIONS.map(v => {
           const isSelected = picked === v.id
           const isHov = hovered === v.id
+          const isPlaying = playing === v.id
+          const isLoading = loading === v.id
+          const canPreview = v.id !== 'auto'
           return (
-            <button
+            <div
               key={v.id}
               onClick={() => setPicked(v.id)}
               onMouseEnter={() => setHovered(v.id)}
               onMouseLeave={() => setHovered(null)}
               style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                padding: '14px 18px', borderRadius: 10, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 16px', borderRadius: 10, cursor: 'pointer',
                 background: isSelected ? '#FEF3F2' : isHov ? '#F4F1EB' : '#FFFFFF',
                 border: `1.5px solid ${isSelected ? red : isHov ? '#D4CDC1' : border}`,
-                textAlign: 'left', transition: 'all 150ms ease',
+                transition: 'all 150ms ease',
               }}
             >
+              {/* Voice info */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, fontWeight: 700, color: isSelected ? red : dark }}>
                   {v.label}
@@ -388,12 +427,44 @@ function VoicePickerStep({ selected, onSelect, onBack }: {
                   {v.desc}
                 </div>
               </div>
+
+              {/* Preview button */}
+              {canPreview && (
+                <button
+                  onClick={(e) => playPreview(e, v.id)}
+                  title={isPlaying ? 'Stop preview' : 'Preview this voice'}
+                  style={{
+                    flexShrink: 0, width: 34, height: 34, borderRadius: '50%',
+                    border: `1.5px solid ${isPlaying ? red : '#D4CDC1'}`,
+                    background: isPlaying ? red : '#F4F1EB',
+                    color: isPlaying ? '#FFF' : muted,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 150ms ease',
+                  }}
+                >
+                  {isLoading ? (
+                    <svg style={{ animation: 'spin 1s linear infinite' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" />
+                    </svg>
+                  ) : isPlaying ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>
+                    </svg>
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5,3 19,12 5,21"/>
+                    </svg>
+                  )}
+                </button>
+              )}
+
+              {/* Selected checkmark */}
               {isSelected && (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={red} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               )}
-            </button>
+            </div>
           )
         })}
       </div>
@@ -420,6 +491,7 @@ function VoicePickerStep({ selected, onSelect, onBack }: {
           Generate Trailer →
         </button>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
