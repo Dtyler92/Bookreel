@@ -936,30 +936,60 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTra
 // placed at their scene's timestamp downstream (no time-stretching).
 //   scenes: [{ scene_number, description }, ...] (the scenes actually being rendered)
 //   returns: [{ scene_number, text }, ...]  (subset of scenes; ~half, max 8 words each)
-async function generateVoiceoverBeats(bookTitle, scenes, tone, ledger = null) {
-  // Sparse: narrate roughly half the scenes (min 1), so there's musical breathing room.
-  const beatCount = Math.max(1, Math.round(scenes.length / 2))
+async function generateVoiceoverBeats(bookTitle, scenes, tone, ledger = null, screenplayVoiceover = null) {
+  // If the screenplay wrote a full voiceover script, slice it across scenes.
+  // Otherwise fall back to generating sparse beats from scratch.
   const sceneList = scenes.map(s => `Scene ${s.scene_number}: ${s.description}`).join('\n')
-  const userContent =
-    `Book trailer for "${bookTitle}". Tone: ${tone}.\n` +
-    `Scenes (in order):\n${sceneList}\n\n` +
-    `Write ${beatCount} short voiceover beat(s) spread across these scenes. Choose the ${beatCount} most ` +
-    `evocative scene(s) to narrate and leave the rest silent (music only). The FINAL beat should weave ` +
-    `in the book title "${bookTitle}" as part of a full phrase (e.g. "His name was ${bookTitle}." — NOT the bare title alone).`
-  const systemPrompt =
-    `You are not merely a voiceover writer. You are a storyteller giving voice to an author's world.\n` +
-    `Your narration must honor the emotional soul of the book — its tone, its dread, its wonder, its longing.\n` +
-    `You write SPARSE, cinematic narration: a few short phrases timed to individual shots, never a paragraph.\n` +
-    `The silence between your words is as intentional as the words themselves.\n\n` +
-    `You are genre-aware. A horror trailer should drip with dread. A romance should ache with longing. ` +
-    `An adventure should pulse with momentum. Match the soul of the book in every phrase.\n\n` +
-    `For each beat ask: What should the audience FEEL in this moment? What one phrase captures that feeling?\n\n` +
-    `RULES:\n` +
-    `- Each beat is a COMPLETE evocative phrase of 3–8 words. Never a single bare word or just a name.\n` +
-    `- Fewer words = more cinematic, but it must read as a line of narration, not a label.\n` +
-    `- Do NOT narrate every scene — pick the most emotionally charged ones; silence between beats is intentional.\n` +
-    `- No character names in the first beat. Build tension or wonder first. The final beat weaves the title into a full phrase.\n` +
-    `Return ONLY a JSON array, no markdown, each item: {"scene_number": <number>, "text": "<phrase>"}.`
+
+  let userContent, systemPrompt
+
+  if (screenplayVoiceover && screenplayVoiceover.trim().length > 20) {
+    // MODE: Use the screenplay's voiceover as the source — distribute it across scenes
+    console.log(`[worker]   Using screenplay voiceover as narration source (${screenplayVoiceover.length} chars)`)
+    userContent =
+      `Book trailer for "${bookTitle}". Tone: ${tone}.\n\n` +
+      `SCREENPLAY VOICEOVER (the full narration written for this book):\n${screenplayVoiceover}\n\n` +
+      `SCENES being rendered (in order):\n${sceneList}\n\n` +
+      `Distribute the screenplay voiceover across these scenes. Each scene should get the portion of the narration ` +
+      `that emotionally fits that visual moment. You may split sentences, trim words, and re-phrase for timing — ` +
+      `but the voice, tone, and emotional arc of the original voiceover must be preserved. ` +
+      `EVERY scene should get narration — this is a narration-forward book trailer. ` +
+      `The final scene's narration should naturally incorporate the book title "${bookTitle}".`
+    systemPrompt =
+      `You are a book trailer editor distributing a screenplay voiceover across visual scenes.\n` +
+      `Your job is to take the full voiceover script and slice it into per-scene narration beats — ` +
+      `each beat timed to land naturally over that scene's visual.\n\n` +
+      `RULES:\n` +
+      `- Assign narration to MOST scenes (unlike sparse mode — this is a narration-forward trailer).\n` +
+      `- Each beat should be 5–20 words — enough to fill a 5–10 second clip as a voiced narrator.\n` +
+      `- Preserve the emotional arc: hook → setup → conflict → escalation → title.\n` +
+      `- You may paraphrase slightly for natural speech rhythm, but stay true to the original voice.\n` +
+      `- The FINAL beat must end with or naturally flow into the book title.\n` +
+      `Return ONLY a JSON array, no markdown, each item: {"scene_number": <number>, "text": "<narration>"}.`
+  } else {
+    // MODE: Generate sparse beats from scratch (no screenplay voiceover available)
+    const beatCount = Math.max(1, Math.round(scenes.length / 2))
+    userContent =
+      `Book trailer for "${bookTitle}". Tone: ${tone}.\n` +
+      `Scenes (in order):\n${sceneList}\n\n` +
+      `Write ${beatCount} short voiceover beat(s) spread across these scenes. Choose the ${beatCount} most ` +
+      `evocative scene(s) to narrate and leave the rest silent (music only). The FINAL beat should weave ` +
+      `in the book title "${bookTitle}" as part of a full phrase (e.g. "His name was ${bookTitle}." — NOT the bare title alone).`
+    systemPrompt =
+      `You are not merely a voiceover writer. You are a storyteller giving voice to an author's world.\n` +
+      `Your narration must honor the emotional soul of the book — its tone, its dread, its wonder, its longing.\n` +
+      `You write SPARSE, cinematic narration: a few short phrases timed to individual shots, never a paragraph.\n` +
+      `The silence between your words is as intentional as the words themselves.\n\n` +
+      `You are genre-aware. A horror trailer should drip with dread. A romance should ache with longing. ` +
+      `An adventure should pulse with momentum. Match the soul of the book in every phrase.\n\n` +
+      `For each beat ask: What should the audience FEEL in this moment? What one phrase captures that feeling?\n\n` +
+      `RULES:\n` +
+      `- Each beat is a COMPLETE evocative phrase of 3–8 words. Never a single bare word or just a name.\n` +
+      `- Fewer words = more cinematic, but it must read as a line of narration, not a label.\n` +
+      `- Do NOT narrate every scene — pick the most emotionally charged ones; silence between beats is intentional.\n` +
+      `- No character names in the first beat. Build tension or wonder first. The final beat weaves the title into a full phrase.\n` +
+      `Return ONLY a JSON array, no markdown, each item: {"scene_number": <number>, "text": "<phrase>"}.`
+  }
 
   const raw = await (async () => {
     if (!isPlaceholder(ANTHROPIC_API_KEY)) {
@@ -1643,7 +1673,7 @@ async function runPipeline(job) {
     if (narrationEligibleScenes.length === 0) {
       console.log('[worker]   No scenes free for narration (all have character lines) — skipping beats')
     } else {
-      const beats = await generateVoiceoverBeats(book.title, narrationEligibleScenes, book.genre || 'dramatic', ledger)
+      const beats = await generateVoiceoverBeats(book.title, narrationEligibleScenes, book.genre || 'dramatic', ledger, book.voiceover || null)
       for (const b of beats) {
         if (narrationBySceneNumber.has(b.scene_number)) continue
         if (lineSceneNumbers.has(b.scene_number)) continue // belt-and-suspenders: never share a scene with dialogue

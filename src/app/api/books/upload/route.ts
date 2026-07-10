@@ -643,7 +643,10 @@ export async function POST(request: Request) {
           amazon_link: amazon_link || null,
           store_link: store_link || null,
           pdf_url: pdfUrl,
-          is_published: false
+          is_published: false,
+          voiceover: trailerData.voiceover || null,
+          tone: trailerData.tone || null,
+          music_mood: trailerData.music_mood || null,
         })
         .select()
         .single()
