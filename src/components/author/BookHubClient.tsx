@@ -128,6 +128,14 @@ function IconEmail() {
   )
 }
 
+function IconBlurb() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+    </svg>
+  )
+}
+
 // ─── Module card ─────────────────────────────────────────────────────────────
 
 interface ModuleCardProps {
@@ -647,10 +655,12 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
       }
     })(),
     {
-      icon: <IconEmail />,
-      title: 'Email Templates',
-      description: 'Launch emails, ARC requests & newsletters — personalized to your book.',
-      state: 'locked',
+      icon: <IconBlurb />,
+      title: 'Marketing Copy',
+      description: 'Back cover blurb, TikTok hooks, Instagram captions, tweet threads & Goodreads blurb — all generated from your book.',
+      state: 'empty' as const,
+      ctaLabel: 'Generate Blurbs',
+      ctaHref: `/blurbs/${book.id}`,
     },
   ]
 
