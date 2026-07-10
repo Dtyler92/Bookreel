@@ -389,9 +389,6 @@ export async function POST(
     await supabase.from('characters').delete().eq('book_id', bookId)
     await supabase.from('items').delete().eq('book_id', bookId)
 
-    // Reset trailer images_approved flag so author re-reviews new characters
-    await supabase.from('trailers').update({ images_approved: false }).eq('book_id', bookId)
-
     // Insert new characters
     if (trailerData.characters?.length > 0) {
       const characters = trailerData.characters.map((c: any) => ({

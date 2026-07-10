@@ -30,16 +30,16 @@ const card   = '#FFFFFF'
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
 const STANDARD_STEPS = [
-  { key: 'tier',       label: 'Quality'     },
   { key: 'screenplay', label: 'Screenplay'  },
+  { key: 'tier',       label: 'Quality'     },
   { key: 'scenes',     label: 'Pick Scenes' },
   { key: 'images',     label: 'Characters'  },
   { key: 'voice',      label: 'Voice'       },
 ]
 
 const PREMIUM_STEPS = [
-  { key: 'tier',       label: 'Quality'    },
   { key: 'screenplay', label: 'Screenplay' },
+  { key: 'tier',       label: 'Quality'    },
   { key: 'images',     label: 'Characters' },
   { key: 'voice',      label: 'Voice'      },
 ]
@@ -129,7 +129,7 @@ function StepBar({ quality, step, isRegenerate }: { quality: Quality; step: Wiza
 
 // ─── Tier picker step ─────────────────────────────────────────────────────────
 
-function TierStep({ onSelect }: { onSelect: (q: Quality) => void }) {
+function TierStep({ onSelect, onBack }: { onSelect: (q: Quality) => void; onBack: () => void }) {
   const [hovered, setHovered] = useState<Quality | null>(null)
 
   const tiers: Array<{
@@ -316,6 +316,18 @@ function TierStep({ onSelect }: { onSelect: (q: Quality) => void }) {
       }}>
         Credits are deducted when generation starts — not when you pick a tier.
       </p>
+      <div style={{ textAlign: 'center', marginTop: 16 }}>
+        <button
+          onClick={onBack}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontFamily: 'var(--font-inter), sans-serif',
+            fontSize: 13, color: muted, textDecoration: 'underline',
+          }}
+        >
+          ← Back to screenplay
+        </button>
+      </div>
     </div>
   )
 }
@@ -683,8 +695,8 @@ export default function TrailerWizardClient({
   const allCharactersApproved = initialCharacters.length > 0 && approvedCharacterIds.size === initialCharacters.length
 
   const getInitialStep = (): WizardStep => {
-    // Always start at tier — let the user pick quality and go through the full flow
-    return 'tier'
+    // Start at screenplay — quality is picked after reviewing it
+    return 'screenplay'
   }
 
   const [step,       setStep]       = useState<WizardStep>(getInitialStep)
@@ -697,7 +709,7 @@ export default function TrailerWizardClient({
 
   const handleSelectTier = (q: Quality) => {
     setQuality(q)
-    setStep('screenplay')
+    setStep(q === 'standard' ? 'scenes' : 'images')
   }
 
   const handleToggleScene = (id: string) => {
@@ -766,41 +778,12 @@ export default function TrailerWizardClient({
 
       {/* Tier picker */}
       {step === 'tier' && (
-        <TierStep onSelect={handleSelectTier} />
+        <TierStep onSelect={handleSelectTier} onBack={() => setStep('screenplay')} />
       )}
 
       {/* Screenplay step */}
       {step === 'screenplay' && (
         <div>
-          {/* Quality reminder banner */}
-          <div style={{ maxWidth: 880, margin: '0 auto', padding: '16px 24px 0' }}>
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              background: quality === 'premium' ? '#FEF3F2' : '#F4F1EB',
-              border: `1px solid ${quality === 'premium' ? '#F5C0B8' : border}`,
-              borderRadius: 8, padding: '8px 14px',
-              fontFamily: 'var(--font-inter), sans-serif',
-              fontSize: 12, fontWeight: 600,
-              color: quality === 'premium' ? red : muted,
-            }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <rect x="2" y="4" width="20" height="16" rx="2"/>
-                <path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none"/>
-              </svg>
-              {quality === 'premium' ? 'Premium trailer · 1080p · ~60s · 150 credits' : 'Standard trailer · 720p · ~24s · 55 credits — you\'ll pick 4 scenes next'}
-              <button
-                onClick={() => setStep('tier')}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontFamily: 'var(--font-inter), sans-serif',
-                  fontSize: 11, color: muted, textDecoration: 'underline',
-                  padding: 0, marginLeft: 4,
-                }}
-              >
-                change
-              </button>
-            </div>
-          </div>
           <ReviewClient
             bookId={book.id}
             bookTitle={book.title}
@@ -811,8 +794,8 @@ export default function TrailerWizardClient({
             onWizardComplete={(sceneIds, charIds) => {
               setApprovedSceneIds(new Set(sceneIds))
               setApprovedCharacterIds(new Set(charIds))
-              // Standard → pick scenes; Premium → go straight to characters
-              setStep(quality === 'standard' ? 'scenes' : 'images')
+              // After screenplay review, pick quality
+              setStep('tier')
             }}
           />
         </div>
@@ -825,7 +808,7 @@ export default function TrailerWizardClient({
           selected={selectedSceneIds}
           onToggle={handleToggleScene}
           onContinue={() => setStep('images')}
-          onBack={() => setStep('screenplay')}
+          onBack={() => setStep('tier')}
         />
       )}
 
