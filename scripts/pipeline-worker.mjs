@@ -800,14 +800,28 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTra
   const filterParts = allInputs
     .map((_, i) => `[${i}:v]scale=${width}:${height},setsar=1,fps=${fps},format=yuv420p[v${i}]`)
     .join(';')
-  // Only extract native audio from actual video clips — endcard has no audio stream
-  const clipCount = clipPaths.length
-  const audioNormParts = clipPaths
-    .map((_, i) => `[${i}:a]aresample=44100,volume=0.35[ca${i}]`)
+
+  // Only extract native audio from clips that actually have an audio stream.
+  // Seedance clips sometimes omit audio entirely — probing avoids ffmpeg filtergraph crash.
+  const clipsWithAudio = clipPaths.map((p, i) => {
+    try {
+      const probe = execSync(`ffprobe -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "${p}"`, { stdio: ['pipe','pipe','pipe'] }).toString().trim()
+      return probe.includes('audio') ? i : -1
+    } catch { return -1 }
+  }).filter(i => i >= 0)
+
+  const audioNormParts = clipsWithAudio
+    .map((clipIdx, j) => `[${clipIdx}:a]aresample=44100,volume=0.35[ca${j}]`)
     .join(';')
+  const concatAudioInputs = clipsWithAudio.map((_, j) => `[ca${j}]`).join('')
   const concatInputs = allInputs.map((_, i) => `[v${i}]`).join('')
-  const concatAudioInputs = clipPaths.map((_, i) => `[ca${i}]`).join('')
-  const filterComplex = `${filterParts};${audioNormParts};${concatInputs}concat=n=${allInputs.length}:v=1:a=0[out];${concatAudioInputs}concat=n=${clipCount}:v=0:a=1[sfx]`
+
+  // If no clips have audio, skip the native-audio concat entirely and feed silence
+  const sfxPart = clipsWithAudio.length > 0
+    ? `${audioNormParts};${concatAudioInputs}concat=n=${clipsWithAudio.length}:v=0:a=1[sfx];[sfx]volume=0.25[sfxa]`
+    : `aevalsrc=0:c=stereo:s=44100:d=1[sfxa]`
+
+  const filterComplex = `${filterParts};${concatInputs}concat=n=${allInputs.length}:v=1:a=0[out];${sfxPart}`
 
   // ── Measure the full video timeline ─────────────────────────────────────────
   // Total video duration = sum of all clip durations + end card. The audio MUST
@@ -934,8 +948,7 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTra
       mixLabels.push('[mus]')
     }
 
-    // Native clip SFX (Kling native audio) — sits low under everything else
-    parts.push(`[sfx]volume=0.25[sfxa]`)
+    // Native clip SFX (Seedance native audio) — already normalised to [sfxa] in filterComplex
     mixLabels.push('[sfxa]')
 
     let finalAudioLabel
