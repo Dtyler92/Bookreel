@@ -1144,7 +1144,6 @@ export function DashboardClient({
   const [showBuyCredits, setShowBuyCredits] = useState(false)
 
   const stats = [
-    { label: 'Trailers Generated', value: trailersGenerated },
     { label: 'Total Views', value: totalViews },
     { label: 'Books Listed', value: books.length },
   ]
@@ -1187,10 +1186,10 @@ export function DashboardClient({
         </div>
 
         {/* Stats Row */}
-        <style>{`.br-stats-grid { grid-template-columns: repeat(3, 1fr) !important; } @media (max-width: 640px) { .br-stats-grid { grid-template-columns: 1fr !important; } }`}</style>
+        <style>{`.br-stats-grid { grid-template-columns: repeat(2, 1fr) !important; } @media (max-width: 640px) { .br-stats-grid { grid-template-columns: 1fr !important; } }`}</style>
         <div className="br-stats-grid" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(2, 1fr)',
           gap: '20px',
           marginBottom: '48px',
         }}>

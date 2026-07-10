@@ -494,6 +494,15 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
     inProgressTrailer.status === 'generating'
   )
 
+  // All tiktok clips across every completed trailer
+  const allTiktokClips = completedTrailers
+    .filter(t => t.tiktok_url)
+    .map((t, i) => ({
+      url: t.tiktok_url!,
+      label: completedTrailers.length === 1 ? 'Social Clip' : `Clip v${completedTrailers.indexOf(t) + 1}`,
+    }))
+  const [showClipsModal, setShowClipsModal] = useState(false)
+
   const hasCharacters = characters.length > 0
   const approvedChars = characters.filter(c => c.author_approved)
   const hasApproved = approvedChars.length > 0
@@ -547,18 +556,19 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
       onCtaClick: undefined,
     },
     (() => {
-      const latestTiktok = completedTrailers.find(t => t.tiktok_url)?.tiktok_url || null
+      const clipCount = allTiktokClips.length
       return {
         icon: <IconSocial />,
         title: 'Social Media Clips',
-        description: latestTiktok
-          ? 'Your vertical clip is ready for TikTok, Instagram Reels & more.'
+        description: clipCount > 0
+          ? `${clipCount} vertical clip${clipCount > 1 ? 's' : ''} ready for TikTok, Instagram Reels & more.`
           : hasTrailer
           ? 'Your vertical TikTok / Reels cut is being prepared — available after your next trailer generates.'
           : 'Short-form clips for TikTok, Instagram Reels & more — auto-cut from your trailer.',
-        state: latestTiktok ? 'complete' : hasTrailer ? 'in-progress' : 'locked',
-        ctaLabel: latestTiktok ? 'Download Clip' : undefined,
-        ctaHref: latestTiktok || undefined,
+        meta: clipCount > 0 ? `${clipCount} clip${clipCount > 1 ? 's' : ''} available` : undefined,
+        state: clipCount > 0 ? 'complete' : hasTrailer ? 'in-progress' : 'locked',
+        ctaLabel: clipCount > 0 ? `View ${clipCount} Clip${clipCount > 1 ? 's' : ''}` : undefined,
+        onCtaClick: clipCount > 0 ? () => setShowClipsModal(true) : undefined,
       }
     })(),
     {
@@ -761,6 +771,91 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
         </div>
 
       </main>
+
+      {/* ── Social Media Clips Modal ── */}
+      {showClipsModal && (
+        <div
+          onClick={() => setShowClipsModal(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(13,13,11,0.55)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '24px',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#FFFFFF', borderRadius: 16,
+              padding: '32px', maxWidth: 520, width: '100%',
+              boxShadow: '0 24px 64px rgba(13,13,11,0.18)',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <h2 style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: 22, color: '#0D0D0B', margin: 0 }}>
+                Social Media Clips
+              </h2>
+              <button
+                onClick={() => setShowClipsModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: '#8A8278', fontSize: 20, lineHeight: 1 }}
+              >
+                ✕
+              </button>
+            </div>
+            <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#8A8278', margin: '0 0 24px' }}>
+              Vertical 9:16 clips ready for TikTok, Instagram Reels, YouTube Shorts & more.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {allTiktokClips.map((clip, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: '#F4F1EB', borderRadius: 10, padding: '14px 16px',
+                  border: '1px solid #E8E2D5',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C8402F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="2" width="20" height="20" rx="3"/>
+                      <path d="M10 8l6 4-6 4V8z" fill="#C8402F" stroke="none"/>
+                    </svg>
+                    <div>
+                      <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, fontWeight: 600, color: '#0D0D0B' }}>
+                        {clip.label}
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, color: '#8A8278' }}>
+                        1080 × 1920 · Vertical
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    href={clip.url}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      background: '#C8402F', color: '#FFFFFF', textDecoration: 'none',
+                      borderRadius: 8, padding: '8px 14px',
+                      fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Download
+                  </a>
+                </div>
+              ))}
+            </div>
+
+            <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, color: '#8A8278', marginTop: 20, textAlign: 'center' }}>
+              A new clip is generated automatically with each trailer.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
