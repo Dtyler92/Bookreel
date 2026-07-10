@@ -43,6 +43,10 @@ interface Audiobook {
   id: string
   status: string
   audio_url?: string | null
+  m4b_url?: string | null
+  mp3_url?: string | null
+  for_sale?: boolean | null
+  price_cents?: number | null
 }
 
 interface Props {
@@ -535,6 +539,44 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
     }
   }
 
+  // Audiobook listing state
+  const [listingForSale, setListingForSale] = useState(audiobook?.for_sale ?? false)
+  const [listingPrice, setListingPrice] = useState(
+    audiobook?.price_cents ? (audiobook.price_cents / 100).toFixed(2) : '9.99'
+  )
+  const [listingPriceEditing, setListingPriceEditing] = useState(false)
+  const [listingSaving, setListingSaving] = useState(false)
+  const [listingSaved, setListingSaved] = useState(false)
+  const [listingError, setListingError] = useState<string | null>(null)
+
+  const handleListingSave = async (forSale: boolean, priceStr?: string) => {
+    setListingSaving(true)
+    setListingError(null)
+    const price = parseFloat(priceStr ?? listingPrice)
+    if (isNaN(price) || price < 0.99 || price > 999) {
+      setListingError('Price must be between $0.99 and $999.00')
+      setListingSaving(false)
+      return
+    }
+    const priceCents = Math.round(price * 100)
+    try {
+      const res = await fetch(`/api/audiobook/${audiobook?.id}/listing`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ for_sale: forSale, price_cents: priceCents }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setListingError(data.error ?? 'Could not save listing.'); return }
+      setListingForSale(forSale)
+      setListingPrice((priceCents / 100).toFixed(2))
+      setListingPriceEditing(false)
+      setListingSaved(true)
+      setTimeout(() => setListingSaved(false), 3000)
+    } finally {
+      setListingSaving(false)
+    }
+  }
+
   const hasCharacters = characters.length > 0
   const approvedChars = characters.filter(c => c.author_approved)
   const hasApproved = approvedChars.length > 0
@@ -582,6 +624,7 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
         : audiobookInProgress
         ? 'Recording your audiobook — check back soon.'
         : 'Create a full-cast AI-narrated audiobook.',
+      meta: hasAudiobook && listingForSale ? `Listed · $${listingPrice}` : undefined,
       state: hasAudiobook ? 'complete' : audiobookInProgress ? 'in-progress' : 'empty',
       ctaLabel: hasAudiobook ? 'View Audiobook' : audiobookInProgress ? 'View Audiobook Progress' : 'Create Audiobook',
       ctaHref: hasAudiobook ? `/listen/${book.id}` : `/audiobook/${book.id}`,
@@ -903,6 +946,119 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
         </div>
 
       </main>
+
+      {/* ── Sell Audiobook Panel ── */}
+      {hasAudiobook && audiobook && (
+        <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px 32px' }}>
+          <div style={{
+            background: '#FFFFFF', border: '1px solid #E8E2D5',
+            borderLeft: '3px solid #C8402F', borderRadius: 12, padding: '24px 28px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+              <div>
+                <h3 style={{ fontFamily: 'var(--font-playfair), serif', fontWeight: 700, fontSize: 18, color: '#0D0D0B', margin: '0 0 4px' }}>
+                  💰 Sell on BookReel
+                </h3>
+                <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#8A8278', margin: 0 }}>
+                  {listingForSale
+                    ? `Your audiobook is listed at $${listingPrice} · `
+                    : 'List your audiobook for sale — readers buy once, download forever. '}
+                  {listingForSale && (
+                    <a href={`/store/${book.id}`} target="_blank" rel="noopener noreferrer"
+                      style={{ color: '#C8402F', textDecoration: 'none', fontWeight: 600 }}>
+                      View store page ↗
+                    </a>
+                  )}
+                </p>
+              </div>
+
+              {/* Toggle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                {listingSaved && <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#16A34A', fontWeight: 600 }}>✓ Saved</span>}
+                <button
+                  onClick={() => handleListingSave(!listingForSale)}
+                  disabled={listingSaving}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    background: listingForSale ? '#F0FDF4' : '#F4F1EB',
+                    border: `1.5px solid ${listingForSale ? '#BBF7D0' : '#E8E2D5'}`,
+                    borderRadius: 8, padding: '8px 16px', cursor: listingSaving ? 'not-allowed' : 'pointer',
+                    fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, fontWeight: 600,
+                    color: listingForSale ? '#15803D' : '#0D0D0B',
+                    opacity: listingSaving ? 0.7 : 1,
+                  }}
+                >
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: listingForSale ? '#16A34A' : '#D4CDC1', display: 'inline-block' }} />
+                  {listingSaving ? 'Saving…' : listingForSale ? 'Listed for sale' : 'Not listed'}
+                </button>
+              </div>
+            </div>
+
+            {/* Price editor */}
+            <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#8A8278' }}>Price:</span>
+              {listingPriceEditing ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 2, border: '1px solid #C8402F', borderRadius: 8, overflow: 'hidden', background: '#FFFDF9' }}>
+                    <span style={{ padding: '7px 8px 7px 12px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, color: '#8A8278' }}>$</span>
+                    <input
+                      type="number"
+                      min="0.99" max="999" step="0.01"
+                      value={listingPrice}
+                      onChange={e => setListingPrice(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleListingSave(listingForSale); if (e.key === 'Escape') setListingPriceEditing(false) }}
+                      autoFocus
+                      style={{ border: 'none', outline: 'none', background: 'transparent', width: 72, fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, color: '#0D0D0B', padding: '7px 12px 7px 0' }}
+                    />
+                  </div>
+                  <button onClick={() => handleListingSave(listingForSale)} disabled={listingSaving}
+                    style={{ background: '#C8402F', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                    Save price
+                  </button>
+                  <button onClick={() => setListingPriceEditing(false)}
+                    style={{ background: 'none', border: '1px solid #E8E2D5', borderRadius: 8, padding: '7px 12px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278', cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 16, fontWeight: 700, color: '#0D0D0B' }}>${listingPrice}</span>
+                  <button onClick={() => setListingPriceEditing(true)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278', textDecoration: 'underline', padding: 0 }}>
+                    Edit price
+                  </button>
+                </>
+              )}
+              <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, color: '#8A8278' }}>
+                · BookReel takes 15% · You keep 85%
+              </span>
+            </div>
+
+            {listingError && (
+              <p style={{ margin: '8px 0 0', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#DC2626' }}>⚠ {listingError}</p>
+            )}
+
+            {/* Download links for author */}
+            {(audiobook.m4b_url || audiobook.mp3_url) && (
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid #F0EBE3', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278', alignSelf: 'center' }}>Your files:</span>
+                {audiobook.m4b_url && (
+                  <a href={audiobook.m4b_url} download target="_blank" rel="noopener noreferrer"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F4F1EB', border: '1px solid #E8E2D5', borderRadius: 7, padding: '5px 12px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600, color: '#0D0D0B', textDecoration: 'none' }}>
+                    ↓ M4B (Apple Books)
+                  </a>
+                )}
+                {audiobook.mp3_url && (
+                  <a href={audiobook.mp3_url} download target="_blank" rel="noopener noreferrer"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F4F1EB', border: '1px solid #E8E2D5', borderRadius: 7, padding: '5px 12px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600, color: '#0D0D0B', textDecoration: 'none' }}>
+                    ↓ MP3
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Social Media Clips Modal ── */}
       {showClipsModal && (

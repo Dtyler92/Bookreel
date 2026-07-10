@@ -122,6 +122,8 @@ export async function POST(request: Request) {
     audiobookId: string
     status: 'processing' | 'complete' | 'failed' | 'parsed' | 'parse_failed'
     audioUrl?: string
+    m4bUrl?: string | null
+    mp3Url?: string | null
     chaptersJson?: string
     durationSeconds?: number
     errorMessage?: string
@@ -136,7 +138,7 @@ export async function POST(request: Request) {
 
   const {
     audiobookId, status,
-    audioUrl, chaptersJson, durationSeconds, errorMessage,
+    audioUrl, m4bUrl, mp3Url, chaptersJson, durationSeconds, errorMessage,
     segmentsJson, speakersJson, wordCount, characterCount,
     chapterMarkersJson, voiceMapJson,
   } = body
@@ -156,6 +158,8 @@ export async function POST(request: Request) {
   if (status === 'complete') {
     update.processing_completed_at = new Date().toISOString()
     if (audioUrl) update.audio_url = audioUrl
+    if (m4bUrl !== undefined) update.m4b_url = m4bUrl
+    if (mp3Url !== undefined) update.mp3_url = mp3Url
     if (chaptersJson !== undefined) update.chapters_json = chaptersJson
     if (durationSeconds !== undefined) update.duration_seconds = durationSeconds
   }

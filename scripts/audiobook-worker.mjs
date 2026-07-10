@@ -936,6 +936,8 @@ async function processJob(job) {
 
     await updateStatus(audiobookId, 'complete', {
       audioUrl:       finalAudioUrl,
+      m4bUrl:         !m4bErr ? (() => { const { data } = supabase.storage.from('media').getPublicUrl(m4bStoragePath); return `${data.publicUrl}?v=${Date.now()}` })() : null,
+      mp3Url:         !mp3Err ? (() => { const { data } = supabase.storage.from('media').getPublicUrl(mp3StoragePath); return `${data.publicUrl}?v=${Date.now()}` })() : null,
       chaptersJson:   JSON.stringify(chaptersJson),
       durationSeconds,
     })

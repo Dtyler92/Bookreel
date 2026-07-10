@@ -89,6 +89,22 @@ export async function POST(request: Request) {
           break
         }
 
+        // One-time audiobook purchase — grant download access
+        if (session.mode === 'payment' && session.metadata?.type === 'audiobook_purchase') {
+          const { userId, bookId, audiobookId } = session.metadata
+          if (userId && bookId && audiobookId) {
+            await supabase.from('audiobook_purchases').upsert({
+              book_id: bookId,
+              audiobook_id: audiobookId,
+              buyer_user_id: userId,
+              amount_cents: session.amount_total ?? 0,
+              stripe_session_id: session.id,
+            }, { onConflict: 'stripe_session_id' })
+            console.log(`[webhook] Audiobook purchase recorded: book=${bookId} buyer=${userId}`)
+          }
+          break
+        }
+
         // Subscription checkout
         const customerId = session.customer as string
         const subscriptionId = session.subscription as string

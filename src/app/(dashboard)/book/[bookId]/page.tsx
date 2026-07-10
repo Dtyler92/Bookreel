@@ -60,7 +60,7 @@ export default async function BookHubPage({
 
   const { data: audiobook } = await supabase
     .from('audiobooks')
-    .select('id, status, audio_url')
+    .select('id, status, audio_url, m4b_url, mp3_url, for_sale, price_cents')
     .eq('book_id', bookId)
     .order('created_at', { ascending: false })
     .limit(1)
