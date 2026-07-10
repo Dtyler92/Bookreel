@@ -631,7 +631,7 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
         ? 'Your audiobook is complete and ready to listen.'
         : audiobookInProgress
         ? 'Recording your audiobook — check back soon.'
-        : 'Create a full-cast AI-narrated audiobook.',
+        : 'Create a full-cast cinematic audiobook.',
       meta: hasAudiobook && listingForSale ? `Listed · $${listingPrice}` : undefined,
       state: hasAudiobook ? 'complete' : audiobookInProgress ? 'in-progress' : 'empty',
       ctaLabel: hasAudiobook ? 'View Audiobook' : audiobookInProgress ? 'View Audiobook Progress' : 'Create Audiobook',

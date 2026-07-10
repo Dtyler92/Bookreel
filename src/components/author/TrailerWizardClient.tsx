@@ -170,7 +170,7 @@ function TierStep({ onSelect, onBack }: { onSelect: (q: Quality) => void; onBack
       badge:       'Recommended',
       features:    [
         '1080p Full HD cinematic quality',
-        'Up to 12 scenes — AI picks 5s or 10s per clip',
+        'Up to 12 scenes — our engine picks 5s or 10s per clip',
         '2 character spoken lines with lip-sync',
         'Cinematic narration + music bed',
         'Title & author card',
@@ -335,7 +335,7 @@ function TierStep({ onSelect, onBack }: { onSelect: (q: Quality) => void; onBack
 // ─── Narrator voice picker step ──────────────────────────────────────────────
 
 const NARRATOR_VOICE_OPTIONS = [
-  { id: 'auto',      label: 'Auto',      desc: 'AI picks the best voice for your genre',         gender: null     },
+  { id: 'auto',      label: 'Auto',      desc: 'Our engine picks the best voice for your genre',         gender: null     },
   { id: 'Daniel',    label: 'Daniel',    desc: 'Deep & cinematic — classic male narrator',       gender: 'male'   },
   { id: 'Charlotte', label: 'Charlotte', desc: 'Clear & elegant — cinematic female narrator',   gender: 'female' },
   { id: 'George',    label: 'George',    desc: 'Rich & authoritative — seasoned male voice',    gender: 'male'   },

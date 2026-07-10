@@ -244,8 +244,8 @@ export default function DownloadsClient({
       icon: 'headphones',
       title: 'Audiobook',
       description: hasAudiobook && audiobookDuration
-        ? `Full-cast AI-narrated audiobook · ${formatDuration(audiobookDuration)} runtime`
-        : 'Full-cast AI-narrated audiobook',
+        ? `Full-cast cinematic audiobook · ${formatDuration(audiobookDuration)} runtime`
+        : 'Full-cast cinematic audiobook',
       available: hasAudiobook,
       formats: [
         { label: 'Download MP3', asset: 'audiobook_mp3', ext: 'mp3' },

@@ -1029,7 +1029,7 @@ export default function ReviewClient({
   const [regenDone, setRegenDone]             = useState(false)
 
   const handleRegenScreenplay = async () => {
-    if (!confirm('This will replace your current screenplay and character list with a fresh AI-generated version using the latest prompts. All current approvals will be reset. Continue?')) return
+    if (!confirm('This will replace your current screenplay and character list with a fresh version using the latest prompts. All current approvals will be reset. Continue?')) return
     setRegenScreenplay(true)
     setRegenError(null)
     setRegenDone(false)
@@ -1156,7 +1156,7 @@ export default function ReviewClient({
             <button
               onClick={handleRegenScreenplay}
               disabled={regenScreenplay}
-              title="Re-run AI with the latest screenplay prompts — replaces all current scenes and characters"
+              title="Re-run with the latest screenplay prompts — replaces all current scenes and characters"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '7px 14px', borderRadius: 8,

@@ -420,7 +420,7 @@ export default function StoreClient({
               'M4B for Apple Books / iPhone — full chapter navigation',
               'MP3 for any device',
               'Full chapter navigation',
-              'AI-narrated full cast',
+              'Full-cast cinematic narration',
             ].map((item, i) => (
               <li
                 key={i}

@@ -205,7 +205,7 @@ export default function BlurbGeneratorClient({ bookId, bookTitle, genre }: Props
             Blurbs for <em>{bookTitle}</em>
           </h1>
           <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, color: muted, margin: 0, lineHeight: 1.6, maxWidth: 560 }}>
-            AI-generated marketing copy tailored to your book&apos;s genre, scenes, and narrator script.
+            Cinematically generated marketing copy tailored to your book&apos;s genre, scenes, and narrator script.
             Edit any section inline, then copy and paste wherever you need it.
           </p>
         </div>
