@@ -13,6 +13,7 @@ interface Book {
   genre?: string | null
   description?: string | null
   cover_image_url?: string | null
+  amazon_link?: string | null
 }
 
 interface Trailer {
@@ -503,6 +504,37 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
     }))
   const [showClipsModal, setShowClipsModal] = useState(false)
 
+  // Amazon / purchase link editing
+  const [amazonLink, setAmazonLink] = useState(book.amazon_link ?? '')
+  const [amazonEditing, setAmazonEditing] = useState(false)
+  const [amazonDraft, setAmazonDraft] = useState(book.amazon_link ?? '')
+  const [amazonSaving, setAmazonSaving] = useState(false)
+  const [amazonError, setAmazonError] = useState<string | null>(null)
+  const [amazonSaved, setAmazonSaved] = useState(false)
+
+  const handleAmazonSave = async () => {
+    setAmazonSaving(true)
+    setAmazonError(null)
+    try {
+      const res = await fetch(`/api/books/${book.id}/links`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amazon_link: amazonDraft.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setAmazonError(data.error ?? 'Could not save link.')
+        return
+      }
+      setAmazonLink(data.amazon_link ?? '')
+      setAmazonEditing(false)
+      setAmazonSaved(true)
+      setTimeout(() => setAmazonSaved(false), 3000)
+    } finally {
+      setAmazonSaving(false)
+    }
+  }
+
   const hasCharacters = characters.length > 0
   const approvedChars = characters.filter(c => c.author_approved)
   const hasApproved = approvedChars.length > 0
@@ -669,6 +701,106 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
                   {label}
                 </span>
               ))}
+            </div>
+
+            {/* Purchase Link */}
+            <div style={{ marginTop: 16 }}>
+              {amazonEditing ? (
+                <div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      type="url"
+                      value={amazonDraft}
+                      onChange={e => { setAmazonDraft(e.target.value); setAmazonError(null) }}
+                      onKeyDown={e => { if (e.key === 'Enter') handleAmazonSave(); if (e.key === 'Escape') { setAmazonEditing(false); setAmazonDraft(amazonLink); setAmazonError(null) } }}
+                      placeholder="https://amazon.com/dp/..."
+                      autoFocus
+                      style={{
+                        flex: 1, minWidth: 200,
+                        fontFamily: 'var(--font-inter), sans-serif', fontSize: 13,
+                        padding: '8px 12px', borderRadius: 8,
+                        border: `1px solid ${amazonError ? '#F87171' : '#C8402F'}`,
+                        outline: 'none', background: '#FFFDF9', color: '#0D0D0B',
+                      }}
+                    />
+                    <button
+                      onClick={handleAmazonSave}
+                      disabled={amazonSaving}
+                      style={{
+                        background: '#C8402F', color: '#fff', border: 'none', borderRadius: 8,
+                        padding: '8px 14px', fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: 12, fontWeight: 600, cursor: amazonSaving ? 'not-allowed' : 'pointer',
+                        opacity: amazonSaving ? 0.7 : 1, whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {amazonSaving ? 'Saving…' : '✓ Save'}
+                    </button>
+                    <button
+                      onClick={() => { setAmazonEditing(false); setAmazonDraft(amazonLink); setAmazonError(null) }}
+                      style={{
+                        background: 'transparent', color: '#8A8278', border: '1px solid #E8E2D5',
+                        borderRadius: 8, padding: '8px 12px',
+                        fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 500,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {amazonError && (
+                    <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#DC2626' }}>
+                      ⚠ {amazonError}
+                    </p>
+                  )}
+                  <p style={{ margin: '5px 0 0', fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, color: '#8A8278' }}>
+                    Accepts Amazon, Barnes &amp; Noble, Bookshop.org, Kobo, and your author website.
+                  </p>
+                </div>
+              ) : amazonLink ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <a
+                    href={amazonLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600,
+                      color: '#C8402F', textDecoration: 'none',
+                      background: '#FEF3F2', border: '1px solid #F5C0B8',
+                      borderRadius: 6, padding: '4px 10px',
+                    }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                    Buy on {(() => { try { return new URL(amazonLink).hostname.replace('www.', '') } catch { return 'store' } })()}
+                  </a>
+                  <button
+                    onClick={() => { setAmazonDraft(amazonLink); setAmazonEditing(true) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, color: '#8A8278', padding: '2px 4px', textDecoration: 'underline' }}
+                  >
+                    Edit
+                  </button>
+                  {amazonSaved && <span style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 11, color: '#16A34A', fontWeight: 600 }}>✓ Saved</span>}
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setAmazonDraft(''); setAmazonEditing(true) }}
+                  style={{
+                    background: 'none', border: '1px dashed #D4CDC1', borderRadius: 6,
+                    padding: '5px 12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278',
+                    transition: 'border-color 150ms, color 150ms',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#C8402F'; (e.currentTarget as HTMLButtonElement).style.color = '#C8402F' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#D4CDC1'; (e.currentTarget as HTMLButtonElement).style.color = '#8A8278' }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                  Add purchase link
+                </button>
+              )}
             </div>
           </div>
 
