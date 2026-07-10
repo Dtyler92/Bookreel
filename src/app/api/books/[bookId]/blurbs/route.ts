@@ -88,10 +88,16 @@ Generate the following marketing copy. Return ONLY valid JSON — no markdown, n
 
     // Try Anthropic first, fall back to OpenRouter
     let content = ''
+    const anthropicKey = process.env.ANTHROPIC_API_KEY
+    const openrouterKey = process.env.OPENROUTER_API_KEY
 
-    if (process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_API_KEY.includes('placeholder')) {
+    if (!anthropicKey && !openrouterKey) {
+      return Response.json({ error: 'AI API keys not configured on this server. Add ANTHROPIC_API_KEY or OPENROUTER_API_KEY to Vercel environment variables.' }, { status: 500 })
+    }
+
+    if (anthropicKey) {
       const { default: Anthropic } = await import('@anthropic-ai/sdk')
-      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+      const anthropic = new Anthropic({ apiKey: anthropicKey })
       const message = await anthropic.messages.create({
         model: 'claude-sonnet-4-5',
         max_tokens: 2000,
@@ -102,7 +108,7 @@ Generate the following marketing copy. Return ONLY valid JSON — no markdown, n
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Authorization': `Bearer ${openrouterKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
