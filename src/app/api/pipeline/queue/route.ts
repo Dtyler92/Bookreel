@@ -37,12 +37,13 @@ export async function GET(request: Request) {
 
   const { data: pendingJobs, error } = await supabase
     .from('trailers')
-    .select('id, book_id, quality_tier, status, narrator_voice, processing_started_at, created_at')
+    .select('id, book_id, quality_tier, status, narrator_voice, processing_started_at, created_at, retry_count')
     .or(
       `status.eq.pending,` +
       `and(status.eq.generating,processing_started_at.lt.${tenMinutesAgo}),` +
       `and(status.eq.processing,processing_started_at.lt.${tenMinutesAgo})`
     )
+    .lt('retry_count', 3)   // ← never pick up a job that has already failed 3 times
     .order('created_at', { ascending: true })
     .limit(5)
 
@@ -103,6 +104,18 @@ export async function POST(request: Request) {
   }
   if (status === 'failed' && errorMessage) {
     update.error_message = errorMessage
+    // Increment retry_count atomically — cap at 3 so the queue stops picking it up
+    const { data: current } = await supabase
+      .from('trailers')
+      .select('retry_count')
+      .eq(trailerId ? 'id' : 'book_id', trailerId || bookId)
+      .single()
+    const newCount = ((current?.retry_count as number) ?? 0) + 1
+    update.retry_count = newCount
+    if (newCount >= 3) {
+      update.error_message = (errorMessage || '') + ' [Max retries reached — manually reset to try again]'
+      console.log(`[queue] Trailer ${trailerId || bookId} hit max retries (${newCount}) — permanently stopped.`)
+    }
   }
 
   // Update by trailerId if provided (preferred — targets only the active trailer).

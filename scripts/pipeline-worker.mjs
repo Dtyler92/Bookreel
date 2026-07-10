@@ -1863,12 +1863,42 @@ async function runPipeline(job) {
       try {
         clipUrl = await generateVideoClip(imageUrl, videoDescription, clipSec, cameraMovement, ledger, true, i2vEndpoint, resolution, perSec)
       } catch (clipErr) {
-        // Non-retryable: moderation, internal bad-output, or daily-cap. Don't waste generations.
-        if (clipErr.isModeration || clipErr.isBadOutput || clipErr.isRateLimit) throw clipErr
-        console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying once in 15s...`)
-        await new Promise(r => setTimeout(r, 15000))
-        imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger, sceneCharRefs)
-        clipUrl = await generateVideoClip(imageUrl, videoDescription, clipSec, cameraMovement, ledger, true, i2vEndpoint, resolution, perSec)
+        // ── Moderation block: auto-rewrite the scene + retry once ───────────
+        if (clipErr.isModeration) {
+          console.log(`[worker]   Scene ${scene.scene_number}: ⚠ moderation block — attempting auto-rewrite...`)
+          try {
+            const safeDesc = await generateSafeRewrite(scene.description, clipErr.message)
+            if (safeDesc) {
+              console.log(`[worker]   Scene ${scene.scene_number}: rewritten → "${safeDesc.substring(0, 80)}..."`)
+              // Regenerate image with the safe description
+              await new Promise(r => setTimeout(r, 5000))
+              imageUrl = await generateSceneImage(safeDesc, book.genre || 'dramatic', ledger, sceneCharRefs)
+              const safeVideoDesc = willLipSync
+                ? `${safeDesc}, character looking directly at camera, minimal head movement, steady close-up, mouth closed, neutral expression`
+                : safeDesc
+              clipUrl = await generateVideoClip(imageUrl, safeVideoDesc, clipSec, cameraMovement, ledger, true, i2vEndpoint, resolution, perSec)
+              console.log(`[worker]   Scene ${scene.scene_number}: ✅ auto-rewrite succeeded`)
+            } else {
+              throw clipErr // rewrite returned nothing, give up on this scene
+            }
+          } catch (rewriteErr) {
+            // Rewrite also blocked — mark scene rejected and continue to next
+            if (rewriteErr.isModeration) {
+              console.log(`[worker]   Scene ${scene.scene_number}: rewrite also blocked — skipping scene`)
+              throw rewriteErr
+            }
+            throw rewriteErr
+          }
+        } else if (clipErr.isBadOutput || clipErr.isRateLimit) {
+          // Non-retryable non-moderation errors — bail immediately
+          throw clipErr
+        } else {
+          // Transient error — regenerate image + retry once
+          console.log(`[worker]   Scene ${scene.scene_number}: ⚠ attempt 1 failed (${clipErr.message}), regenerating image + retrying once in 15s...`)
+          await new Promise(r => setTimeout(r, 15000))
+          imageUrl = await generateSceneImage(imageDescription, book.genre || 'dramatic', ledger, sceneCharRefs)
+          clipUrl = await generateVideoClip(imageUrl, videoDescription, clipSec, cameraMovement, ledger, true, i2vEndpoint, resolution, perSec)
+        }
       }
       console.log(`[worker]   Scene ${scene.scene_number}: ✅ ${clipUrl.substring(0, 80)}`)
 
