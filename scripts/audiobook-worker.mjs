@@ -885,7 +885,7 @@ async function processJob(job) {
     console.log('[audiobook-worker]    Converting MP3 → M4B with chapter metadata…')
     execSync(
       `ffmpeg -y -i "${mp3Path}" -i "${metadataPath}" ` +
-      `-map_metadata 1 -c:a aac -b:a 128k "${m4bPath}"`,
+      `-map_metadata 1 -c:a aac -b:a 64k "${m4bPath}"`,
       { stdio: 'pipe' }
     )
 
