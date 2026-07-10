@@ -510,11 +510,30 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
   // All tiktok clips across every completed trailer
   const allTiktokClips = completedTrailers
     .filter(t => t.tiktok_url)
-    .map((t, i) => ({
+    .map((t, i, arr) => ({
+      trailerId: t.id,
       url: t.tiktok_url!,
-      label: completedTrailers.length === 1 ? 'Social Clip' : `Clip v${completedTrailers.indexOf(t) + 1}`,
+      label: arr.length === 1 ? 'Social Clip' : `Clip v${i + 1}`,
     }))
   const [showClipsModal, setShowClipsModal] = useState(false)
+  const [deletingClip, setDeletingClip] = useState<string | null>(null)
+
+  const handleDeleteClip = async (trailerId: string) => {
+    setDeletingClip(trailerId)
+    try {
+      const res = await fetch(`/api/trailers/${trailerId}`, { method: 'PATCH' })
+      if (res.ok) {
+        setLiveTrailers(prev => prev.map(t =>
+          t.id === trailerId ? { ...t, tiktok_url: null } : t
+        ))
+        // Close modal if this was the last clip
+        const remaining = allTiktokClips.filter(c => c.trailerId !== trailerId)
+        if (remaining.length === 0) setShowClipsModal(false)
+      }
+    } finally {
+      setDeletingClip(null)
+    }
+  }
 
   // Amazon / purchase link editing
   const [amazonLink, setAmazonLink] = useState(book.amazon_link ?? '')
@@ -1126,24 +1145,47 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
                       </div>
                     </div>
                   </div>
-                  <a
-                    href={clip.url}
-                    download
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6,
-                      background: '#C8402F', color: '#FFFFFF', textDecoration: 'none',
-                      borderRadius: 8, padding: '8px 14px',
-                      fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    Download
-                  </a>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <a
+                      href={clip.url}
+                      download
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        background: '#C8402F', color: '#FFFFFF', textDecoration: 'none',
+                        borderRadius: 8, padding: '8px 14px',
+                        fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                      </svg>
+                      Download
+                    </a>
+                    <button
+                      onClick={() => handleDeleteClip(clip.trailerId)}
+                      disabled={deletingClip === clip.trailerId}
+                      title="Delete this clip"
+                      style={{
+                        background: 'transparent', border: '1px solid #E8E2D5',
+                        borderRadius: 8, padding: '8px 10px', cursor: deletingClip === clip.trailerId ? 'not-allowed' : 'pointer',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#8A8278', opacity: deletingClip === clip.trailerId ? 0.5 : 1,
+                        transition: 'color 150ms, border-color 150ms',
+                      }}
+                      onMouseEnter={e => { if (deletingClip !== clip.trailerId) { (e.currentTarget as HTMLButtonElement).style.color = '#DC2626'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#FECACA' } }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#8A8278'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#E8E2D5' }}
+                    >
+                      {deletingClip === clip.trailerId
+                        ? <span style={{ display: 'inline-block', width: 12, height: 12, border: '1.5px solid #8A8278', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                        : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                          </svg>
+                      }
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

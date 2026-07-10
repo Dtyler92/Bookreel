@@ -2070,8 +2070,8 @@ async function runPipeline(job) {
     if (ttErr) throw new Error(ttErr.message)
     const { data: ttUrl } = supabase.storage.from('media').getPublicUrl(tiktokStoragePath)
     const tiktokUrl = `${ttUrl.publicUrl}?v=${Date.now()}`
-    // Save TikTok URL to the trailer record
-    await supabase.from('trailers').update({ tiktok_url: tiktokUrl }).eq('book_id', bookId)
+    // Save TikTok URL to THIS trailer record only (not all trailers for the book)
+    await supabase.from('trailers').update({ tiktok_url: tiktokUrl }).eq('id', trailerId)
     console.log(`[worker]   📱 TikTok vertical cut: ${tiktokUrl.substring(0, 80)}`)
   } catch (ttErr) {
     console.error('[worker]   TikTok cut failed (non-fatal):', ttErr.message)
