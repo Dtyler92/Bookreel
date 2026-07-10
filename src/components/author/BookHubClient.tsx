@@ -14,6 +14,7 @@ interface Book {
   description?: string | null
   cover_image_url?: string | null
   amazon_link?: string | null
+  blurbs_json?: object | null
 }
 
 interface Trailer {
@@ -676,9 +677,11 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
     {
       icon: <IconBlurb />,
       title: 'Marketing Copy',
-      description: 'Back cover blurb, TikTok hooks, Instagram captions, tweet threads & Goodreads blurb — all generated from your book.',
-      state: 'empty' as const,
-      ctaLabel: 'Generate Blurbs',
+      description: book.blurbs_json
+        ? 'Your marketing copy is ready — back cover, TikTok hooks, Instagram, tweets & Goodreads.'
+        : 'Back cover blurb, TikTok hooks, Instagram captions, tweet threads & Goodreads blurb — all generated from your book.',
+      state: book.blurbs_json ? 'complete' as const : 'empty' as const,
+      ctaLabel: book.blurbs_json ? 'View & Edit Blurbs' : 'Generate Blurbs',
       ctaHref: `/blurbs/${book.id}`,
     },
   ]
