@@ -320,6 +320,110 @@ function TierStep({ onSelect }: { onSelect: (q: Quality) => void }) {
   )
 }
 
+// ─── Narrator voice picker step ──────────────────────────────────────────────
+
+const NARRATOR_VOICE_OPTIONS = [
+  { id: 'auto',      label: 'Auto',      desc: 'AI picks the best voice for your genre',         gender: null     },
+  { id: 'Daniel',    label: 'Daniel',    desc: 'Deep & cinematic — classic male narrator',       gender: 'male'   },
+  { id: 'Charlotte', label: 'Charlotte', desc: 'Clear & elegant — cinematic female narrator',   gender: 'female' },
+  { id: 'George',    label: 'George',    desc: 'Rich & authoritative — seasoned male voice',    gender: 'male'   },
+  { id: 'Liam',      label: 'Liam',      desc: 'Warm & conversational — younger male',          gender: 'male'   },
+  { id: 'Alice',     label: 'Alice',     desc: 'Smooth & professional — versatile female',      gender: 'female' },
+  { id: 'Matilda',   label: 'Matilda',   desc: 'Bright & energetic — younger female voice',     gender: 'female' },
+  { id: 'Bill',      label: 'Bill',      desc: 'Gravelly & weathered — gritty storyteller',     gender: 'male'   },
+]
+
+function VoicePickerStep({ selected, onSelect, onBack }: {
+  selected: string
+  onSelect: (voice: string) => void
+  onBack: () => void
+}) {
+  const [hovered, setHovered] = useState<string | null>(null)
+  const [picked, setPicked] = useState<string>(selected)
+
+  return (
+    <div style={{ maxWidth: 640, margin: '0 auto', padding: '40px 24px' }}>
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ fontFamily: 'var(--font-playfair), serif', fontSize: 26, fontWeight: 700, color: dark, margin: '0 0 8px' }}>
+          Choose your narrator voice
+        </h2>
+        <p style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, color: muted, margin: 0 }}>
+          The voiceover narration will be read in this voice. You can change it next time you generate.
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
+        {NARRATOR_VOICE_OPTIONS.map(v => {
+          const isSelected = picked === v.id
+          const isHov = hovered === v.id
+          return (
+            <button
+              key={v.id}
+              onClick={() => setPicked(v.id)}
+              onMouseEnter={() => setHovered(v.id)}
+              onMouseLeave={() => setHovered(null)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 14,
+                padding: '14px 18px', borderRadius: 10, cursor: 'pointer',
+                background: isSelected ? '#FEF3F2' : isHov ? '#F4F1EB' : '#FFFFFF',
+                border: `1.5px solid ${isSelected ? red : isHov ? '#D4CDC1' : border}`,
+                textAlign: 'left', transition: 'all 150ms ease',
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, fontWeight: 700, color: isSelected ? red : dark }}>
+                  {v.label}
+                  {v.gender && (
+                    <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 500, color: muted, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+                      {v.gender}
+                    </span>
+                  )}
+                  {v.id === 'auto' && (
+                    <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: '#7C3AED', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+                      recommended
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: muted, marginTop: 2 }}>
+                  {v.desc}
+                </div>
+              </div>
+              {isSelected && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={red} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button
+          onClick={onBack}
+          style={{
+            padding: '11px 22px', borderRadius: 8, border: `1.5px solid ${border}`,
+            background: '#FFFFFF', color: muted, cursor: 'pointer',
+            fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, fontWeight: 600,
+          }}
+        >
+          ← Back
+        </button>
+        <button
+          onClick={() => onSelect(picked)}
+          style={{
+            flex: 1, padding: '11px 22px', borderRadius: 8, border: 'none',
+            background: red, color: '#FFFFFF', cursor: 'pointer',
+            fontFamily: 'var(--font-inter), sans-serif', fontSize: 14, fontWeight: 700,
+          }}
+        >
+          Generate Trailer →
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Scene picker step (Standard only) ───────────────────────────────────────
 
 function ScenePickerStep({
