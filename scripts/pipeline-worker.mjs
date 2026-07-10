@@ -927,18 +927,18 @@ async function stitchAndUpload(clipUrls, bookId, title, authorName, narrationTra
       mixLabels.push(`[ln${i}]`)
     })
 
-    // Music: loop to cover the WHOLE video. Sits low (0.28) under voice, swells to 0.6
+    // Music: loop to cover the WHOLE video. Sits low (0.22) under voice, swells to 0.48
     // in the gaps + after the last beat, fades out over the final 3s (the button).
     if (musicAudioPath) {
       const mIdx = idx++; extraInputs.push(`-stream_loop -1 -i ${musicAudioPath}`)
       const fadeStart = Math.max(0, videoTotal - 3)
       let volExpr
       if (voiceWindows.length > 0) {
-        // Duck (0.28) during any voice window, swell (0.6) everywhere else.
+        // Duck (0.22) during any voice window, swell (0.48) everywhere else.
         const duckExpr = voiceWindows.map(w => `between(t,${w.start.toFixed(2)},${w.end.toFixed(2)})`).join('+')
-        volExpr = `if(gt(${duckExpr},0),0.28,0.6)`
+        volExpr = `if(gt(${duckExpr},0),0.22,0.48)`
       } else {
-        volExpr = '0.6'
+        volExpr = '0.48'
       }
       parts.push(
         `[${mIdx}:a]atrim=0:${videoTotal.toFixed(2)},` +
