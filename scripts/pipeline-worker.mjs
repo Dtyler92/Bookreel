@@ -181,7 +181,8 @@ async function updateTrailerStatus(bookId, status, extra = {}) {
 // ONE fal balance, so when it's exhausted, everything stops at once. The ledger logs
 // exactly what each trailer costs so credit pricing ($9.99=1 credit) stays profitable.
 const PRICING = {
-  flux_image_ultra: 0.06,   // flux-pro/v1.1-ultra — per image (scene gen + char refs)
+  flux_image_ultra: 0.06,   // flux-pro/v1.1-ultra — per image (atmosphere/landscape scenes)
+  flux_kontext: 0.08,       // flux-pro/kontext/max/multi — per image (character scenes, stronger identity binding)
   // ── Video per-second rates ────────────────────────────────────────────────
   // EvoLink.ai Seedance 2.0 (USE_EVOLINK=true, default)
   evolink_seedance_720p:  0.043,   // seedance-2.0-fast-image-to-video (720p)
@@ -362,34 +363,75 @@ async function generateCharacterReferenceImage(character, ledger = null) {
 async function generateSceneImage(sceneDescription, genre, ledger = null, characterRefs = []) {
   const safeDescription = softenForModeration(sceneDescription)
 
-  // Build @tag annotations — "Image2 is CharacterName" tells Flux to use that reference.
-  // We pass front view first (index 0 = primary), remaining angles follow.
+  // When character reference images exist, use Flux Kontext Max Multi —
+  // it's purpose-built for multi-image reference with strong identity binding.
+  // Kontext treats each reference image as a hard constraint, not a loose style hint,
+  // so characters look like themselves across every scene.
+  // Fall back to Flux Pro Ultra for pure atmosphere/landscape scenes (no characters).
   const allRefUrls = characterRefs.flatMap(c => c.imageUrls || [c.imageUrl]).filter(Boolean)
-  const charTags = characterRefs.length > 0
-    ? characterRefs.map((c, i) => `@Image${i + 2} is ${c.name}`).join(', ') + '. '
-    : ''
+  const hasRefs = allRefUrls.length > 0
 
-  // Cinematic photorealism prompt — written for flux-pro/v1.1-ultra raw mode
-  const prompt = `${charTags}${safeDescription}, ${genre} mood, cinematic film still, shot on ARRI Alexa, anamorphic lens, shallow depth of field, dramatic atmospheric lighting, ultra-realistic, photorealistic, 8K, no text, no watermarks, no logos, tasteful, general audience`
+  if (hasRefs) {
+    // Kontext prompt: describe each reference explicitly so the model knows who is who
+    const charDescriptions = characterRefs.map((c, i) =>
+      `person ${i + 1} is ${c.name} (matches reference image ${i + 1})`
+    ).join(', ')
+    const prompt = `${safeDescription}. Characters: ${charDescriptions}. Maintain exact facial features, hair, and clothing from the reference images. ${genre} mood, cinematic film still, dramatic atmospheric lighting, ultra-realistic, photorealistic, no text, no watermarks, no logos, tasteful, general audience`
 
-  // flux-pro/v1.1-ultra: highest-quality Flux tier, raw=true = photographic realism
-  // (raw bypasses aesthetic post-processing for true photographic output)
+    console.log(`[worker]   Scene image: Flux Kontext Max Multi (${allRefUrls.length} char refs)`)
+    const res = await fetch('https://fal.run/fal-ai/flux-pro/kontext/max/multi', {
+      method: 'POST',
+      headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        image_urls: allRefUrls.slice(0, 5),  // Kontext supports up to 5 reference images
+        aspect_ratio: '16:9',
+        num_images: 1,
+        output_format: 'jpeg',
+        safety_tolerance: '5',
+      })
+    })
+
+    if (!res.ok) {
+      const err = await res.text()
+      // If Kontext fails for any reason, fall through to Flux Ultra below
+      console.warn(`[worker]   Kontext failed (${res.status}), falling back to Flux Ultra: ${err.substring(0, 120)}`)
+    } else {
+      const data = await res.json()
+      const falImageUrl = data.images?.[0]?.url
+      if (falImageUrl) {
+        // Download and re-upload to Supabase so URL is permanent
+        const imgRes = await fetch(falImageUrl)
+        if (!imgRes.ok) throw new Error(`Failed to download Kontext image: ${imgRes.status}`)
+        const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
+        const storagePath = `scene-images/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`
+        const { error: uploadErr } = await supabase.storage
+          .from('media').upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: false })
+        if (uploadErr) throw new Error(`Supabase image upload failed: ${uploadErr.message}`)
+        const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
+        console.log(`[worker]   Scene image (Kontext): ${urlData.publicUrl.substring(0, 80)}`)
+        if (ledger) ledger.add('scene image (flux-kontext-max-multi)', 'fal', PRICING.flux_kontext)
+        return urlData.publicUrl
+      }
+    }
+    // Fall through to Flux Ultra if Kontext gave no image
+  }
+
+  // Flux Pro Ultra — used for atmosphere/landscape scenes (no character refs),
+  // or as fallback when Kontext fails.
+  const prompt = `${safeDescription}, ${genre} mood, cinematic film still, shot on ARRI Alexa, anamorphic lens, shallow depth of field, dramatic atmospheric lighting, ultra-realistic, photorealistic, 8K, no text, no watermarks, no logos, tasteful, general audience`
+
+  console.log(`[worker]   Scene image: Flux Pro Ultra (no char refs)`)
   const res = await fetch('https://fal.run/fal-ai/flux-pro/v1.1-ultra', {
     method: 'POST',
-    headers: {
-      'Authorization': `Key ${FAL_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
+    headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       prompt,
       aspect_ratio: '16:9',
       num_images: 1,
       output_format: 'jpeg',
-      raw: true,          // photographic realism — less AI-processed look
-      safety_tolerance: '6', // most permissive; we enforce content policy at prompt level
-      // Pass character reference images as image_urls so Flux anchors on their look.
-      // Index 0 = primary reference (first character); subsequent refs are @Image2, @Image3, etc.
-      ...(allRefUrls.length > 0 && { image_urls: allRefUrls })
+      raw: true,
+      safety_tolerance: '6',
     })
   })
 
@@ -402,20 +444,19 @@ async function generateSceneImage(sceneDescription, genre, ledger = null, charac
   const falImageUrl = data.images?.[0]?.url
   if (!falImageUrl) throw new Error('fal.ai returned no image URL')
 
-  // Download and re-upload to Supabase so URL doesn't expire before Kling uses it
+  // Download and re-upload to Supabase so URL doesn't expire before video gen uses it
   const imgRes = await fetch(falImageUrl)
   if (!imgRes.ok) throw new Error(`Failed to download fal.ai image: ${imgRes.status}`)
   const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
 
   const storagePath = `scene-images/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`
   const { error: uploadErr } = await supabase.storage
-    .from('media')
-    .upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: false })
+    .from('media').upload(storagePath, imgBuffer, { contentType: 'image/jpeg', upsert: false })
 
   if (uploadErr) throw new Error(`Supabase image upload failed: ${uploadErr.message}`)
 
   const { data: urlData } = supabase.storage.from('media').getPublicUrl(storagePath)
-  console.log(`[worker]   Image uploaded to Supabase: ${urlData.publicUrl.substring(0, 80)}`)
+  console.log(`[worker]   Scene image (Flux Ultra): ${urlData.publicUrl.substring(0, 80)}`)
   if (ledger) ledger.add('scene image (flux-pro ultra)', 'fal', PRICING.flux_image_ultra)
   return urlData.publicUrl
 }
@@ -510,7 +551,10 @@ async function generateVideoClip(imageUrl, sceneDescription, durationSeconds = 1
   const motionText = screenplayText?.trim()
     ? `${sceneDescription}. Camera and motion: ${screenplayText}`
     : sceneDescription
-  const safePrompt = softenForModeration(motionText)
+  // Anchor the video model to the start frame image — prepend an explicit instruction
+  // so the model treats it as ground truth, not just a loose starting point.
+  const anchorPrefix = 'Animate exactly what is shown in this image — do not change characters, setting, lighting, or composition. '
+  const safePrompt = anchorPrefix + softenForModeration(motionText)
     + (suppressTalking ? ', subject is silent and still, mouth closed, no talking' : '')
 
   if (USE_EVOLINK) {
