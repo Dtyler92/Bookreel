@@ -804,6 +804,7 @@ export default function TrailerWizardClient({
           <ReviewClient
             bookId={book.id}
             bookTitle={book.title}
+            initialVoiceover={book.voiceover ?? null}
             initialScenes={initialScenes}
             initialCharacters={initialCharacters}
             wizardMode

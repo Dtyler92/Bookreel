@@ -83,6 +83,7 @@ export default async function ReviewPage({
         bookId={bookId}
         bookTitle={typedBook.title}
         bookGenre={typedBook.genre}
+        initialVoiceover={(typedBook as any).voiceover ?? null}
         initialCharacters={typedCharacters}
         initialScenes={typedScenes}
       />

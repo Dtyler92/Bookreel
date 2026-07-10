@@ -19,6 +19,7 @@ interface Props {
   bookId: string
   bookTitle: string
   bookGenre?: string | null
+  initialVoiceover?: string | null
   initialCharacters: CharacterWithApproval[]
   initialScenes: SceneWithApproval[]
   wizardMode?: boolean
@@ -960,6 +961,7 @@ export default function ReviewClient({
   bookId,
   bookTitle,
   bookGenre,
+  initialVoiceover,
   initialCharacters,
   initialScenes,
   wizardMode,
@@ -970,6 +972,32 @@ export default function ReviewClient({
   const [scenes, setScenes] = useState<SceneWithApproval[]>(initialScenes)
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
+
+  // ── Narrator script state ─────────────────────────────────────────────────
+  const [voiceoverExpanded, setVoiceoverExpanded] = useState(false)
+  const [voiceoverEditing, setVoiceoverEditing] = useState(false)
+  const [voiceoverDraft, setVoiceoverDraft] = useState(initialVoiceover ?? '')
+  const [voiceover, setVoiceover] = useState(initialVoiceover ?? '')
+  const [voiceoverSaving, setVoiceoverSaving] = useState(false)
+  const [voiceoverSaved, setVoiceoverSaved] = useState(false)
+
+  const handleVoiceoverSave = async () => {
+    setVoiceoverSaving(true)
+    setVoiceoverSaved(false)
+    try {
+      await fetch(`/api/books/${bookId}/voiceover`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voiceover: voiceoverDraft }),
+      })
+      setVoiceover(voiceoverDraft)
+      setVoiceoverEditing(false)
+      setVoiceoverSaved(true)
+      setTimeout(() => setVoiceoverSaved(false), 3000)
+    } finally {
+      setVoiceoverSaving(false)
+    }
+  }
 
   const approvedCharacters = new Set(characters.filter((c) => c.author_approved).map((c) => c.id))
   const approvedScenes = new Set(scenes.filter((s) => s.author_approved).map((s) => s.id))
@@ -1183,6 +1211,196 @@ export default function ReviewClient({
             fontFamily: 'var(--font-inter), sans-serif', fontSize: 13, color: '#DC2626',
           }}>
             {regenError}
+          </div>
+        </div>
+      )}
+
+      {/* ── Narrator Script panel ────────────────────────────────────────────── */}
+      {(voiceover || voiceoverEditing) && (
+        <div style={{ maxWidth: 1300, margin: '0 auto', padding: '0 24px 0' }}>
+          <div
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #E8E2D5',
+              borderLeft: '3px solid #C8402F',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              marginBottom: '8px',
+            }}
+          >
+            {/* Header row — always visible */}
+            <button
+              onClick={() => {
+                setVoiceoverExpanded((v) => !v)
+                if (!voiceoverExpanded) setVoiceoverEditing(false)
+              }}
+              style={{
+                width: '100%',
+                background: 'none',
+                border: 'none',
+                padding: '18px 24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                gap: 12,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '18px' }}>🎙️</span>
+                <div style={{ textAlign: 'left' }}>
+                  <p style={{
+                    fontFamily: 'var(--font-playfair), serif',
+                    fontWeight: 700,
+                    fontSize: '16px',
+                    color: '#0D0D0B',
+                    margin: 0,
+                  }}>
+                    Narrator Script
+                  </p>
+                  <p style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '12px',
+                    color: '#8A8278',
+                    margin: '2px 0 0',
+                  }}>
+                    {voiceoverExpanded ? 'Click to collapse' : 'The voiceover narration for your trailer — click to review and edit'}
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                {voiceoverSaved && (
+                  <span style={{
+                    fontFamily: 'var(--font-inter), sans-serif',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: '#16A34A',
+                  }}>✓ Saved</span>
+                )}
+                <span style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '12px',
+                  color: '#C8402F',
+                  fontWeight: 600,
+                }}>
+                  {voiceoverExpanded ? '▲ Hide' : '▼ Show'}
+                </span>
+              </div>
+            </button>
+
+            {/* Expandable body */}
+            {voiceoverExpanded && (
+              <div style={{ padding: '0 24px 24px', borderTop: '1px solid #F0EBE3' }}>
+                <p style={{
+                  fontFamily: 'var(--font-inter), sans-serif',
+                  fontSize: '12px',
+                  color: '#8A8278',
+                  margin: '16px 0 10px',
+                }}>
+                  This script is what the narrator will speak over your trailer clips. You can edit it to match your voice exactly — it will be used as-is when your trailer is generated.
+                </p>
+
+                {voiceoverEditing ? (
+                  <>
+                    <textarea
+                      value={voiceoverDraft}
+                      onChange={(e) => setVoiceoverDraft(e.target.value)}
+                      rows={8}
+                      style={{
+                        width: '100%',
+                        fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: '14px',
+                        color: '#1A1A18',
+                        lineHeight: 1.7,
+                        padding: '14px',
+                        border: '1px solid #C8402F',
+                        borderRadius: '8px',
+                        resize: 'vertical',
+                        outline: 'none',
+                        background: '#FFFDF9',
+                        boxSizing: 'border-box',
+                      }}
+                      placeholder="Write the narrator's script here..."
+                    />
+                    <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                      <button
+                        onClick={handleVoiceoverSave}
+                        disabled={voiceoverSaving}
+                        style={{
+                          background: '#C8402F',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '10px 20px',
+                          fontFamily: 'var(--font-inter), sans-serif',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: voiceoverSaving ? 'not-allowed' : 'pointer',
+                          opacity: voiceoverSaving ? 0.7 : 1,
+                        }}
+                      >
+                        {voiceoverSaving ? 'Saving…' : '✓ Save script'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setVoiceoverDraft(voiceover)
+                          setVoiceoverEditing(false)
+                        }}
+                        disabled={voiceoverSaving}
+                        style={{
+                          background: 'transparent',
+                          color: '#8A8578',
+                          border: '1px solid #E8E2D5',
+                          borderRadius: '8px',
+                          padding: '10px 18px',
+                          fontFamily: 'var(--font-inter), sans-serif',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{
+                      background: '#F4F1EB',
+                      borderRadius: '8px',
+                      padding: '18px',
+                      fontFamily: 'var(--font-inter), sans-serif',
+                      fontSize: '14px',
+                      color: '#1A1A18',
+                      lineHeight: 1.8,
+                      whiteSpace: 'pre-wrap',
+                    }}>
+                      {voiceover || <span style={{ color: '#8A8278', fontStyle: 'italic' }}>No narrator script yet. Regenerate the screenplay to generate one.</span>}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setVoiceoverDraft(voiceover)
+                        setVoiceoverEditing(true)
+                      }}
+                      style={{
+                        marginTop: '12px',
+                        background: 'transparent',
+                        border: '1px solid #E8E2D5',
+                        borderRadius: '8px',
+                        padding: '9px 16px',
+                        fontFamily: 'var(--font-inter), sans-serif',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#1A1A18',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ✎ Edit narrator script
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

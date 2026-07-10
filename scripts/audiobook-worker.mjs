@@ -678,7 +678,8 @@ async function runParsePipeline(job) {
 // ════════════════════════════════════════════════════════════════════════════
 
 async function processJob(job) {
-  const { audiobookId, bookId, narratorVoice, segmentsJson: segments, ttsModel } = job
+  const { audiobookId, bookId, narratorVoice, segmentsJson: segmentsRaw, ttsModel } = job
+  const segments = Array.isArray(segmentsRaw) ? segmentsRaw : (typeof segmentsRaw === "string" ? JSON.parse(segmentsRaw) : [])
   const segCount = Array.isArray(segments) ? segments.length : 0
 
   console.log(`\n[audiobook-worker] 🎙  Starting GENERATE job: audiobookId=${audiobookId} bookId=${bookId}`)
@@ -895,13 +896,19 @@ async function processJob(job) {
     const { error: m4bErr } = await supabase.storage
       .from('media')
       .upload(m4bStoragePath, m4bBuffer, { contentType: 'audio/mp4', upsert: true })
-    if (m4bErr) throw new Error(`M4B upload failed: ${m4bErr.message}`)
+    if (m4bErr) {
+      console.warn(`[audiobook-worker]    M4B upload failed (will use MP3): ${m4bErr.message}`)
+    }
 
-    const { data: m4bUrlData } = supabase.storage.from('media').getPublicUrl(m4bStoragePath)
-    const m4bUrl = `${m4bUrlData.publicUrl}?v=${Date.now()}`
-    console.log(`[audiobook-worker]    M4B uploaded ✓`)
+    // Try to get M4B url if upload succeeded
+    let finalAudioUrl = null
+    if (!m4bErr) {
+      const { data: m4bUrlData } = supabase.storage.from('media').getPublicUrl(m4bStoragePath)
+      finalAudioUrl = `${m4bUrlData.publicUrl}?v=${Date.now()}`
+      console.log(`[audiobook-worker]    M4B uploaded successfully`)
+    }
 
-    // ── 6. Upload MP3 to Supabase storage (non-fatal) ─────────────────────
+    // ── 6. Upload MP3 (primary fallback if M4B failed) ─────────────────────
     console.log('[audiobook-worker]    Uploading MP3…')
     const mp3Buffer      = readFileSync(mp3Path)
     const mp3StoragePath = `audiobooks/${bookId}/audiobook.mp3`
@@ -909,22 +916,26 @@ async function processJob(job) {
       .from('media')
       .upload(mp3StoragePath, mp3Buffer, { contentType: 'audio/mpeg', upsert: true })
     if (mp3Err) {
-      console.warn(`[audiobook-worker]    ⚠  MP3 upload failed (non-fatal): ${mp3Err.message}`)
+      console.warn(`[audiobook-worker]    MP3 upload failed: ${mp3Err.message}`)
     } else {
-      console.log(`[audiobook-worker]    MP3 uploaded ✓`)
+      const { data: mp3UrlData } = supabase.storage.from('media').getPublicUrl(mp3StoragePath)
+      if (!finalAudioUrl) finalAudioUrl = `${mp3UrlData.publicUrl}?v=${Date.now()}`
+      console.log(`[audiobook-worker]    MP3 uploaded successfully`)
     }
+
+    if (!finalAudioUrl) throw new Error('Both M4B and MP3 uploads failed')
 
     // ── 7. Mark job complete via queue API ─────────────────────────────────
     const cost    = (totalChars / 1000) * TTS_PER_1K_CHARS
     const segsDone = renderedSegments.filter(r => !r.isSilence).length
     console.log(
-      `[audiobook-worker] ✅ Audiobook complete: ${durationSeconds}s | ` +
+      `[audiobook-worker] Audiobook complete: ${durationSeconds}s | ` +
       `${chaptersJson.length} chapters | ${segsDone} segments | ` +
       `$${cost.toFixed(2)} COGS (${totalChars.toLocaleString()} chars)`
     )
 
     await updateStatus(audiobookId, 'complete', {
-      audioUrl:       m4bUrl,
+      audioUrl:       finalAudioUrl,
       chaptersJson:   JSON.stringify(chaptersJson),
       durationSeconds,
     })
