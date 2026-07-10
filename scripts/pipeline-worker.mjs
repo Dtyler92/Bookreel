@@ -1950,11 +1950,12 @@ async function runPipeline(job) {
           const faceImageUrl = charRecord?.image_url_left || charRecord?.image_url_front || charRecord?.image_url || null
 
           if (faceImageUrl) {
-            // Seedance ref2v lip-sync — works with or without EvoLink
+            // Seedance ref2v lip-sync — audio is baked INTO the generated clip.
+            // Do NOT push lineAudioPath to characterLineTracks — that would mix
+            // a second copy of the voice into the final audio and cause an echo/offset.
             console.log(`[worker]   Scene ${scene.scene_number}: lip-syncing via Seedance ref2v...`)
             const refClipUrl = await generateCharacterClip(faceImageUrl, lineAudioUrl, scene.description, clipSec, ledger)
             clipUrl = refClipUrl
-            characterLineTracks.push({ clipIndex: clipUrls.length, path: lineAudioPath })
             console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line — Seedance ref2v lip-sync`)
           } else {
             console.log(`[worker]   Scene ${scene.scene_number}: no face image for lip-sync — keeping original clip`)
