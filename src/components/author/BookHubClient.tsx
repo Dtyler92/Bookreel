@@ -19,6 +19,7 @@ interface Trailer {
   id: string
   status: string
   final_video_url?: string | null
+  tiktok_url?: string | null
   quality_tier?: string | null
   created_at?: string
 }
@@ -545,12 +546,21 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
       ctaHref: hasAudiobook ? `/listen/${book.id}` : `/audiobook/${book.id}`,
       onCtaClick: undefined,
     },
-    {
-      icon: <IconSocial />,
-      title: 'Social Media Clips',
-      description: 'Short-form clips for TikTok, Instagram Reels & more — auto-cut from your trailer.',
-      state: 'locked',
-    },
+    (() => {
+      const latestTiktok = completedTrailers.find(t => t.tiktok_url)?.tiktok_url || null
+      return {
+        icon: <IconSocial />,
+        title: 'Social Media Clips',
+        description: latestTiktok
+          ? 'Your vertical clip is ready for TikTok, Instagram Reels & more.'
+          : hasTrailer
+          ? 'Your vertical TikTok / Reels cut is being prepared — available after your next trailer generates.'
+          : 'Short-form clips for TikTok, Instagram Reels & more — auto-cut from your trailer.',
+        state: latestTiktok ? 'complete' : hasTrailer ? 'in-progress' : 'locked',
+        ctaLabel: latestTiktok ? 'Download Clip' : undefined,
+        ctaHref: latestTiktok || undefined,
+      }
+    })(),
     {
       icon: <IconEmail />,
       title: 'Email Templates',
