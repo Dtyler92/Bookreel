@@ -303,8 +303,8 @@ function TrailerRow({ trailer, index, total, onDelete }: { trailer: Trailer; ind
   const [delHov, setDelHov] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const isComplete = trailer.status === 'complete' || !!trailer.final_video_url
-  const isInProgress = trailer.status === 'pending' || trailer.status === 'processing' || trailer.status === 'generating'
-  const isFailed = trailer.status === 'failed'
+  const isInProgress = !isComplete && (trailer.status === 'pending' || trailer.status === 'processing' || trailer.status === 'generating')
+  const isFailed = !isComplete && trailer.status === 'failed'
 
   const handleDelete = async () => {
     if (!confirm('Delete this trailer? This cannot be undone.')) return
