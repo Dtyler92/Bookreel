@@ -1080,9 +1080,9 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
                       </svg>
                       Play
                     </a>
-                    {/* Download button — separate icon-only button */}
+                    {/* Download button — proxied so browser saves to device */}
                     <a
-                      href={clip.url}
+                      href={`/api/download-proxy?url=${encodeURIComponent(clip.url)}&filename=${encodeURIComponent(`bookreel-clip-${clip.label.replace(/\s+/g,'-')}.mp4`)}`}
                       download
                       target="_blank"
                       rel="noopener noreferrer"
@@ -1267,13 +1267,13 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
                 <div style={{ fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, color: '#8A8278', marginBottom: 10, fontWeight: 600 }}>Your files</div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {audiobook.m4b_url && (
-                    <a href={audiobook.m4b_url} download target="_blank" rel="noopener noreferrer"
+                    <a href={`/api/download-proxy?url=${encodeURIComponent(audiobook.m4b_url)}&filename=${encodeURIComponent(`${book.title}.m4b`)}`} download target="_blank" rel="noopener noreferrer"
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F4F1EB', border: '1px solid #E8E2D5', borderRadius: 7, padding: '7px 14px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600, color: '#0D0D0B', textDecoration: 'none' }}>
                       ↓ M4B (Apple Books)
                     </a>
                   )}
                   {audiobook.mp3_url && (
-                    <a href={audiobook.mp3_url} download target="_blank" rel="noopener noreferrer"
+                    <a href={`/api/download-proxy?url=${encodeURIComponent(audiobook.mp3_url)}&filename=${encodeURIComponent(`${book.title}.mp3`)}`} download target="_blank" rel="noopener noreferrer"
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#F4F1EB', border: '1px solid #E8E2D5', borderRadius: 7, padding: '7px 14px', fontFamily: 'var(--font-inter), sans-serif', fontSize: 12, fontWeight: 600, color: '#0D0D0B', textDecoration: 'none' }}>
                       ↓ MP3
                     </a>
