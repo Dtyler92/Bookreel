@@ -568,7 +568,7 @@ export default function BookHubClient({ book, trailers: initialTrailers, charact
     }
     const priceCents = Math.round(price * 100)
     try {
-      const res = await fetch(`/api/audiobook/${audiobook?.id}/listing`, {
+      const res = await fetch(`/api/audiobook/${book.id}/listing`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ for_sale: forSale, price_cents: priceCents }),
