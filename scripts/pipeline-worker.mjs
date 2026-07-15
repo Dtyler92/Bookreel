@@ -1419,24 +1419,65 @@ async function generateCharacterLineAudio(line, voiceKey, tmpDir, sceneNumber, l
   return { url: audioUrl, path }
 }
 
-// Lip-sync a clip to a line of audio via fal-ai/sync-lipsync/v2. Returns a new
-// public video URL (stitch downloads it like any other clip). Throws on failure
-// so the caller can fall back to the original clip.
+// Lip-sync a clip to a line of audio via HeyGen /v3/lipsyncs (Speed mode).
+// Falls back to fal-ai/sync-lipsync/v2 if HeyGen key unavailable.
+// Returns a new public video URL. Throws on failure.
 async function lipSyncClip(videoUrl, audioUrl, sceneNumber, clipSeconds = 10, ledger = null) {
-  console.log(`[worker]   Scene ${sceneNumber}: lip-syncing character line...`)
+  // ── HeyGen /v3/lipsyncs (preferred) ────────────────────────────────────────
+  if (!isPlaceholder(HEYGEN_API_KEY)) {
+    console.log(`[worker]   Scene ${sceneNumber}: lip-syncing via HeyGen /v3/lipsyncs...`)
+    const submitRes = await fetch(`${HEYGEN_BASE}/v3/lipsyncs`, {
+      method: 'POST',
+      headers: { 'x-api-key': HEYGEN_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        video: { type: 'url', url: videoUrl },
+        audio: { type: 'url', url: audioUrl },
+        mode: 'speed',
+        enable_dynamic_duration: false,  // keep clip length fixed
+      })
+    })
+    if (!submitRes.ok) {
+      const err = await submitRes.text()
+      throw new Error(`HeyGen lipsync submit failed ${submitRes.status}: ${err.slice(0, 200)}`)
+    }
+    const submitData = await submitRes.json()
+    const lipsyncId = submitData?.data?.lipsync_id
+    if (!lipsyncId) throw new Error(`HeyGen lipsync returned no lipsync_id: ${JSON.stringify(submitData).slice(0, 200)}`)
+    console.log(`[worker]   HeyGen lipsync queued: ${lipsyncId}`)
+
+    // Poll until completed (max 10 min)
+    for (let i = 0; i < 120; i++) {
+      await new Promise(r => setTimeout(r, 5000))
+      const pollRes = await fetch(`${HEYGEN_BASE}/v3/lipsyncs/${lipsyncId}`, {
+        headers: { 'x-api-key': HEYGEN_API_KEY }
+      })
+      if (!pollRes.ok) { console.warn('[worker]   HeyGen lipsync poll failed, retrying...'); continue }
+      const poll = await pollRes.json()
+      const status = poll?.data?.status
+      const videoUrl2 = poll?.data?.video_url
+      if (i % 6 === 0) console.log(`[worker]   HeyGen lipsync poll ${i+1}: ${status}`)
+      if (status === 'completed' && videoUrl2) {
+        if (ledger) ledger.add(`HeyGen lipsync ${clipSeconds}s (speed)`, 'heygen', clipSeconds * 0.05)
+        console.log(`[worker]   Scene ${sceneNumber}: ✅ HeyGen lipsync complete`)
+        return videoUrl2
+      }
+      if (status === 'failed') throw new Error(`HeyGen lipsync failed: ${poll?.data?.failure_message || 'unknown'}`)
+    }
+    throw new Error('HeyGen lipsync timed out after 10 minutes')
+  }
+
+  // ── Fallback: fal-ai/sync-lipsync/v2 ───────────────────────────────────────
+  console.log(`[worker]   Scene ${sceneNumber}: lip-syncing via sync-lipsync/v2 (fallback)...`)
   const res = await fetch('https://fal.run/fal-ai/sync-lipsync/v2', {
     method: 'POST',
     headers: { 'Authorization': `Key ${FAL_API_KEY}`, 'Content-Type': 'application/json' },
-    // sync_mode: 'silence' — the spoken line is shorter than the clip; keep the FULL
-    // clip length and leave the mouth still after the line ends (speaks once, then quiet).
     body: JSON.stringify({ video_url: videoUrl, audio_url: audioUrl, sync_mode: 'silence' })
   })
   if (!res.ok) throw new Error(`Lip-sync failed ${res.status}: ${(await res.text()).slice(0, 160)}`)
   const data = await res.json()
   const url = data.video?.url || data.url || null
   if (!url) throw new Error('Lip-sync returned no video URL')
-  // Billed at $3/min of video processed (the whole clip, not just the spoken portion).
-  if (ledger) ledger.add(`lip-sync ${clipSeconds}s clip (sync-lipsync v2)`, 'fal', clipSeconds * PRICING.lipsync_per_sec)
+  if (ledger) ledger.add(`lip-sync ${clipSeconds}s clip (sync-lipsync v2 fallback)`, 'fal', clipSeconds * PRICING.lipsync_per_sec)
   return url
 }
 
@@ -1960,15 +2001,15 @@ async function runPipeline(job) {
           const faceImageUrl = charRecord?.image_url_left || charRecord?.image_url_front || charRecord?.image_url || null
 
           if (faceImageUrl) {
-            // Seedance ref2v lip-sync — audio is baked INTO the generated clip.
-            // Track the clip index so the stitch keeps that clip's audio at full volume.
-            // Do NOT push lineAudioPath to characterLineTracks — that would mix
-            // a second copy of the voice and cause an echo/offset.
-            console.log(`[worker]   Scene ${scene.scene_number}: lip-syncing via Seedance ref2v...`)
-            const refClipUrl = await generateCharacterClip(faceImageUrl, lineAudioUrl, scene.description, clipSec, ledger)
-            clipUrl = refClipUrl
-            lipSyncClipIndices.add(clipUrls.length)  // mark this clip index as having baked-in voice
-            console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line — Seedance ref2v lip-sync`)
+            // Use HeyGen /v3/lipsyncs on the already-generated scene clip.
+            // HeyGen bakes the TTS audio into the output video — do NOT also
+            // push to characterLineTracks or we get a double-audio echo.
+            // Instead mark the clip index so the stitch plays its audio at full volume.
+            console.log(`[worker]   Scene ${scene.scene_number}: lip-syncing via HeyGen...`)
+            const lipsyncedUrl = await lipSyncClip(clipUrl, lineAudioUrl, scene.scene_number, clipSec, ledger)
+            clipUrl = lipsyncedUrl
+            lipSyncClipIndices.add(clipUrls.length)  // play this clip's baked audio at full vol
+            console.log(`[worker]   Scene ${scene.scene_number}: ✅ character line — HeyGen lipsync`)
           } else {
             console.log(`[worker]   Scene ${scene.scene_number}: no face image for lip-sync — keeping original clip`)
           }
